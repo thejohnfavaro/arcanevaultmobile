@@ -709,7 +709,16 @@ async function syncBatch(names){
   try { response=await fetch('/api/scryfall/collection',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({identifiers:names.map(name=>({name}))})}); }
   catch(e){throw new Error('Cannot reach the local Arcane Vault service. Please use the launcher and keep its window open. '+e.message)}
   let data; try{data=await response.json()}catch{throw new Error('Local service returned invalid data (HTTP '+response.status+').')}
-  if(!response.ok)throw new Error(data.error||('Scryfall sync returned HTTP '+response.status));
+  if(!response.ok){
+   const seconds=Number(data.retryAfterSeconds)||0;
+   if(response.status===429||response.status===403||response.status===400){
+    const warning=seconds?' Wait at least '+seconds+' seconds before resuming.':'';
+    const error=new Error((data.error||'Scryfall declined live card requests.')+warning+' Previously synced cards are saved; rerun to continue.');
+    error.scryfallCooldown=true;
+    throw error;
+   }
+   throw new Error(data.error||('Scryfall sync returned HTTP '+response.status));
+  }
   return data;
 }
 async function syncAll(forceRefresh=false){if(syncing)return {ok:false,error:'A card detail sync is already running'};syncing=true;syncStop=false;$('enrich').disabled=true;$('enrichSettings').disabled=true;$('refreshLegalities').disabled=true;$('stopSync').disabled=false;const todo=cards.filter(c=>forceRefresh?(c.meta||!c.syncUnmatched||$('retryUnmatched')?.checked):(!c.meta&&($('retryUnmatched')?.checked||!c.syncUnmatched)));let done=0,missed=0;const batches=[];for(let i=0;i<todo.length;i+=75)batches.push(todo.slice(i,i+75));let failures=[];try{for(const batch of batches){if(syncStop)break;try{const data=await syncBatch(batch.map(x=>x.name));for(const raw of (data.data||[])){const c=index.get((raw.name||'').toLowerCase())||batch.find(x=>raw.name===x.name||raw.name?.startsWith(x.name+' // ')||x.name.startsWith(raw.name+' // '));if(c){c.meta=jsonMeta(raw);dbput(c.name.toLowerCase(),c.meta);delete c.syncUnmatched}}for(const bad of (data.not_found||[])){const nm=String(bad.name||'').toLowerCase();const c=batch.find(x=>x.name.toLowerCase()===nm);if(c)c.syncUnmatched=true;missed++}}catch(e){failures.push(e.message);break;}done+=batch.length;const percent=Math.round((done/Math.max(1,todo.length))*100);$('progressFill').style.width=percent+'%';$('progressText').textContent=`Checked ${done.toLocaleString()} of ${todo.length.toLocaleString()} remaining cards · ${missed} unmatched by Scryfall`;save('cards',cards.map(({meta,...rest})=>rest));render();await pause(140);} }finally{if(!failures.length&&!syncStop&&done>0)recordDetailsSync();syncing=false;$('enrich').disabled=false;$('enrichSettings').disabled=false;$('refreshLegalities').disabled=false;$('stopSync').disabled=true;$('progressText').textContent=failures.length?'Sync paused: '+failures[0]:syncStop?'Stopped. You can resume whenever you like.':`Sync finished. ${missed} names not found. Use 'Retry previously unmatched names' to try again.`;render();renderStudio();}return {ok:!failures.length&&!syncStop,error:failures[0]||'',stopped:syncStop};}
