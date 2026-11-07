@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.19'/);
-assert.match(gradle,/versionCode 39/);
+assert.match(gradle,/versionName '2\.0\.20'/);
+assert.match(gradle,/versionCode 40/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -240,3 +240,20 @@ assert.match(backend,/if\(!preservePrintings\)db\.delete\("physical_printings",n
 assert.match(html,/info\.insertBefore\(nav,info\.querySelector\('\.actions'\)\|\|null\)/);
 assert.match(html,/for\(const panel of panels\.values\(\)\)\{panelAnchor\.after\(panel\);panelAnchor=panel;\}/);
 assert.doesNotMatch(html,/info\.insertBefore\(nav,first\|\|null\)/);
+
+
+// Catalog status must remain responsive even while SQLite imports tens of thousands of
+// Scryfall printings within an active write transaction.
+const avCatalogStatusSource=backend.slice(backend.indexOf('JSONObject status() throws Exception {'),backend.indexOf('    boolean start(){',backend.indexOf('JSONObject status() throws Exception {')));
+assert.ok(avCatalogStatusSource.includes('indexedPrintings'),'Catalog status must return the committed cached count');
+assert.doesNotMatch(avCatalogStatusSource,/count\(|getReadableDatabase|rawQuery|db\./,'HTTP status must not query SQLite');
+assert.match(avCatalogStatusSource,/put\("idleSeconds",inactiveSeconds\)/);
+assert.match(avCatalogStatusSource,/put\("stalled",busy&&inactiveSeconds>=180\)/);
+assert.match(backend,/indexedPrintings=count\(db,"variants"\)/,'Native catalog updates the cached printing count');
+assert.match(backend,/downloadedBytes\+=n/,'Native importer should track download activity');
+assert.match(backend,/lastProgressAtMs=android\.os\.SystemClock\.elapsedRealtime\(\)/,'Native importer should report progress');
+assert.match(html,/function avCatalogStatusRequest\(\)/,'Catalog status calls should be single-flight and timeout');
+assert.match(html,/setTimeout\(\(\)=>controller\.abort\(\),12000\)/);
+assert.match(html,/const ready=await avCatalogStatusRequest\(\)/,'Set Progress must use responsive status service');
+assert.match(html,/if\(ready\.busy\)\{/,'Set Progress must not query an actively indexing catalog');
+assert.match(html,/if\(status\.stalled\)throw Error/,'Unified Sync must explain truly stalled imports');
