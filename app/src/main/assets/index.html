@@ -790,15 +790,43 @@ async function postOwnership(){
  try {const r=await fetch('/api/catalog/ownership',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards:cards.map(c=>({name:c.name,qty:c.qty}))})});if(!r.ok)throw Error('HTTP '+r.status)}
  catch(e){console.warn('Could not update catalog ownership:',e.message)}
 }
+// Catalog status is served from native memory so a long import cannot block it.
+let avCatalogStatusPending=null;
+function avCatalogStatusRequest(){
+ if(avCatalogStatusPending)return avCatalogStatusPending;
+ avCatalogStatusPending=(async()=>{
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+  try{
+   const response=await fetch('/api/catalog/status',{signal:controller.signal,cache:'no-store'});
+   if(!response.ok)throw Error('Local catalog status returned HTTP '+response.status);
+   return await response.json();
+  }catch(error){
+   if(error?.name==='AbortError')throw Error('Local catalog status timed out. Your collection is safe; reopen the app and retry the catalog sync.');
+   throw error;
+  }finally{clearTimeout(timer);avCatalogStatusPending=null;}
+ })();
+ return avCatalogStatusPending;
+}
+function avCatalogProgressText(status){
+ const phase=status.phase||'Indexing printing catalog';
+ const count=Number(status.imported||0).toLocaleString()+' printings indexed';
+ const bytes=Number(status.downloadedBytes||0);
+ const size=Number(status.expectedBytes||0);
+ const network=bytes>0?' · '+(bytes/1048576).toFixed(1)+(size>0?' / '+(size/1048576).toFixed(1):'')+' MiB downloaded':'';
+ const idle=Number(status.idleSeconds||0);
+ return status.stalled
+  ?'Catalog indexing may be stalled ('+Math.ceil(idle/60)+' minutes without progress). Existing collections are safe. Reopen Arcane Vault to restart an interrupted sync.'
+  :phase+' · '+count+network;
+}
 async function refreshCatalogStatus(){
- try{const wasBusy=!!catalogStatus?.busy,hadPrintings=!!catalogStatus?.hasPrintings;const r=await fetch('/api/catalog/status');if(!r.ok)throw Error('Catalog service unavailable');catalogStatus=await r.json();renderSyncHistory();
+ try{const wasBusy=!!catalogStatus?.busy,hadPrintings=!!catalogStatus?.hasPrintings;catalogStatus=await avCatalogStatusRequest();renderSyncHistory();
  if((wasBusy&&!catalogStatus.busy||!hadPrintings&&catalogStatus.hasPrintings)&&$('sets')&&!$('sets').classList.contains('hidden'))loadSets();
- $('catalogStatus').textContent=catalogStatus.busy?`${catalogStatus.phase} · ${Number(catalogStatus.imported||0).toLocaleString()} cards indexed`:
+ $('catalogStatus').textContent=catalogStatus.busy?avCatalogProgressText(catalogStatus):
  catalogStatus.total?`${Number(catalogStatus.total).toLocaleString()} cards cached · Updated ${catalogStatus.updatedAt?new Date(catalogStatus.updatedAt).toLocaleDateString():'unknown'}`:
  catalogStatus.error?`Catalog sync error: ${catalogStatus.error}`:'Download the catalog to enable All / Unowned browsing and set progress';
  $('catalogSync').disabled=!!catalogStatus.busy;
  if(!catalogStatus.busy&&arenaScope!=='physical'&&(catalogScope!=='owned'||arenaScope!=='any')&&catalogStatus.total&&!catalogPage.length)renderCatalog();
- }catch(e){$('catalogStatus').textContent='Catalog service unavailable. Please check the local app service.';const line=$('catalogLastSync');if(line)line.textContent='Full catalog + variants: Unable to read sync status';}
+ }catch(e){$('catalogStatus').textContent='Catalog status unavailable: '+(e.message||String(e));const line=$('catalogLastSync');if(line)line.textContent='Full catalog + variants: Unable to read sync status';}
 }
 async function beginCatalogDownload(){
  if(!confirm('Download Scryfall’s card-printings catalog? This is a large download, may require significant disk space, and can take some time. Your ownership collection will not change.'))return;
@@ -1061,12 +1089,11 @@ async function avSyncAllCardData(){
   let seenActive=!!catalogStatus?.busy,emptyChecks=0;
   for(;;){
    await pause(1800);
-   const response=await fetch('/api/catalog/status');
-   if(!response.ok)throw Error('Catalog status HTTP '+response.status);
-   const status=await response.json();catalogStatus=status;renderSyncHistory();
+   const status=await avCatalogStatusRequest();catalogStatus=status;renderSyncHistory();
    if(status.busy){
     seenActive=true;
-    line.textContent='Step 1 of 2: '+(status.phase||'Indexing printing catalog')+' · '+Number(status.imported||0).toLocaleString()+' records processed';
+    line.textContent='Step 1 of 2: '+avCatalogProgressText(status);
+    if(status.stalled)throw Error('The printing catalog has made no progress for 3 minutes. Reopen the app and retry; your inventory is preserved.');
     emptyChecks=0;
     continue;
    }
@@ -1665,10 +1692,19 @@ function drawSets(){
 async function loadSets(){const req=++setRequest,source=setCollectionSource;
  $('setStatus').textContent='Checking the local printing catalog…';
  try{
-  const sr=await fetch('/api/catalog/status');
-  if(!sr.ok)throw Error('Catalog status HTTP '+sr.status);
-  const ready=await sr.json();
+  const ready=await avCatalogStatusRequest();
   if(req!==setRequest||source!==setCollectionSource)return;
+  if(ready.busy){
+   // Never query the active SQLite import transaction from Set Progress.
+   setRows=[];setCurrent=null;
+   $('setDrill').classList.add('hidden');
+   $('setGrid').classList.remove('hidden');
+   $('setSummary').classList.remove('hidden');
+   $('setSummary').replaceChildren();
+   $('setGrid').textContent='Indexing the Scryfall printings in the background. Your physical inventory is unchanged; this screen will refresh when indexing completes.';
+   $('setStatus').textContent=avCatalogProgressText(ready)+'. Set Progress will load automatically once indexing finishes.';
+   return;
+  }
   if(!ready.hasPrintings){
    setRows=[];setCurrent=null;$('setDrill').classList.add('hidden');$('setGrid').classList.remove('hidden');$('setSummary').classList.remove('hidden');
    $('setSummary').replaceChildren();
@@ -1677,7 +1713,6 @@ async function loadSets(){const req=++setRequest,source=setCollectionSource;
    return;
   }
  }catch(e){if(req===setRequest)$('setStatus').textContent='Cannot check catalog readiness: '+e.message;return}
- $('setStatus').textContent='Loading set completion from the local catalog…';
  $('setStatus').textContent='Loading set completion from the local catalog…';
  try{if(source==='physical')await postPhysicalOwnership();if(req!==setRequest||source!==setCollectionSource)return;const u='/api/catalog/sets?arena='+encodeURIComponent($('setArena').value)+'&q='+encodeURIComponent($('setSearch').value.trim())+'&source='+source;const r=await fetch(u);const j=await r.json();if(!r.ok)throw Error(j.error||'Set lookup failed');if(req!==setRequest||source!==setCollectionSource)return;
  setRows=j.sets||[];
