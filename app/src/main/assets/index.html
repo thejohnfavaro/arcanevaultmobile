@@ -217,9 +217,9 @@ button,input,select,textarea {font-size:16px}button {min-height:42px}.actions,.v
  <div class="panel"><h2>Import physical cards</h2><p class="note">Recognizes commonly used ManaBox, Moxfield, Mythic Tools, Archidekt, Delver Lens, TCGplayer-style and Deckbox-style CSV headers. Imports preserve set, collector number, finish, location, condition and language where supplied.</p>
  <div class="studio-line"><label>CSV file <input type="file" class="field" id="physicalCsv" accept=".csv,text/csv"></label><label>Import mode <select id="physicalImportMode" class="field"><option value="replace">Replace physical collection</option><option value="merge">Add quantities to physical collection</option></select></label></div><p id="physicalImportProfile" class="note" aria-live="polite">No physical CSV imported yet.</p></div>
  <div class="panel" id="portableSyncAndroidPanel">
- <h2>Sync from Windows QR</h2>
- <p class="note">On Windows: Physical Collection → Sync collections with Android → Show QR for Android. Connect both devices to the same Wi-Fi. The link expires after five minutes and works once. No data changes until you approve the import.</p>
- <div class="actions"><button type="button" class="primary" id="physicalScanWindowsQr">Scan Windows QR</button></div>
+ <h2>Sync from Windows (Wi-Fi or USB)</h2>
+ <p class="note">On Windows: Physical Collection → Show QR for Android (same Wi-Fi) or Show USB transfer QR (USB debugging + ADB). Scan either QR here. Alternatively, export a collection sync JSON file on Windows and copy it to your Galaxy over an ordinary USB file-transfer connection. Nothing changes until you approve the import.</p>
+ <div class="actions"><button type="button" class="primary" id="physicalScanWindowsQr">Scan Windows QR (Wi-Fi or USB)</button><label>Import sync JSON file<input id="physicalSyncJsonFile" type="file" class="field" accept=".json,application/json"></label></div>
  <details><summary>Camera unavailable? Paste the one-time transfer link</summary><div class="studio-line"><label>Windows transfer link<input class="field" type="url" id="physicalWindowsQrUrl" placeholder="http://192.168.x.x:port/arcane-vault-sync/…"></label><button type="button" id="physicalFetchWindowsQr">Fetch Windows collection</button></div></details>
  <p class="note" id="physicalQrStatus" role="status" aria-live="polite">Ready to scan a Windows collection QR code.</p>
  <div id="physicalQrPreview" class="hidden"><p id="physicalQrSummary" class="note"></p><div class="studio-line"><label>Replace on this Galaxy<select class="field" id="physicalQrScope"><option value="physical">Physical collection only</option><option value="arena">Arena collection only</option><option value="both">Both collections</option></select></label><button type="button" class="primary" id="physicalQrImport">Review and import</button><button type="button" id="physicalQrCancel">Cancel</button></div></div>
@@ -440,9 +440,9 @@ window.arcaneVaultSyncData=b64=>{
 };
 function portableQrFetch(){
  const raw=$('physicalWindowsQrUrl').value.trim();
- if(!/^http:\/\/(?:10\.|192\.168\.|172\.)(?:[^\s]*)\/arcane-vault-sync\/[a-f0-9]{48}$/.test(raw)){portableQrStatus('Paste the complete one-time Windows QR transfer link (not a GitHub URL).');return}
+ if(!/^http:\/\/(?:127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d{1,5}\/arcane-vault-sync\/[a-f0-9]{48}$/.test(raw)){portableQrStatus('Paste the complete one-time Windows QR transfer link (not a GitHub URL).');return}
  if(!window.ArcaneAndroid?.fetchWindowsSync){portableQrStatus('Native Android QR transfer is not supported by this app build.');return}
- portableQrReset();portableQrStatus('Connecting to Windows over your local Wi-Fi…');window.ArcaneAndroid.fetchWindowsSync(raw);
+ portableQrReset();portableQrStatus('Connecting to Windows over '+(raw.includes('127.0.0.1')?'USB (ADB reverse)':'your local Wi-Fi')+'…');window.ArcaneAndroid.fetchWindowsSync(raw);
 }
 function portableQrApply(data,scope){
  const physical=scope==='physical'||scope==='both',arena=scope==='arena'||scope==='both';
@@ -461,6 +461,16 @@ function physicalQrInit(){
   portableQrStatus('Opening QR scanner…');window.ArcaneAndroid.scanWindowsQr();
  };
  $('physicalFetchWindowsQr').onclick=portableQrFetch;
+ $('physicalSyncJsonFile').onchange=async event=>{
+  const file=event.target.files?.[0];if(!file)return;
+  portableQrReset();
+  try{
+   if(file.size>8*1024*1024)throw Error('Sync file exceeds 8 MB.');
+   const data=JSON.parse(await file.text());portableQrReady(data);
+   portableQrStatus('Collection sync file loaded from your Galaxy. Review the preview and confirm the import.');
+  }catch(err){portableQrStatus('Unable to import sync file: '+err.message)}
+  finally{event.target.value=''}
+ };
  $('physicalQrCancel').onclick=()=>{portableQrReset();portableQrStatus('Import cancelled. Your inventory is unchanged.')};
  $('physicalQrImport').onclick=()=>{
   if(!portableQrPending){portableQrStatus('Scan a fresh Windows QR first.');return}
@@ -1413,7 +1423,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script>
 /* Arcane Vault: opt-in release checks and type-aware card tags. */
 (function(){'use strict';
-const PLATFORM='android', INSTALLED='2.0.3';
+const PLATFORM='android', INSTALLED='2.0.4';
 const DEFAULT_UPDATE_REPO='thejohnfavaro/arcanevaultmobile';
 const key=n=>'arcaneVault.update.'+PLATFORM+'.'+n;
 const loadPref=(n,fallback='')=>{try{return localStorage.getItem(key(n))??fallback}catch{return fallback}};
