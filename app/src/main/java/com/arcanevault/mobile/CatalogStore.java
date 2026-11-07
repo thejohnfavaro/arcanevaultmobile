@@ -24,7 +24,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     private volatile long imported=0;
     private volatile int total=0;
     CatalogStore(Context context) {
-        super(context,"arcane_catalog.db",null,2);
+        super(context,"arcane_catalog.db",null,3);
         SQLiteDatabase db=getWritableDatabase();
         total=count(db,"cards");
         try(Cursor c=db.rawQuery("SELECT value FROM state WHERE key='updated'",null)) {if(c.moveToFirst())updatedAt=c.getString(0);}
@@ -37,10 +37,12 @@ final class CatalogStore extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX idx_variants_name ON variants(name COLLATE NOCASE)");
         db.execSQL("CREATE TABLE ownership(name TEXT PRIMARY KEY COLLATE NOCASE,qty INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE physical_ownership(name TEXT PRIMARY KEY COLLATE NOCASE,qty INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE physical_printings(name TEXT NOT NULL COLLATE NOCASE,setcode TEXT NOT NULL COLLATE NOCASE,collector TEXT NOT NULL COLLATE NOCASE,print_id TEXT NOT NULL COLLATE NOCASE,qty INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE state(key TEXT PRIMARY KEY,value TEXT NOT NULL)");
     }
     @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){
         if(oldVersion<2)db.execSQL("CREATE TABLE IF NOT EXISTS physical_ownership(name TEXT PRIMARY KEY COLLATE NOCASE,qty INTEGER NOT NULL)");
+        if(oldVersion<3)db.execSQL("CREATE TABLE IF NOT EXISTS physical_printings(name TEXT NOT NULL COLLATE NOCASE,setcode TEXT NOT NULL COLLATE NOCASE,collector TEXT NOT NULL COLLATE NOCASE,print_id TEXT NOT NULL COLLATE NOCASE,qty INTEGER NOT NULL)");
     }
     private static int count(SQLiteDatabase db,String table){try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM "+table,null)){return c.moveToFirst()?c.getInt(0):0;}}
     JSONObject status() throws Exception {int printings=count(getReadableDatabase(),"variants");return new JSONObject().put("busy",syncing.get()).put("phase",phase).put("imported",imported).put("total",total).put("printings",printings).put("updatedAt",updatedAt==null?JSONObject.NULL:updatedAt).put("error",error).put("source","Scryfall Default Cards (Android local database)").put("hasPrintings",printings>0);}
@@ -173,6 +175,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
             db.delete("physical_ownership",null,null);
+            db.delete("physical_printings",null,null);
             // Aggregate name duplicates before inserting. Android API 26's older SQLite
             // does not support the modern ON CONFLICT ... DO UPDATE syntax.
             Map<String,Integer> quantities=new LinkedHashMap<>();
@@ -184,6 +187,19 @@ final class CatalogStore extends SQLiteOpenHelper {
                 String key=name.toLowerCase(Locale.ROOT);
                 displayNames.putIfAbsent(key,name);
                 quantities.put(key,quantities.getOrDefault(key,0)+qty);
+                String set=item.optString("set","").trim();
+                String collector=item.optString("number","").trim();
+                String id=item.optString("scryfallId","").trim();
+                // An unspecified printing must never create set-specific progress.
+                if(!id.isEmpty() || (!set.isEmpty() && !collector.isEmpty())){
+                    ContentValues ownedPrinting=new ContentValues();
+                    ownedPrinting.put("name",name);
+                    ownedPrinting.put("setcode",set);
+                    ownedPrinting.put("collector",collector);
+                    ownedPrinting.put("print_id",id);
+                    ownedPrinting.put("qty",qty);
+                    db.insertOrThrow("physical_printings",null,ownedPrinting);
+                }
             }
             for(Map.Entry<String,Integer> entry:quantities.entrySet()){
                 ContentValues record=new ContentValues();
@@ -193,6 +209,14 @@ final class CatalogStore extends SQLiteOpenHelper {
             }
             db.setTransactionSuccessful();
         } finally {db.endTransaction();}
+    }
+    private static String printingCte(Map<String,String> p){
+        if(!"physical".equals(get(p,"source")))
+            return "confirmed AS (SELECT setcode,name,0 AS qty FROM variants WHERE 0)";
+        return "confirmed AS (SELECT v.setcode,v.name,SUM(p.qty) qty FROM variants v JOIN physical_printings p ON "+
+            "(p.print_id!='' AND v.print_id=p.print_id AND v.name=p.name) OR "+
+            "(p.print_id='' AND v.setcode=p.setcode AND v.collector=p.collector AND v.name=p.name) "+
+            "GROUP BY v.setcode,v.name)";
     }
     private static String ownershipTable(Map<String,String> p){
         return "physical".equals(get(p,"source"))?"physical_ownership":"ownership";
@@ -237,19 +261,20 @@ final class CatalogStore extends SQLiteOpenHelper {
     }
     JSONObject sets(Map<String,String> p)throws Exception{
         String arena=get(p,"arena"),query=get(p,"q");JSONArray rows=new JSONArray();int t=0,owned=0;
-        String source=ownershipTable(p);
-        String sql="WITH distinct_cards AS (SELECT DISTINCT setcode,name FROM variants WHERE (?!='arena' OR arena=1)), per_set AS (SELECT d.setcode,COUNT(*) total,SUM(CASE WHEN COALESCE(o.qty,0)>0 THEN 1 ELSE 0 END) owned FROM distinct_cards d LEFT JOIN "+source+" o ON o.name=d.name GROUP BY d.setcode),names AS (SELECT setcode,MAX(setname) setname,MIN(CASE WHEN length(release)=10 AND release GLOB '????-??-??' THEN release END) released FROM variants GROUP BY setcode) SELECT p.setcode,n.setname,p.total,p.owned,n.released FROM per_set p JOIN names n ON n.setcode=p.setcode WHERE (?='' OR p.setcode LIKE ? OR n.setname LIKE ?) ORDER BY n.setname COLLATE NOCASE";
+        String source=printingCte(p);
+        String sql="WITH distinct_cards AS (SELECT DISTINCT setcode,name FROM variants WHERE (?!='arena' OR arena=1)), "+source+", per_set AS (SELECT d.setcode,COUNT(*) total,SUM(CASE WHEN COALESCE(o.qty,0)>0 THEN 1 ELSE 0 END) owned FROM distinct_cards d LEFT JOIN confirmed o ON o.name=d.name AND o.setcode=d.setcode GROUP BY d.setcode),names AS (SELECT setcode,MAX(setname) setname,MIN(CASE WHEN length(release)=10 AND release GLOB '????-??-??' THEN release END) released FROM variants GROUP BY setcode) SELECT p.setcode,n.setname,p.total,p.owned,n.released FROM per_set p JOIN names n ON n.setcode=p.setcode WHERE (?='' OR p.setcode LIKE ? OR n.setname LIKE ?) ORDER BY n.setname COLLATE NOCASE";
         try(Cursor r=getReadableDatabase().rawQuery(sql,new String[]{arena,query,"%"+query+"%","%"+query+"%"})){
             while(r.moveToNext()){int all=r.getInt(2),have=r.getInt(3);t+=all;owned+=have;rows.put(new JSONObject().put("code",r.getString(0)).put("name",r.getString(1)).put("total",all).put("owned",have).put("missing",all-have).put("percentage",all==0?0:Math.round(1000.0*have/all)/10.0).put("releaseDate",r.isNull(4)?"":r.getString(4)));}
         }
-        return new JSONObject().put("sets",rows).put("count",rows.length()).put("totalCards",t).put("ownedCards",owned).put("source","Scryfall card-name completion; owned cards from "+("physical".equals(get(p,"source"))?"physical collection":"Arena collection")).put("note","Ownership by name, not individual printing.");
+        return new JSONObject().put("sets",rows).put("count",rows.length()).put("totalCards",t).put("ownedCards",owned).put("source","physical".equals(get(p,"source"))?"Confirmed physical printings":"Arena printing identity unavailable").put("note","Only confirmed printings are counted; name-only ownership does not imply a specific set.");
     }
     JSONObject setCards(Map<String,String> p)throws Exception{
         String code=get(p,"set").toLowerCase(Locale.US),arena=get(p,"arena"),scope=get(p,"ownership");if(!code.matches("[a-z0-9]{2,8}"))throw new IllegalArgumentException("Invalid set code");
         int page=clamp(get(p,"page"),0,10000,0),size=clamp(get(p,"size"),1,100,48);
+        String confirmed=printingCte(p);
         String filter="";if("owned".equals(scope))filter=" AND COALESCE(o.qty,0)>0";else if("missing".equals(scope))filter=" AND COALESCE(o.qty,0)=0";
-        String sql="WITH setcards AS (SELECT DISTINCT name FROM variants WHERE setcode=? AND (?!='arena' OR arena=1)) SELECT sc.name,COALESCE(o.qty,0),COALESCE(v.image,c.image,''),COALESCE(c.type,''),COALESCE(c.rarity,''),COALESCE(c.uri,'') FROM setcards sc LEFT JOIN "+ownershipTable(p)+" o ON o.name=sc.name LEFT JOIN cards c ON c.name=sc.name LEFT JOIN variants v ON v.print_id=(SELECT print_id FROM variants WHERE setcode=? AND name=sc.name AND (?!='arena' OR arena=1) ORDER BY release DESC LIMIT 1) WHERE 1=1"+filter+" ORDER BY sc.name COLLATE NOCASE LIMIT ? OFFSET ?";
-        JSONArray rows=new JSONArray();try(Cursor r=getReadableDatabase().rawQuery(sql,new String[]{code,arena,code,arena,""+size,""+(page*size)})){
+        String sql="WITH setcards AS (SELECT DISTINCT name FROM variants WHERE setcode=? AND (?!='arena' OR arena=1)), "+confirmed+" SELECT sc.name,COALESCE(o.qty,0),COALESCE(v.image,c.image,''),COALESCE(c.type,''),COALESCE(c.rarity,''),COALESCE(c.uri,'') FROM setcards sc LEFT JOIN confirmed o ON o.name=sc.name AND o.setcode=? LEFT JOIN cards c ON c.name=sc.name LEFT JOIN variants v ON v.print_id=(SELECT print_id FROM variants WHERE setcode=? AND name=sc.name AND (?!='arena' OR arena=1) ORDER BY release DESC LIMIT 1) WHERE 1=1"+filter+" ORDER BY sc.name COLLATE NOCASE LIMIT ? OFFSET ?";
+        JSONArray rows=new JSONArray();try(Cursor r=getReadableDatabase().rawQuery(sql,new String[]{code,arena,code,code,arena,""+size,""+(page*size)})){
             while(r.moveToNext())rows.put(new JSONObject().put("name",r.getString(0)).put("qty",r.getInt(1)).put("image",r.getString(2)).put("type",r.getString(3)).put("rarity",r.getString(4)).put("url",r.getString(5)));
         }
         return new JSONObject().put("set",code).put("page",page).put("size",size).put("cards",rows).put("hasMore",rows.length()==size);
