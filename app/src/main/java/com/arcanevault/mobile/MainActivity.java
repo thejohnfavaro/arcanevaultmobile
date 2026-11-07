@@ -462,6 +462,33 @@ public class MainActivity extends Activity {
                     try {respond(out,200,type,artwork.get(url));}
                     catch(Exception ex){respondJson(out,502,new JSONObject().put("error","Artwork not cached and could not be fetched").toString());}
                 }
+                else if(path.equals("/api/app/releases") && request[0].equals("GET")){
+                    String host=hdr.getOrDefault("host","");
+                    String origin=hdr.getOrDefault("origin","");
+                    String local="http://127.0.0.1:"+getPort();
+                    if(!host.equals("127.0.0.1:"+getPort()) || (!origin.isEmpty()&&!origin.equals(local))){
+                        respondJson(out,403,"{\\"error\\":\\"Local app only\\"}");return;
+                    }
+                    String repo=queryParams(request[1]).getOrDefault("repo","");
+                    if(repo.length()>150 || !repo.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+") || repo.contains("..")){
+                        respondJson(out,400,"{\\"error\\":\\"Invalid repository owner/name\\"}");return;
+                    }
+                    HttpURLConnection conn=null;
+                    try{
+                        conn=(HttpURLConnection)new URL("https://api.github.com/repos/"+repo+"/releases?per_page=50").openConnection();
+                        conn.setConnectTimeout(12000);conn.setReadTimeout(20000);
+                        conn.setRequestProperty("User-Agent","ArcaneVault-Android-Updater/1.0");
+                        conn.setRequestProperty("Accept","application/vnd.github+json");
+                        int code=conn.getResponseCode();
+                        if(code!=200){respondJson(out,502,new JSONObject().put("error","GitHub returned HTTP "+code).toString());return;}
+                        byte[] data=readBytes(conn.getInputStream(),2_000_000);
+                        String json=new String(data,StandardCharsets.UTF_8);
+                        if(!json.trim().startsWith("[")){respondJson(out,502,"{\\"error\\":\\"Unexpected GitHub release response\\"}");return;}
+                        respondJson(out,200,json);
+                    }catch(Exception ex){
+                        respondJson(out,502,new JSONObject().put("error","Native GitHub release check failed: "+(ex.getMessage()==null?"network unavailable":ex.getMessage())).toString());
+                    }finally{if(conn!=null)conn.disconnect();}
+                }
                 else if(path.equals("/api/catalog/status")) respondJson(out,200,catalog.status().toString());
                 else if(path.equals("/api/catalog/sync") && request[0].equals("POST")){
                     if(catalog.start())respondJson(out,200,"{\"ok\":true}");
