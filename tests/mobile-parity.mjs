@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.15'/);
-assert.match(gradle,/versionCode 35/);
+assert.match(gradle,/versionName '2\.0\.16'/);
+assert.match(gradle,/versionCode 36/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -197,3 +197,11 @@ assert.match(html,/role="progressbar" aria-label="Set completion"/);
 assert.match(html,/aria-valuenow/);
 assert.match(html,/setSymbol\(r\.code\)/);
 assert.match(html,/#sets \.set-tile:focus-visible/);
+
+// Physical set completion must include paper-only printings and retain indexed IDs across recovery.
+assert.match(html,/\$\('setArena'\)\.value=setCollectionSource==='physical'\?'any':'arena'/);
+assert.match(html,/\$\('setArena'\)\.value=source==='physical'\?'any':'arena'/);
+assert.match(backend,/Map<String,Integer> restored=new HashMap/);
+assert.match(backend,/\.put\("scryfallId",c\.getString\(3\)\)/);
+assert.match(backend,/boolean preservePrintings=!hasIdentifiers&&prior\.equals\(incoming\)/);
+assert.match(backend,/if\(!preservePrintings\)db\.delete\("physical_printings",null,null\)/);
