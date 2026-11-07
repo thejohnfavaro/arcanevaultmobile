@@ -1386,7 +1386,14 @@ async function checkUpdates(silent=false){
   const found=items.map(releaseMatch).filter(Boolean).sort((a,b)=>semverCompare(b.version,a.version))[0];
   if(!found){
    if(status){
-    const samePlatform=items.filter(r=>!r.draft&&new RegExp('^(?:'+(PLATFORM==='windows'?'windows|win|desktop':'android|mobile')+')[-_]?v?[0-9]+\\.[0-9]+\\.[0-9]+
+    const prefix=PLATFORM==='windows'?'windows-v':'android-v';
+    const relevant=items.filter(r=>!r.draft&&String(r.tag_name||'').toLowerCase().startsWith(prefix));
+    status.textContent=relevant.length
+     ?'Only prerelease or non-installable '+PLATFORM+' packages are published. A stable '+prefix+'X.Y.Z release'+(PLATFORM==='android'?' with an APK':'')+' is required.'
+     :'No stable '+PLATFORM+' release has been published for this repository yet. Installed version: '+INSTALLED+'. This does not mean your app is outdated.';
+   }
+   return;
+  }
   if(semverCompare(found.version,INSTALLED)<=0){if(status)status.textContent='Up to date — installed '+INSTALLED+', latest '+found.version+'.';return}
   if(status)status.textContent='Update available: '+INSTALLED+' → '+found.version+'.';
   if(result){result.hidden=false;result.replaceChildren();const title=document.createElement('strong');title.textContent='New Arcane Vault '+PLATFORM+' release '+found.version;result.append(title);
