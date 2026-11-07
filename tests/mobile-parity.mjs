@@ -27,7 +27,7 @@ assert.match(html,/full-card|av-hand-art/i);
 assert.match(html,/physicalCards,manualMatches,favorites:/);
 assert.match(html,/id:String\(d.id\|\|makeDeckId\(\)\)/);
 assert.match(html,/const hasApk=.*\.apk/);
-assert.match(gradle,/versionName '2\.0\.0'/);
+assert.match(gradle,/versionName '2\.0\.1'/);
 assert.match(gradle,/versionCode 21/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','ownershipTable(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
