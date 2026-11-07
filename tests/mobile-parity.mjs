@@ -46,7 +46,7 @@ assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 const pStart=html.indexOf('const PHYSICAL_KEY='),pEnd=html.indexOf('const index=new Map()',pStart);
 const csvStart=html.indexOf('function parseCsv('),csvEnd=html.indexOf('async function importCsv(',csvStart);
 assert.ok(pStart>0 && pEnd>pStart && csvStart>0 && csvEnd>csvStart);
-const context=vm.createContext({load:()=>[],save:()=>{},fetch:async()=>({ok:true}),document:{},console});
+const context=vm.createContext({load:()=>[],save:()=>{},fetch:async()=>({ok:true}),document:{},window:{},console});
 vm.runInContext(html.slice(csvStart,csvEnd)+html.slice(pStart,pEnd)+';globalThis.exportFunctions={physicalCsvRows,physicalNormalize,physicalOwnership,physicalOwnedCount};',context);
 const f=context.exportFunctions;
 const manabox=f.physicalCsvRows('Binder Name,Binder Type,Name,Set code,Collector number,Foil,Quantity\nMain,Binder,Sol Ring,cmm,1,etched,2\nWishlist,List,Black Lotus,lea,1,normal,1');
