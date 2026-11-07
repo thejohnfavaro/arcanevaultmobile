@@ -20,4 +20,4 @@ console.log('PASS: update controls, safe release filtering, type filters, and Li
 // Android Set Progress must default to the source that can confirm printings.
 assert.match(html, /let setCollectionSource=load\('setCollectionSourceV1','physical'\)==='arena'\?'arena':'physical'/);
 assert.match(html, /Arena imports do not contain confirmed printing identities/);
-assert.match(html, /No sets have confirmed owned printings with these filters/);
+assert.match(html, /No sets match these filters. Clear the search or turn off Hide sets with no progress./);
