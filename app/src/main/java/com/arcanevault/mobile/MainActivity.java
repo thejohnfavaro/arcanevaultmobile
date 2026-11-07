@@ -102,8 +102,9 @@ public class MainActivity extends Activity {
                 if (RECOVERY_PATH.equals(url.getPath()) && "127.0.0.1".equals(url.getHost())
                         && "http".equals(url.getScheme())) {
                     String page = "<!doctype html><meta charset=utf-8><script>(function(){var d={};"
-                            + "for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);"
-                            + "if(k==='vault_cards'||k==='vault_physicalCollectionV1')d[k]=localStorage.getItem(k)}"
+                            + "try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);"
+                            + "if(k.startsWith('vault_')||k.startsWith('arcaneVault.')||k==='arcaneVault.collectionHistory.v1')"
+                            + "d[k]=localStorage.getItem(k)}}catch(e){}"
                             + "ArcaneRecovery.capture(JSON.stringify(d))})()</script>";
                     return new WebResourceResponse("text/html","UTF-8",
                             new ByteArrayInputStream(page.getBytes(StandardCharsets.UTF_8)));
@@ -147,7 +148,8 @@ public class MainActivity extends Activity {
             recoveryOrigins.sort((a,b)->Long.compare(
                     origins.get(b)==null?0:origins.get(b).getUsage(),
                     origins.get(a)==null?0:origins.get(a).getUsage()));
-            if (recoveryOrigins.size() > 64) recoveryOrigins.subList(64,recoveryOrigins.size()).clear();
+            // Scan every app-local origin, including older versions. No old data is
+            // deleted until a verified copy exists in the stable storage location.
             continueLegacyRecovery();
         }));
     }
@@ -156,7 +158,11 @@ public class MainActivity extends Activity {
             finishLegacyRecovery();
             return;
         }
+        int expectedIndex=recoveryIndex;
         browser.loadUrl(recoveryOrigins.get(recoveryIndex) + RECOVERY_PATH);
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if(recoveryIndex==expectedIndex) finishRecoveryOrigin(null);
+        },3000);
     }
     private final class RecoveryBridge {
         @JavascriptInterface public void capture(String json) {
@@ -224,18 +230,28 @@ public class MainActivity extends Activity {
                 String canonical=durable.getString(key,null);
                 if(canonical==null||!canonical.equals(source)){compatible=false;legacyConflicts++;break;}
             }
-            // An old origin may also contain non-collection settings; cleanup is
-            // deferred until the new WebView has confirmed their restoration.
+            // A conflicting preference/deck/library snapshot must not be erased
+            // automatically. Only proven duplicate origins qualify for cleanup.
+            if(compatible)for(java.util.Iterator<String> it=data.keys();it.hasNext();){
+                String key=it.next();
+                if(key.equals("vault_cards")||key.equals("vault_physicalCollectionV1"))continue;
+                if(!data.optString(key,"").equals(recoveredSettings.optString(key,""))){compatible=false;legacyConflicts++;break;}
+            }
             if(compatible)matchedRecoveryOrigins.add(entry.getKey());
         }
         android.util.Log.i("ArcaneVault","Legacy origins scanned="+legacyScanned+
                 ", collection types recovered="+imported+", conflicting snapshots="+legacyConflicts);
+        durable.edit().putString("recoveryReport","Checked "+legacyScanned+" older storage locations; restored "+imported+" collection inventories. "+legacyConflicts+" older differences preserved for safety.").commit();
         browser.loadUrl(appUrl);
+        if(recoveredSettings.length()==0) cleanVerifiedLegacyOrigins();
     }
     private void cleanVerifiedLegacyOrigins(){
         if (durable.getString("migrationSettings",null)!=null) return;
+        int removed=matchedRecoveryOrigins.size();
         for(String origin:matchedRecoveryOrigins) WebStorage.getInstance().deleteOrigin(origin);
         matchedRecoveryOrigins.clear();
+        String prior=durable.getString("recoveryReport","Storage ready.");
+        durable.edit().putString("recoveryReport",prior+" Removed "+removed+" confirmed redundant origins.").commit();
     }
 
     private void toast(String message) {runOnUiThread(()-> Toast.makeText(this,message,Toast.LENGTH_LONG).show());}
@@ -302,6 +318,9 @@ public class MainActivity extends Activity {
             // Native SharedPreferences is the authoritative single copy for
             // inventories. Use commit() so a failed write is not reported as saved.
             return durable.edit().putString("vault_"+key,json).commit();
+        }
+        @JavascriptInterface public String readRecoveryReport() {
+            return durable.getString("recoveryReport","Storage protection active. Collections are saved in native app storage.");
         }
         @JavascriptInterface public String readLegacySettings() {
             return durable.getString("migrationSettings",null);
