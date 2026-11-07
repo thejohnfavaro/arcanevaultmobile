@@ -225,6 +225,21 @@ public class MainActivity extends Activity {
                 if(durable.edit().putString(key,candidate).commit()) imported++;
             }
         }
+        // The catalog database contains ownership mirrors independent of WebView.
+        // Recover aggregate name/quantity records only if no complete inventory
+        // survived; never replace successfully migrated printing-specific data.
+        int indexedRecovered=0;
+        try{
+            JSONObject indexed=catalog.recoverIndexedOwnership();
+            for(String kind:new String[]{"arena","physical"}){
+                String key="arena".equals(kind)?"vault_cards":"vault_physicalCollectionV1";
+                String current=durable.getString(key,null);
+                if(current!=null&&collectionSize(current)>0)continue;
+                org.json.JSONArray rows=indexed.optJSONArray(kind);
+                if(rows!=null&&rows.length()>0&&durable.edit().putString(key,rows.toString()).commit())
+                    indexedRecovered++;
+            }
+        }catch(Exception ex){android.util.Log.w("ArcaneVault","Indexed ownership recovery unavailable",ex);}
         // Preserve settings in the stable origin before running application JS.
         if(recoveredSettings.length()>0)
             durable.edit().putString("migrationSettings",recoveredSettings.toString()).commit();
@@ -248,7 +263,7 @@ public class MainActivity extends Activity {
         }
         android.util.Log.i("ArcaneVault","Legacy origins scanned="+legacyScanned+
                 ", collection types recovered="+imported+", conflicting snapshots="+legacyConflicts);
-        durable.edit().putString("recoveryReport","Checked "+legacyScanned+" older storage locations; restored "+imported+" collection inventories. "+legacyConflicts+" older differences preserved for safety.").commit();
+        durable.edit().putString("recoveryReport","Checked "+legacyScanned+" older storage locations; restored "+imported+" full collection inventories and "+indexedRecovered+" aggregate inventory fallbacks. "+legacyConflicts+" older differences preserved for safety.").commit();
         browser.loadUrl(appUrl);
         if(recoveredSettings.length()==0) cleanVerifiedLegacyOrigins();
     }
