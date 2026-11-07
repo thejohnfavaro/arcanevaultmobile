@@ -28,9 +28,18 @@ assert.match(html,/physicalCards,manualMatches,favorites:/);
 assert.match(html,/id:String\(d.id\|\|makeDeckId\(\)\)/);
 assert.match(html,/const hasApk=.*\.apk/);
 assert.match(html,/overflow-x:hidden/);
+for (const id of ['physicalScanWindowsQr','physicalWindowsQrUrl','physicalQrPreview','physicalQrImport','physicalQrUndo']) assert.ok(html.includes('id="'+id+'"'),'Missing QR collection control '+id);
+assert.match(html,/function portableQrValidated\(/);
+assert.match(html,/function portableQrApply\(/);
+assert.match(html,/physicalInit\(\);physicalQrInit\(\)/);
+assert.match(bridge,/scanWindowsQr\(\)/);
+assert.match(bridge,/fetchWindowsSync\(String link\)/);
+assert.match(bridge,/arcane-vault-sync/);
+assert.match(gradle,/play-services-code-scanner:16\.1\.0/);
+
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.2'/);
-assert.match(gradle,/versionCode 22/);
+assert.match(gradle,/versionName '2\.0\.3'/);
+assert.match(gradle,/versionCode 23/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','ownershipTable(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
