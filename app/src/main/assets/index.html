@@ -12,7 +12,7 @@ try{
    if(localStorage.getItem(key)===null)localStorage.setItem(key,String(values[key]));
    attempts.push(key);
   }
-  if(attempts.every(key=>localStorage.getItem(key)!==null))
+  if(attempts.every(key=>localStorage.getItem(key)===String(values[key])))
    window.ArcaneAndroid.finishLegacySettings();
  }
 }catch(error){console.warn('Safe preference migration will retry on next launch',error)}
