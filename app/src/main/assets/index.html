@@ -362,7 +362,7 @@ const load=(key,fallback)=>{
  try{
   if(nativeCollectionKey(key)&&window.ArcaneAndroid?.readCollection){
    const existing=window.ArcaneAndroid.readCollection(key);
-   if(existing!==null&&existing!==undefined)return JSON.parse(existing)??fallback;
+   if(existing!==null&&existing!==undefined){const value=JSON.parse(existing);localStorage.removeItem('vault_'+key);return value??fallback}
    // Recover data from the fixed-origin browser on first migration.
    const old=localStorage.getItem('vault_'+key);
    if(old!==null){
