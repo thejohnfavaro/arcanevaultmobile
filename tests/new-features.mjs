@@ -123,3 +123,64 @@ console.log('PASS: Android card detail tab DOM insertions and repeated opens');
  assert.match(stalled,/Existing collections are safe/);
 }
 console.log('PASS: indexing status reports activity and actionable stalled states');
+
+
+// Quantity-safe physical printing recovery from the user's own CSV/Windows snapshot.
+{
+ const between=(a,b)=>{
+  const start=html.indexOf(a),end=html.indexOf(b,start);
+  assert.ok(start>=0&&end>start,'Missing printing recovery helper: '+a);
+  return html.slice(start,end);
+ };
+ const helpers=[
+  between('function physicalLegacyKey(c)','function physicalNormalize(rows)'),
+  between('function physicalNormalize(rows)','function physicalOwnership()'),
+  between('function avPlanPhysicalIdentityRecovery(current,source)','function avRestorePhysicalIdentities(source,description)')
+ ].join('\n');
+ const api=new Function(helpers+';return {normalize:physicalNormalize,plan:avPlanPhysicalIdentityRecovery,hasId:avPhysicalHasIdentity}')();
+ const unknown=(name,qty,more={})=>({name,qty,set:'',number:'',finish:'nonfoil',scryfallId:'',...more});
+ const sameQuantities=(first,second)=>{
+  const totals=rows=>Object.fromEntries([...rows.reduce((m,c)=>{
+   const n=c.name.toLowerCase();m.set(n,(m.get(n)||0)+c.qty);return m
+  },new Map())].sort((a,b)=>a[0].localeCompare(b[0])));
+  assert.deepEqual(totals(first),totals(second),'Physical quantities must never change during recovery');
+ };
+ const current=[unknown('Sol Ring',3),unknown('Arcane Signet',2),unknown('Counterspell',1),
+  unknown('Lightning Bolt',4,{location:'Binder A'})];
+ const source=[
+  {name:'Sol Ring',qty:1,set:'cmm',number:'001',scryfallId:''},
+  {name:'Sol Ring',qty:2,set:'2xm',number:'002',scryfallId:''},
+  {name:'Arcane Signet',qty:3,set:'cmm',number:'003',scryfallId:''}, // Quantity mismatch: skip.
+  unknown('Counterspell',1), // No print ID: skip.
+  {name:'Lightning Bolt',qty:4,set:'m11',number:'148',scryfallId:''}
+ ];
+ const recovered=api.plan(current,source);
+ assert.equal(recovered.recoveredNames,2);
+ assert.equal(recovered.recoveredCopies,7);
+ assert.equal(recovered.recoveredPrintings,3);
+ assert.equal(recovered.quantityMismatches,1);
+ assert.equal(recovered.missingIdentifiers,1);
+ sameQuantities(current,recovered.entries);
+ assert.deepEqual(recovered.entries.filter(c=>c.name==='Sol Ring').map(c=>c.qty).sort(),[1,2]);
+ assert.deepEqual(recovered.entries.filter(c=>c.name==='Arcane Signet').map(c=>c.set),['']);
+ assert.equal(recovered.entries.find(c=>c.name==='Lightning Bolt').location,'Binder A');
+
+ const preidentified=[{name:'Island',qty:1,set:'m11',number:'235',finish:'nonfoil'}];
+ const ignored=api.plan(preidentified,[{name:'Island',qty:1,set:'cmm',number:'111'}]);
+ assert.equal(ignored.recoveredNames,0,'Previously verified printings must not be overwritten');
+ assert.deepEqual(ignored.entries,api.normalize(preidentified));
+ const ambiguous=api.plan([unknown('Opt',1,{location:'Binder 1'}),unknown('Opt',1,{location:'Binder 2'})],
+  [{name:'Opt',qty:2,set:'m21',number:'59'}]);
+ assert.equal(ambiguous.ambiguousNames,1);
+ assert.equal(ambiguous.recoveredNames,0);
+ sameQuantities([unknown('Opt',1,{location:'Binder 1'}),unknown('Opt',1,{location:'Binder 2'})],ambiguous.entries);
+ const uuidA='c72b6a17-9a8e-4ef6-9fce-726d1d72a927';
+ const uuidB='0a7b6a17-9a8e-4ef6-9fce-726d1d72a928';
+ const distinct=api.normalize([
+  {name:'Test card',qty:1,set:'test',number:'1',finish:'nonfoil',scryfallId:uuidA},
+  {name:'Test card',qty:1,set:'test',number:'1',finish:'nonfoil',scryfallId:uuidB}
+ ]);
+ assert.equal(distinct.length,2,'Distinct Scryfall printing IDs must not collapse');
+ assert.equal(api.hasId({scryfallId:'not-a-real-uuid'}),false,'Invalid Scryfall IDs must not be trusted');
+}
+console.log('PASS: physical printing recovery preserves quantities, explicit IDs and ambiguous names');
