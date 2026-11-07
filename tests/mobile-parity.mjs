@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.17'/);
-assert.match(gradle,/versionCode 37/);
+assert.match(gradle,/versionName '2\.0\.18'/);
+assert.match(gradle,/versionCode 38/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -220,3 +220,17 @@ assert.match(backend,/if\(!preservePrintings\)db\.delete\("physical_printings",n
  assert.match(html,/av-rarity-rare/);
  assert.match(html,/av-rarity-mythic/);
  assert.doesNotMatch(html,/<select id="colors">/);
+
+ // Rarity badges must have a stable, shared size in all card views.
+ assert.match(html,/\.av-rarity\{box-sizing:border-box;display:inline-flex/);
+ assert.match(html,/min-width:116px;height:26px;min-height:26px;max-height:26px/);
+ assert.match(html,/#cards \.cardbody \.meta\{flex-wrap:wrap/);
+ assert.match(html,/#cards \.cardbody \.meta>\.av-rarity\{margin-left:auto\}/);
+
+ // Fetch missing details must support retrying failures and commit metadata before reporting saved.
+ assert.match(html,/const retryUnmatched=!!\$\('retryUnmatched'\)\?\.checked;/);
+ assert.match(html,/if\(!force&&card\.syncUnmatched&&!retryUnmatched\)/);
+ assert.match(html,/await avStoreMetadataConfirmed\(key,metadata\)/);
+ assert.match(html,/tx\.oncomplete=\(\)=>resolve\(\)/);
+ assert.match(html,/if\(!db\)throw Error\('The metadata database is not available/);
+ assert.doesNotMatch(html,/!meta\.oracle\|\|!meta\.rarity/);
