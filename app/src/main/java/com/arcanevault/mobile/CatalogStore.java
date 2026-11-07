@@ -43,7 +43,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(oldVersion<2)db.execSQL("CREATE TABLE IF NOT EXISTS physical_ownership(name TEXT PRIMARY KEY COLLATE NOCASE,qty INTEGER NOT NULL)");
     }
     private static int count(SQLiteDatabase db,String table){try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM "+table,null)){return c.moveToFirst()?c.getInt(0):0;}}
-    JSONObject status() throws Exception {return new JSONObject().put("busy",syncing.get()).put("phase",phase).put("imported",imported).put("total",total).put("updatedAt",updatedAt==null?JSONObject.NULL:updatedAt).put("error",error).put("source","Scryfall Default Cards (Android local database)").put("hasPrintings",total>0);}
+    JSONObject status() throws Exception {int printings=count(getReadableDatabase(),"variants");return new JSONObject().put("busy",syncing.get()).put("phase",phase).put("imported",imported).put("total",total).put("printings",printings).put("updatedAt",updatedAt==null?JSONObject.NULL:updatedAt).put("error",error).put("source","Scryfall Default Cards (Android local database)").put("hasPrintings",printings>0);}
     boolean start(){if(!syncing.compareAndSet(false,true))return false;imported=0;error="";new Thread(this::sync,"ArcaneCatalogSync").start();return true;}
     private static HttpURLConnection connect(String value)throws Exception{
         URL url=new URL(value);
