@@ -46,11 +46,14 @@ assert.match(html,/if\(!ready\.hasPrintings\)/);
 assert.match(html,/if\(\(wasBusy&&!catalogStatus\.busy/);
 assert.match(backend,/\.put\("printings",printings\)/);
 assert.match(backend,/\.put\("hasPrintings",printings>0\)/);
+assert.ok(html.includes('id="setHideZero"'),'Missing hide zero-progress sets checkbox');
+assert.ok(html.includes('setRows.filter(r=>Number(r.owned)>0)'),'Zero-progress sets must be hidden');
+assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persist');
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.4'/);
-assert.match(gradle,/versionCode 24/);
+assert.match(gradle,/versionName '2\.0\.5'/);
+assert.match(gradle,/versionCode 25/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','ownershipTable(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
