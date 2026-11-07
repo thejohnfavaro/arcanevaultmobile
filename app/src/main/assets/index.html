@@ -1051,7 +1051,19 @@ function initSidebarNavigation(){
  avRenderPins();avSyncNav(document.querySelector('.av-nav-group[data-group] button[data-tab].active')?.dataset.tab||'browse')
 }
 
-function tabs(tab){avSyncNav(tab);if(tab==='settings')avRefreshSyncDashboard();for(let t of ['browse','sets','physical','builder','library','planner','synergy','archetypes','deck','shortlist','settings','performance','workbench'])$(t).classList.toggle('hidden',t!==tab);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));if(tab==='deck')updateDeckUI();if(tab==='shortlist')renderFavorites();if(tab==='builder')renderStudio();if(tab==='library')renderLibrary();if(tab==='planner')renderPlanner();if(tab==='synergy')renderSynergy();if(tab==='archetypes')renderArchetypes();if(tab==='performance')loadPerformance();if(tab==='sets')loadSets();if(tab==='physical')physicalRender();if(tab==='workbench')window.avWorkbenchRefresh?.()}
+
+function avUxBottomSelect(tab){
+ const group=['builder','library','deck','planner'].includes(tab)?'builder':['browse','physical','shortlist'].includes(tab)?'browse':['sets'].includes(tab)?'sets':['settings'].includes(tab)?'settings':'menu';
+ document.querySelectorAll('[data-ux-bottom]').forEach(btn=>{if(btn.dataset.uxBottom===group)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current')});
+}
+document.addEventListener('click',e=>{
+ const button=e.target.closest('[data-ux-bottom]');if(!button)return;
+ const target=button.dataset.uxBottom;
+ if(target==='menu'){$('avMobileNavToggle')?.click();return}
+ tabs(target);document.querySelector('.sidebar')?.classList.remove('av-mobile-nav-open');
+ $('avMobileNavToggle')?.setAttribute('aria-expanded','false');
+});
+function tabs(tab){avSyncNav(tab);avUxBottomSelect(tab);if(tab==='settings')avRefreshSyncDashboard();for(let t of ['browse','sets','physical','builder','library','planner','synergy','archetypes','deck','shortlist','settings','performance','workbench'])$(t).classList.toggle('hidden',t!==tab);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));if(tab==='deck')updateDeckUI();if(tab==='shortlist')renderFavorites();if(tab==='builder')renderStudio();if(tab==='library')renderLibrary();if(tab==='planner')renderPlanner();if(tab==='synergy')renderSynergy();if(tab==='archetypes')renderArchetypes();if(tab==='performance')loadPerformance();if(tab==='sets')loadSets();if(tab==='physical')physicalRender();if(tab==='workbench')window.avWorkbenchRefresh?.()}
 const DEFAULTDECK=``;
 
 // Deck Studio: storage is local to the user's browser.
@@ -1879,4 +1891,10 @@ function init(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
 </script>
-</body></html>
+<nav class="ux-mobile-bottom" aria-label="Quick navigation">
+<button type="button" data-ux-bottom="browse" aria-current="page"><span class="ux-nav-icon" aria-hidden="true">▦</span>Cards</button>
+<button type="button" data-ux-bottom="sets"><span class="ux-nav-icon" aria-hidden="true">◫</span>Sets</button>
+<button type="button" data-ux-bottom="builder"><span class="ux-nav-icon" aria-hidden="true">⚒</span>Decks</button>
+<button type="button" data-ux-bottom="menu"><span class="ux-nav-icon" aria-hidden="true">☰</span>More</button>
+<button type="button" data-ux-bottom="settings"><span class="ux-nav-icon" aria-hidden="true">↻</span>Data</button>
+</nav></body></html>
