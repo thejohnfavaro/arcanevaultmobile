@@ -9,6 +9,8 @@ on:
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
       - '.github/workflows/android.yml'
 permissions:
   contents: write           # Required to push code or create releases
@@ -30,15 +32,13 @@ jobs:
         with:
           packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.13'
       - name: JavaScript regression checks
         run: |
           node tests/regression.mjs
           node tests/new-features.mjs
           node tests/mobile-parity.mjs
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: bash ./gradlew --no-daemon :app:assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
