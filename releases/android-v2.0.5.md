@@ -1,6 +1,7 @@
 # Arcane Vault Android v2.0.5
 
 ## Added
+- **Hide sets with no progress** checkbox in Set Progress; remembers the setting per device and works for Arena and physical collections.
 - One **Sync All Card Data** button replaces four separate Scryfall maintenance buttons.
 - Two-stage progress: synchronize the full printing catalog, then refresh owned-card metadata and Scryfall format legalities.
 - Set Progress now displays catalog indexing/readiness diagnostics instead of an empty screen when printings are unavailable.
