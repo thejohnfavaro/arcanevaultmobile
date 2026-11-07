@@ -181,6 +181,6 @@ assert.match(html,/async function physicalRefreshPrices\(/);
 assert.match(html,/physicalPrices=load\(PHYSICAL_PRICE_KEY/);
 assert.match(html,/save\(PHYSICAL_PRICE_KEY,physicalPrices\)/);
 assert.match(html,/if\(\(aa===null\)!==\(bb===null\)\)return aa===null\?1:-1/);
-assert.match(html,/c\.scryfallId\?\{id:c\.scryfallId\}:\{set:c\.set\.toLowerCase\(\),collector_number:String\(c\.number\)\}/);
+assert.match(html,/exactId\(c\)\?\{id:c\.scryfallId\}:\{set:c\.set\.toLowerCase\(\),collector_number:String\(c\.number\)\}/);
 
 console.log('PASS: UX refresh navigation, card tabs, sync health and physical price sorting');
