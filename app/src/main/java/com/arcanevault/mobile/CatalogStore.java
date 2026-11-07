@@ -143,22 +143,41 @@ final class CatalogStore extends SQLiteOpenHelper {
     JSONObject recoverIndexedOwnership() throws Exception {
         JSONObject result=new JSONObject();
         SQLiteDatabase db=getReadableDatabase();
-        for(String kind:new String[]{"arena","physical"}){
-            String table="physical".equals(kind)?"physical_ownership":"ownership";
-            JSONArray rows=new JSONArray();
-            try(Cursor cursor=db.rawQuery("SELECT name,qty FROM "+table+" WHERE qty>0 ORDER BY name COLLATE NOCASE",null)){
-                while(cursor.moveToNext()){
-                    JSONObject card=new JSONObject().put("name",cursor.getString(0)).put("qty",cursor.getInt(1));
-                    if("arena".equals(kind)){
-                        card.put("sets",new JSONArray()).put("tags",new JSONArray()).put("uses",new JSONArray());
-                    }else{
-                        card.put("set","").put("number","").put("finish","nonfoil");
-                    }
-                    rows.put(card);
-                }
-            }
-            result.put(kind,rows);
+        JSONArray arena=new JSONArray();
+        try(Cursor c=db.rawQuery("SELECT name,qty FROM ownership WHERE qty>0 ORDER BY name COLLATE NOCASE",null)){
+            while(c.moveToNext())arena.put(new JSONObject().put("name",c.getString(0)).put("qty",c.getInt(1))
+                .put("sets",new JSONArray()).put("tags",new JSONArray()).put("uses",new JSONArray()));
         }
+        result.put("arena",arena);
+        // Reconstruct known printing identities BEFORE resorting to name-only
+        // aggregate ownership. Name-only restoration previously lost set progress.
+        Map<String,Integer> totals=new LinkedHashMap<>();
+        Map<String,String> display=new HashMap<>();
+        try(Cursor c=db.rawQuery("SELECT name,qty FROM physical_ownership WHERE qty>0 ORDER BY name COLLATE NOCASE",null)){
+            while(c.moveToNext()){String name=c.getString(0),key=name.toLowerCase(Locale.ROOT);
+                totals.put(key,c.getInt(1));display.put(key,name);}
+        }
+        Map<String,Integer> restored=new HashMap<>();
+        JSONArray physical=new JSONArray();
+        try(Cursor c=db.rawQuery("SELECT name,setcode,collector,print_id,qty FROM physical_printings WHERE qty>0 ORDER BY name COLLATE NOCASE",null)){
+            while(c.moveToNext()){
+                String name=c.getString(0),key=name.toLowerCase(Locale.ROOT);
+                int available=totals.getOrDefault(key,0)-restored.getOrDefault(key,0);
+                if(available<=0)continue;
+                int qty=Math.min(c.getInt(4),available);
+                if(qty<=0)continue;
+                physical.put(new JSONObject().put("name",name).put("qty",qty)
+                    .put("set",c.getString(1)).put("number",c.getString(2))
+                    .put("scryfallId",c.getString(3)).put("finish","nonfoil"));
+                restored.put(key,restored.getOrDefault(key,0)+qty);
+            }
+        }
+        for(Map.Entry<String,Integer> e:totals.entrySet()){
+            int remainder=e.getValue()-restored.getOrDefault(e.getKey(),0);
+            if(remainder>0)physical.put(new JSONObject().put("name",display.get(e.getKey()))
+                .put("qty",remainder).put("set","").put("number","").put("finish","nonfoil"));
+        }
+        result.put("physical",physical);
         return result;
     }
     void ownership(JSONObject input)throws Exception{
@@ -174,8 +193,27 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(rows.length()>150000)throw new IllegalArgumentException("Too many physical inventory entries");
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
+            // An aggregate-only recovery snapshot may arrive after this database
+            // already indexed the real printing identities. Preserve those identities
+            // only when every incoming name and quantity matches the current mirror.
+            Map<String,Integer> incoming=new LinkedHashMap<>();
+            boolean hasIdentifiers=false;
+            for(int i=0;i<rows.length();i++){
+                JSONObject item=rows.optJSONObject(i);if(item==null)continue;
+                String name=item.optString("name","").trim();int qty=item.optInt("qty",0);
+                if(name.isEmpty()||qty<=0||qty>99999)continue;
+                String key=name.toLowerCase(Locale.ROOT);
+                incoming.put(key,incoming.getOrDefault(key,0)+qty);
+                if(!item.optString("scryfallId","").trim().isEmpty()||
+                    (!item.optString("set","").trim().isEmpty()&&!item.optString("number","").trim().isEmpty()))hasIdentifiers=true;
+            }
+            Map<String,Integer> prior=new LinkedHashMap<>();
+            try(Cursor c=db.rawQuery("SELECT name,qty FROM physical_ownership",null)){
+                while(c.moveToNext())prior.put(c.getString(0).toLowerCase(Locale.ROOT),c.getInt(1));
+            }
+            boolean preservePrintings=!hasIdentifiers&&prior.equals(incoming)&&count(db,"physical_printings")>0;
             db.delete("physical_ownership",null,null);
-            db.delete("physical_printings",null,null);
+            if(!preservePrintings)db.delete("physical_printings",null,null);
             // Aggregate name duplicates before inserting. Android API 26's older SQLite
             // does not support the modern ON CONFLICT ... DO UPDATE syntax.
             Map<String,Integer> quantities=new LinkedHashMap<>();
@@ -191,7 +229,7 @@ final class CatalogStore extends SQLiteOpenHelper {
                 String collector=item.optString("number","").trim();
                 String id=item.optString("scryfallId","").trim();
                 // An unspecified printing must never create set-specific progress.
-                if(!id.isEmpty() || (!set.isEmpty() && !collector.isEmpty())){
+                if(!preservePrintings&&(!id.isEmpty() || (!set.isEmpty() && !collector.isEmpty()))){
                     ContentValues ownedPrinting=new ContentValues();
                     ownedPrinting.put("name",name);
                     ownedPrinting.put("setcode",set);
