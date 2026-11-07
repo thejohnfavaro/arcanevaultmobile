@@ -159,3 +159,28 @@ assert.match(html,/id="perfExport"/);
 assert.match(html,/function normalizeManualMatches\(/);
 assert.match(html,/Match History/);
 console.log('PASS: mobile-only navigation excludes Windows log connector and retains manual match history');
+
+
+// UX refresh contract: existing data models, printing IDs and collection routines stay intact.
+for(const id of ['uxDataDashboard','uxSyncInventory','uxSyncMetadata','uxSyncCatalog','uxSyncPhysical','uxSyncState','avSyncAllData','avFetchAllDetails','setGrid','detailInner']){
+ assert.ok(html.includes('id="'+id+'"'),'Missing UX control '+id);
+}
+assert.match(html,/function avCardDetailsLayout\(/);
+assert.match(html,/function avRefreshSyncDashboard\(/);
+assert.match(html,/data-ux-trigger="avFetchAllDetails"/);
+assert.match(html,/data-ux-trigger="avSyncAllData"/);
+assert.match(html,/class="ux-set-percent"/);
+assert.match(html,/role="tabpanel"/);
+assert.match(html,/\.ux-detail-panel\[hidden\]/);
+assert.match(html,/function physicalSort/);
+for(const direction of ['price-desc','price-asc','unit-desc','unit-asc']) assert.ok(html.includes('value="'+direction+'"'),'Missing price sorting '+direction);
+
+for(const target of ['browse','sets','builder','menu','settings'])assert.ok(html.includes('data-ux-bottom="'+target+'"'));
+assert.match(html,/function avUxBottomSelect\(/);
+assert.match(html,/async function physicalRefreshPrices\(/);
+assert.match(html,/physicalPrices=load\(PHYSICAL_PRICE_KEY/);
+assert.match(html,/save\(PHYSICAL_PRICE_KEY,physicalPrices\)/);
+assert.match(html,/if\(\(aa===null\)!==\(bb===null\)\)return aa===null\?1:-1/);
+assert.match(html,/c\.scryfallId\?\{id:c\.scryfallId\}:\{set:c\.set\.toLowerCase\(\),collector_number:String\(c\.number\)\}/);
+
+console.log('PASS: UX refresh navigation, card tabs, sync health and physical price sorting');
