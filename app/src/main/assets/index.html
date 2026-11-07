@@ -366,7 +366,7 @@ body{padding-bottom:calc(78px + env(safe-area-inset-bottom,0px))}
  <div class="top"><div><h1 class="h1">Physical Collection</h1><p class="subtitle">Maintain paper inventory separately from MTG Arena ownership.</p></div><button id="physicalExport">Export physical CSV</button></div>
  <div class="notice">Import or edit real cards here. Physical quantities never overwrite Arena quantities. Set Progress can measure either collection by card name.</div>
  <div class="panel"><h2>Import physical cards</h2><p class="note">Recognizes commonly used ManaBox, Moxfield, Mythic Tools, Archidekt, Delver Lens, TCGplayer-style and Deckbox-style CSV headers. Imports preserve set, collector number, finish, location, condition and language where supplied.</p>
- <div class="studio-line"><label>CSV file <input type="file" class="field" id="physicalCsv" accept=".csv,text/csv"></label><label>Import mode <select id="physicalImportMode" class="field"><option value="replace">Replace physical collection</option><option value="merge">Add quantities to physical collection</option></select></label></div><p id="physicalImportProfile" class="note" aria-live="polite">No physical CSV imported yet.</p></div>
+ <div class="studio-line"><label>CSV file <input type="file" class="field" id="physicalCsv" accept=".csv,text/csv"></label><label>Import mode <select id="physicalImportMode" class="field"><option value="replace">Replace physical collection</option><option value="merge">Add quantities to physical collection</option><option value="identities">Restore verified printing IDs only (keep quantities)</option></select></label></div><p id="physicalImportProfile" class="note" aria-live="polite">No physical CSV imported yet.</p></div>
  <div class="panel" id="portableSyncAndroidPanel">
  <h2>Sync from Windows (Wi-Fi or USB)</h2>
  <p class="note">On Windows: Physical Collection → Show QR for Android (same Wi-Fi) or Show USB transfer QR (USB debugging + ADB). Scan either QR here. Alternatively, export a collection sync JSON file on Windows and copy it to your Galaxy over an ordinary USB file-transfer connection. Nothing changes until you approve the import.</p>
@@ -559,7 +559,10 @@ let cards=load('cards',bundled.cards),currentDeck=load('deck',null),favorite=new
 const PHYSICAL_KEY='physicalCollectionV1';
 let physicalCards=physicalNormalize(load(PHYSICAL_KEY,[]));
 let physicalPage=0;
-function physicalKey(c){return [c.name,c.set,c.number,c.finish,c.language,c.condition,c.location].map(x=>String(x||'').trim().toLowerCase()).join('|')}
+function physicalLegacyKey(c){return [c.name,c.set,c.number,c.finish,c.language,c.condition,c.location].map(x=>String(x||'').trim().toLowerCase()).join('|')}
+function physicalKey(c){return physicalLegacyKey(c)+'|'+String(c.scryfallId||'').trim().toLowerCase()}
+function avPhysicalHasIdentity(c){return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(c.scryfallId||'').trim())||
+ !!(String(c.set||'').trim()&&String(c.number||'').trim())}
 function physicalNormalize(rows){const byKey=new Map();for(const r of rows||[]){if(!r||!String(r.name||'').trim())continue;const qty=Number(r.qty);if(!Number.isInteger(qty)||qty<=0||qty>99999)continue;const c={name:String(r.name).trim(),qty,set:String(r.set||'').trim(),number:String(r.number||'').trim(),finish:String(r.finish||'nonfoil'),language:String(r.language||'').trim(),condition:String(r.condition||'').trim(),location:String(r.location||'').trim(),scryfallId:String(r.scryfallId||'').trim(),purchasePrice:String(r.purchasePrice||'').trim()};const k=physicalKey(c);if(byKey.has(k))byKey.get(k).qty+=qty;else byKey.set(k,c)}return [...byKey.values()]}
 function physicalOwnership(){const count=new Map();for(const c of physicalCards){const key=c.name.toLowerCase();const old=count.get(key);if(old)old.qty+=c.qty;else count.set(key,{name:c.name,qty:c.qty})}return [...count.values()]}
 function physicalOwnedCount(name){const key=String(name||'').toLowerCase().trim();return physicalCards.reduce((n,c)=>n+(c.name.toLowerCase()===key?c.qty:0),0)}
@@ -568,6 +571,57 @@ function ownedCollectionCards(physicalOnly=false){const all=new Map();if(!physic
 let physicalSync=Promise.resolve();
 function postPhysicalOwnership(){const payload=physicalCards;physicalSync=physicalSync.catch(()=>{}).then(async()=>{const response=await fetch('/api/catalog/physical-ownership',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards:payload})});if(!response.ok)throw Error('Physical catalog sync failed: HTTP '+response.status)});return physicalSync}
 function physicalSave(){save(PHYSICAL_KEY,physicalCards);postPhysicalOwnership().catch(e=>{if($('physicalStatus'))$('physicalStatus').textContent=e.message});render();if($('physical')&&!$('physical').classList.contains('hidden'))physicalRender();if($('sets')&&!$('sets').classList.contains('hidden')&&setCollectionSource==='physical')loadSets()}
+// Reconcile printing information, never quantities, from a verified snapshot of
+// this same physical collection. Reconciliation is deliberately conservative:
+// one unassigned row per card name, equal quantities, and every imported row
+// carrying an exact Scryfall printing ID or set + collector number.
+function avPlanPhysicalIdentityRecovery(current,source){
+ const mine=physicalNormalize(current),external=physicalNormalize(source);
+ const mineByName=new Map(),externalByName=new Map();
+ for(const c of mine){const k=c.name.toLowerCase();if(!mineByName.has(k))mineByName.set(k,[]);mineByName.get(k).push(c)}
+ for(const c of external){const k=c.name.toLowerCase();if(!externalByName.has(k))externalByName.set(k,[]);externalByName.get(k).push(c)}
+ const rows=[];let recoveredNames=0,recoveredCopies=0,recoveredPrintings=0,quantityMismatches=0,ambiguousNames=0,missingIdentifiers=0;
+ for(const [key,existing] of mineByName){
+  const candidates=externalByName.get(key)||[];
+  const eligible=existing.length===1&&!existing.some(avPhysicalHasIdentity)&&candidates.length&&candidates.every(avPhysicalHasIdentity);
+  const have=existing.reduce((n,c)=>n+c.qty,0),supplied=candidates.reduce((n,c)=>n+c.qty,0);
+  if(eligible&&have===supplied){
+   const original=existing[0];
+   for(const incoming of candidates)rows.push({
+    ...incoming,
+    language:incoming.language||original.language,
+    condition:incoming.condition||original.condition,
+    location:incoming.location||original.location,
+    purchasePrice:incoming.purchasePrice||original.purchasePrice
+   });
+   recoveredNames++;recoveredCopies+=have;recoveredPrintings+=candidates.length;
+  }else{
+   rows.push(...existing);
+   if(!existing.some(avPhysicalHasIdentity)){
+    if(existing.length!==1)ambiguousNames++;
+    else if(candidates.length&&have!==supplied)quantityMismatches++;
+    else missingIdentifiers++;
+   }
+  }
+ }
+ const result=physicalNormalize(rows);
+ const originalCounts=new Map(),updatedCounts=new Map();
+ for(const c of mine)originalCounts.set(c.name.toLowerCase(),(originalCounts.get(c.name.toLowerCase())||0)+c.qty);
+ for(const c of result)updatedCounts.set(c.name.toLowerCase(),(updatedCounts.get(c.name.toLowerCase())||0)+c.qty);
+ if(originalCounts.size!==updatedCounts.size||[...originalCounts].some(([name,qty])=>updatedCounts.get(name)!==qty))
+  throw Error('Printing recovery would change owned quantities. No changes applied.');
+ return {entries:result,recoveredNames,recoveredCopies,recoveredPrintings,quantityMismatches,ambiguousNames,missingIdentifiers};
+}
+function avRestorePhysicalIdentities(source,description){
+ const plan=avPlanPhysicalIdentityRecovery(physicalCards,source);
+ const status='Matched '+plan.recoveredNames+' card names / '+plan.recoveredCopies+' copies ('+plan.recoveredPrintings+' confirmed printing records). '+
+  plan.quantityMismatches+' quantity mismatches, '+plan.ambiguousNames+' ambiguous names, '+plan.missingIdentifiers+' without verified printings were left unchanged.';
+ if(!plan.recoveredNames)return {applied:false,status:'No printing identities could be safely restored. '+status+' Use a printing-specific export of the same physical collection.'};
+ if(!confirm(description+'\\n\\n'+status+'\\n\\nYour owned quantities will remain unchanged. This uses the printing identities supplied by the export, so confirm it represents your physical collection. Apply?'))
+  return {applied:false,status:'Printing recovery cancelled. Your physical collection is unchanged.'};
+ physicalCards=plan.entries;physicalPage=0;physicalSave();
+ return {applied:true,status:'Printing recovery applied. '+status+' Check Set Progress after catalog matching finishes.'};
+}
 function physicalCsvRows(raw){const rows=parseCsv(String(raw).replace(/^\uFEFF/,'')).filter(r=>r.some(v=>String(v).trim()));if(!rows.length)throw Error('CSV is empty');const headers=rows.shift().map(x=>String(x).trim().toLowerCase().replace(/[^a-z0-9]/g,''));const has=(...terms)=>terms.some(t=>headers.includes(t));let source='Generic CSV';if(has('containertype')&&has('containername')&&has('scryfallid'))source='Mythic Tools';else if(has('manaboxid')||has('bindername')&&has('setcode'))source='ManaBox';else if(has('tradelistcount')||has('count')&&has('edition')&&has('collectornumber'))source='Moxfield';else if(has('editioncode')&&has('dateadded'))source='Archidekt';else if(has('delverlensid')||has('scanid'))source='Delver Lens';else if(has('tcgplayerid')||has('productid'))source='TCGplayer-style';else if(has('deckboxid')||has('inventoryid'))source='Deckbox-style';
 const aliases={name:['name','cardname','productname','card'],qty:['quantity','count','qty','copies','amount','owned','tradelistcount','totalquantity'],set:['setcode','editioncode','edition','set','setname','expansion'],number:['collectornumber','collectorno','number','cardnumber'],finish:['finish','foil','foiling','isfoil'],condition:['condition','quality'],language:['language','lang'],location:['containername','bindername','folder','location','storage'],scryfallId:['scryfallid','scryfalluuid'],purchasePrice:['purchaseprice','pricepaid','costbasis']};
 const fields={};for(const [key,names] of Object.entries(aliases))fields[key]=names.map(n=>headers.indexOf(n)).find(i=>i>=0)??-1;if(fields.name<0)throw Error('No card name column found');if(fields.qty<0)throw Error('No quantity column found');const read=(row,k)=>fields[k]<0?'':String(row[fields[k]]??'').trim();const entries=[],problems={};function skip(reason){problems[reason]=(problems[reason]||0)+1}for(const row of rows){const name=read(row,'name'),qtyText=read(row,'qty'),qty=Number(qtyText);if(!name){skip('blank name');continue}if(!Number.isInteger(qty)||qty<0||qty>99999){skip('invalid quantity');continue}if(!qty){skip('zero copies');continue}const binderTypeIdx=headers.indexOf('bindertype');if(source==='ManaBox'&&binderTypeIdx>=0&&/list/i.test(String(row[binderTypeIdx]||''))){skip('wishlist');continue}const foil=read(row,'finish').toLowerCase();entries.push({name,qty,set:read(row,'set'),number:read(row,'number'),finish:/etch/.test(foil)?'etched':/^(true|1|yes|foil|foiled|premium|f)$/.test(foil)?'foil':'nonfoil',condition:read(row,'condition'),language:read(row,'language'),location:read(row,'location'),scryfallId:read(row,'scryfallId'),purchasePrice:read(row,'purchasePrice')})}if(!entries.length)throw Error('No positive-quantity cards found');return {entries:physicalNormalize(entries),source,skipped:Object.values(problems).reduce((n,v)=>n+v,0),problems}}
@@ -576,7 +630,7 @@ const PHYSICAL_PRICE_KEY='physicalPriceQuotesV1';
 let physicalPrices=load(PHYSICAL_PRICE_KEY,{quotes:{},updatedAt:''}),physicalPricesBusy=false;
 const physicalPriceNum=v=>{const n=Number(v);return v!=null&&v!==''&&Number.isFinite(n)&&n>0&&n<10000000?n:null};
 const physicalMoney=v=>Number(v||0).toLocaleString('en-US',{style:'currency',currency:'USD'});
-function physicalPrice(c){return physicalPriceNum(physicalPrices?.quotes?.[physicalKey(c)]?.usd)}
+function physicalPrice(c){return physicalPriceNum((physicalPrices?.quotes?.[physicalKey(c)]||physicalPrices?.quotes?.[physicalLegacyKey(c)])?.usd)}
 function physicalSortRows(a,b){
  const mode=$('physicalSort').value;
  if(mode!=='name'){
@@ -626,13 +680,13 @@ function physicalRender(){
  const size=40,pages=Math.max(1,Math.ceil(list.length/size));physicalPage=Math.max(0,Math.min(physicalPage,pages-1));
  const total=physicalCards.reduce((n,c)=>n+c.qty,0),priced=physicalCards.filter(c=>physicalPrice(c)!==null);
  const value=priced.reduce((n,c)=>n+physicalPrice(c)*c.qty,0);
- $('physicalSummary').textContent=physicalCards.length.toLocaleString()+' printings · '+total.toLocaleString()+' copies · '+physicalOwnership().length+' card names · '+physicalMoney(value)+' estimated ('+priced.length+' priced printings)';
+ $('physicalSummary').textContent=physicalCards.length.toLocaleString()+' inventory rows · '+total.toLocaleString()+' copies · '+physicalOwnership().length+' card names · '+physicalCards.filter(avPhysicalHasIdentity).length+' identified printing rows · '+physicalMoney(value)+' estimated ('+priced.length+' priced printings)';
  $('physicalPageLabel').textContent='Page '+(physicalPage+1)+' / '+pages+' · '+list.length+' matching'+($('physicalSort').value!=='name'?' · unpriced last':'');
  $('physicalPrev').disabled=physicalPage===0;$('physicalNext').disabled=physicalPage===pages-1;
  $('physicalRows').innerHTML=list.slice(physicalPage*size,(physicalPage+1)*size).map(c=>'<div class="av-physical-row"><div><strong>'+escapeHtml(c.name)+'</strong><div class="av-physical-meta">'+escapeHtml([c.set,c.number,c.finish,c.condition,c.location].filter(Boolean).join(' · '))+'</div><div class="note">Est. '+(physicalPrice(c)===null?'Unpriced':escapeHtml(physicalMoney(physicalPrice(c)*c.qty))+' total · '+escapeHtml(physicalMoney(physicalPrice(c)||0))+' each')+'</div></div><div><label class="note">Copies <input class="field" type="number" min="0" max="99999" data-physical-qty="'+escapeHtml(physicalKey(c))+'" value="'+c.qty+'"></label><button class="small" data-physical-save="'+escapeHtml(physicalKey(c))+'">Save</button></div></div>').join('')||'<div class="empty">No physical cards found. Import a CSV or add a card above.</div>';
 }
 function physicalInit(){
- $('physicalCsv').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const {entries,source,skipped,problems}=physicalCsvRows(await file.text()),mode=$('physicalImportMode').value;const merged=mode==='merge'?physicalNormalize([...physicalCards,...entries]):entries;const msg=source+' · '+entries.length+' printings · '+skipped+' skipped';$('physicalImportProfile').textContent=msg+(skipped?' ('+Object.entries(problems).map(([k,v])=>k+' '+v).join(', ')+')':'');if(!confirm('Import '+entries.length+' printings from '+source+'? '+(mode==='merge'?'Add quantities to':'Replace')+' physical inventory. Arena inventory stays unchanged.'))return;physicalCards=merged;physicalPage=0;physicalSave();$('physicalStatus').textContent='Imported '+entries.length+' printings. Arena inventory unchanged.'}catch(err){$('physicalStatus').textContent='Import failed: '+err.message}finally{e.target.value=''}});
+ $('physicalCsv').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const {entries,source,skipped,problems}=physicalCsvRows(await file.text()),mode=$('physicalImportMode').value;const msg=source+' · '+entries.length+' rows · '+entries.filter(avPhysicalHasIdentity).length+' identified · '+skipped+' skipped';$('physicalImportProfile').textContent=msg+(skipped?' ('+Object.entries(problems).map(([k,v])=>k+' '+v).join(', ')+')':'');if(mode==='identities'){$('physicalStatus').textContent=avRestorePhysicalIdentities(entries,'Restore verified printing identities from '+source+'?').status;return}const merged=mode==='merge'?physicalNormalize([...physicalCards,...entries]):entries;if(!confirm('Import '+entries.length+' printings from '+source+'? '+(mode==='merge'?'Add quantities to':'Replace')+' physical inventory. Arena inventory stays unchanged.'))return;physicalCards=merged;physicalPage=0;physicalSave();$('physicalStatus').textContent='Imported '+entries.length+' printings. Arena inventory unchanged.'}catch(err){$('physicalStatus').textContent='Import failed: '+err.message}finally{e.target.value=''}});
  $('physicalAdd').onclick=()=>{const name=$('physicalName').value.trim(),qty=Number($('physicalQty').value);if(!name||!Number.isInteger(qty)||qty<1||qty>99999){$('physicalStatus').textContent='Enter a name and a positive whole-number quantity';return}physicalCards=physicalNormalize([...physicalCards,{name,qty,set:$('physicalSet').value,number:$('physicalNumber').value,finish:$('physicalFinish').value}]);physicalPage=0;physicalSave();$('physicalStatus').textContent='Added physical copies of '+name};
  $('physicalSort').value=load('physicalSortChoiceV1','name');$('physicalSort').onchange=()=>{save('physicalSortChoiceV1',$('physicalSort').value);physicalPage=0;physicalRender()};$('physicalValueRefresh').onclick=physicalRefreshPrices;
  $('physicalSearch').oninput=()=>{physicalPage=0;physicalRender()};$('physicalPrev').onclick=()=>{physicalPage--;physicalRender()};$('physicalNext').onclick=()=>{physicalPage++;physicalRender()};
