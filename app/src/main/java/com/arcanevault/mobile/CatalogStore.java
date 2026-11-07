@@ -23,10 +23,15 @@ final class CatalogStore extends SQLiteOpenHelper {
     private volatile String phase="Not downloaded", error="", updatedAt=null;
     private volatile long imported=0;
     private volatile int total=0;
+    // Serve progress from memory. A COUNT(*) here can block behind the large
+    // SQLite bulk-import transaction and make the Android UI appear frozen.
+    private volatile int indexedPrintings=0;
+    private volatile long lastProgressAtMs=0L, downloadedBytes=0L, expectedBytes=0L;
     CatalogStore(Context context) {
         super(context,"arcane_catalog.db",null,3);
         SQLiteDatabase db=getWritableDatabase();
         total=count(db,"cards");
+        indexedPrintings=count(db,"variants");
         try(Cursor c=db.rawQuery("SELECT value FROM state WHERE key='updated'",null)) {if(c.moveToFirst())updatedAt=c.getString(0);}
         phase=total>0?"Ready":"Not downloaded";
     }
@@ -45,8 +50,27 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(oldVersion<3)db.execSQL("CREATE TABLE IF NOT EXISTS physical_printings(name TEXT NOT NULL COLLATE NOCASE,setcode TEXT NOT NULL COLLATE NOCASE,collector TEXT NOT NULL COLLATE NOCASE,print_id TEXT NOT NULL COLLATE NOCASE,qty INTEGER NOT NULL)");
     }
     private static int count(SQLiteDatabase db,String table){try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM "+table,null)){return c.moveToFirst()?c.getInt(0):0;}}
-    JSONObject status() throws Exception {int printings=count(getReadableDatabase(),"variants");return new JSONObject().put("busy",syncing.get()).put("phase",phase).put("imported",imported).put("total",total).put("printings",printings).put("updatedAt",updatedAt==null?JSONObject.NULL:updatedAt).put("error",error).put("source","Scryfall Default Cards (Android local database)").put("hasPrintings",printings>0);}
-    boolean start(){if(!syncing.compareAndSet(false,true))return false;imported=0;error="";new Thread(this::sync,"ArcaneCatalogSync").start();return true;}
+    JSONObject status() throws Exception {
+        boolean busy=syncing.get();
+        long inactiveSeconds=busy&&lastProgressAtMs>0
+            ?Math.max(0L,(android.os.SystemClock.elapsedRealtime()-lastProgressAtMs)/1000L):0L;
+        int printings=indexedPrintings; // No SQLite access on the status HTTP worker.
+        return new JSONObject().put("busy",busy).put("phase",phase)
+            .put("imported",imported).put("total",total).put("printings",printings)
+            .put("downloadedBytes",downloadedBytes).put("expectedBytes",expectedBytes)
+            .put("idleSeconds",inactiveSeconds).put("stalled",busy&&inactiveSeconds>=180)
+            .put("updatedAt",updatedAt==null?JSONObject.NULL:updatedAt)
+            .put("error",error).put("source","Scryfall Default Cards (Android local database)")
+            .put("hasPrintings",printings>0);
+    }
+    boolean start(){
+        if(!syncing.compareAndSet(false,true))return false;
+        imported=0;downloadedBytes=0;expectedBytes=0;
+        lastProgressAtMs=android.os.SystemClock.elapsedRealtime();
+        phase="Starting catalog sync";error="";
+        new Thread(this::sync,"ArcaneCatalogSync").start();
+        return true;
+    }
     private static HttpURLConnection connect(String value)throws Exception{
         URL url=new URL(value);
         if(!"https".equals(url.getProtocol()))throw new IOException("Catalog download must use HTTPS");
@@ -74,6 +98,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             URL download=new URL(url);
             if(!"https".equals(download.getProtocol())||!(download.getHost().equals("data.scryfall.io")||download.getHost().equals("data.scryfall.com")))throw new IOException("Unexpected Scryfall data host");
             phase="Downloading and indexing card printings";
+            lastProgressAtMs=android.os.SystemClock.elapsedRealtime();
             // Keep active catalog available until the new dataset has been indexed successfully.
             db.execSQL("DROP TABLE IF EXISTS cards_stage");db.execSQL("DROP TABLE IF EXISTS variants_stage");
             db.execSQL("CREATE TABLE cards_stage AS SELECT * FROM cards WHERE 0");
@@ -84,8 +109,21 @@ final class CatalogStore extends SQLiteOpenHelper {
             db.beginTransaction();
             try {
                 if(remote.getResponseCode()!=200)throw new IOException("Scryfall download HTTP "+remote.getResponseCode());
-                // Detect gzip from bytes rather than trusting extension/content-encoding.
-                try(InputStream network=remote.getInputStream();BufferedInputStream buffered=new BufferedInputStream(network,65536)){
+                // Track network progress separately from database writes. This
+                // keeps the status endpoint informative while bytes are streaming.
+                expectedBytes=Math.max(0L,remote.getContentLengthLong());
+                try(InputStream tracked=new java.io.FilterInputStream(remote.getInputStream()){
+                    @Override public int read(byte[] target,int offset,int length)throws IOException {
+                        int n=super.read(target,offset,length);
+                        if(n>0){downloadedBytes+=n;lastProgressAtMs=android.os.SystemClock.elapsedRealtime();}
+                        return n;
+                    }
+                    @Override public int read()throws IOException {
+                        int n=super.read();
+                        if(n>=0){downloadedBytes++;lastProgressAtMs=android.os.SystemClock.elapsedRealtime();}
+                        return n;
+                    }
+                };BufferedInputStream buffered=new BufferedInputStream(tracked,65536)){
                     buffered.mark(8);int a=buffered.read(),b=buffered.read();buffered.reset();
                     InputStream raw=(a==0x1f&&b==0x8b)?new GZIPInputStream(buffered,65536):buffered;
                     BufferedInputStream content=new BufferedInputStream(raw,65536);
@@ -98,6 +136,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             }finally{if(db.inTransaction()){db.setTransactionSuccessful();db.endTransaction();}remote.disconnect();}
             if(imported<1000)throw new IOException("Downloaded catalog unexpectedly contained too few cards: "+imported);
             phase="Finalizing local catalog";
+            lastProgressAtMs=android.os.SystemClock.elapsedRealtime();
             db.beginTransaction();try {
                 db.execSQL("DELETE FROM cards");db.execSQL("INSERT INTO cards SELECT * FROM cards_stage");
                 db.execSQL("DELETE FROM variants");db.execSQL("INSERT INTO variants SELECT * FROM variants_stage");
@@ -105,6 +144,8 @@ final class CatalogStore extends SQLiteOpenHelper {
                 db.setTransactionSuccessful();
             }finally{db.endTransaction();}
             total=count(db,"cards");
+            indexedPrintings=count(db,"variants");
+            lastProgressAtMs=android.os.SystemClock.elapsedRealtime();
             try(Cursor cur=db.rawQuery("SELECT value FROM state WHERE key='updated'",null)){if(cur.moveToFirst())updatedAt=cur.getString(0);}
             phase="Ready";
         }catch(Exception ex){error=ex.getMessage()==null?ex.toString():ex.getMessage();phase="Sync failed; previous catalog preserved";Log.e("ArcaneVault","Catalog synchronization failed",ex);}
@@ -136,6 +177,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         ContentValues p=new ContentValues();p.put("print_id",id);p.put("name",name);p.put("setcode",str(card,"set"));p.put("setname",str(card,"set_name"));p.put("collector",str(card,"collector_number"));p.put("rarity",str(card,"rarity"));p.put("image",image(card));p.put("image_back",backImage(card));p.put("art_id",str(card,"illustration_id"));p.put("games",game);p.put("arena",arena?1:0);p.put("digital",card.optBoolean("digital")?1:0);p.put("promo",card.optBoolean("promo")?1:0);p.put("full_art",card.optBoolean("full_art")?1:0);p.put("border",str(card,"border_color"));p.put("release",str(card,"released_at"));p.put("url",str(card,"scryfall_uri"));
         db.insertWithOnConflict("variants_stage",null,p,SQLiteDatabase.CONFLICT_REPLACE);imported++;
+        if(imported%500==0)lastProgressAtMs=android.os.SystemClock.elapsedRealtime();
         if(imported%2000==0 && db.inTransaction()){db.setTransactionSuccessful();db.endTransaction();db.beginTransaction();}
     }
     // Last-resort recovery from the indexed ownership mirrors. This can recover
