@@ -98,11 +98,11 @@ public class MainActivity extends Activity {
     // Only numeric RFC1918 IPv4 addresses with the exact Arcane Vault path are accepted.
     private static URL validatedWindowsSyncUrl(String raw) throws Exception {
         URL url = new URL(raw == null ? "" : raw.trim());
-        if (!"http".equalsIgnoreCase(url.getProtocol()) || url.getUserInfo() != null ||
+        if (!"http".equalsIgnoreCase(url.getProtocol()) || url.getAuthority().contains("@") ||
                 url.getQuery() != null || url.getRef() != null) throw new IOException("Not a Windows Arcane Vault QR link.");
         String host = url.getHost();
-        if (!host.matches("[0-9]{1,3}(?:\\\\.[0-9]{1,3}){3}")) throw new IOException("The QR link must use a local IPv4 address.");
-        String[] octets = host.split("\\\\.");
+        if (!host.matches("[0-9]{1,3}(?:\\.[0-9]{1,3}){3}")) throw new IOException("The QR link must use a local IPv4 address.");
+        String[] octets = host.split("\\.");
         int a = Integer.parseInt(octets[0]), b = Integer.parseInt(octets[1]);
         for (String item : octets) if (Integer.parseInt(item) > 255) throw new IOException("Invalid local IP address.");
         boolean privateLan = a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
