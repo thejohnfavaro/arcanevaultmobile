@@ -1484,7 +1484,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script>
 /* Arcane Vault: opt-in release checks and type-aware card tags. */
 (function(){'use strict';
-const PLATFORM='android', INSTALLED='2.0.4';
+const PLATFORM='android', INSTALLED='2.0.5';
 const DEFAULT_UPDATE_REPO='thejohnfavaro/arcanevaultmobile';
 const key=n=>'arcaneVault.update.'+PLATFORM+'.'+n;
 const loadPref=(n,fallback='')=>{try{return localStorage.getItem(key(n))??fallback}catch{return fallback}};
