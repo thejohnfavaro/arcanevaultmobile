@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.9'/);
-assert.match(gradle,/versionCode 29/);
+assert.match(gradle,/versionName '2\.0\.10'/);
+assert.match(gradle,/versionCode 30/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
