@@ -64,6 +64,13 @@ public class MainActivity extends Activity {
     private ExecutorService workers;
     private CatalogStore catalog;
     private ArtworkCache artwork;
+    // All live Scryfall card collection requests share one conservative limiter,
+    // including manually refreshed cards and full owned-card metadata syncs.
+    private final Object scryfallRequestGate = new Object();
+    private long scryfallLastRequestAt = 0L;
+    private long scryfallCooldownUntil = 0L;
+    private static final long SCRYFALL_MIN_GAP_MS = 700L;
+
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -490,21 +497,81 @@ public class MainActivity extends Activity {
             return parsed;
         }
         private void proxyScryfall(OutputStream out,byte[] payload)throws IOException{
-            HttpURLConnection conn=null;
-            try{
-                conn=(HttpURLConnection)new URL("https://api.scryfall.com/cards/collection").openConnection();
-                conn.setRequestMethod("POST");conn.setConnectTimeout(12000);conn.setReadTimeout(20000);
-                conn.setDoOutput(true);conn.setRequestProperty("Content-Type","application/json");
-                conn.setRequestProperty("Accept","application/json");conn.setRequestProperty("User-Agent","ArcaneVaultAndroid/0.1 (personal collection manager)");
-                conn.getOutputStream().write(payload);
-                int status=conn.getResponseCode();
-                InputStream content=status>=400?conn.getErrorStream():conn.getInputStream();
-                byte[] result=content==null?"{}".getBytes(StandardCharsets.UTF_8):readBytes(content,3_000_000);
-                respond(out,status,"application/json",result);
-            } catch(Exception e){
-                String message="{\"error\":\"Scryfall could not be reached. Check the network connection and retry.\"}";
-                respondJson(out,502,message);
-            } finally {if(conn!=null)conn.disconnect();}
+            // Validate batch size and shape before any upstream call. Never
+            // repeatedly retry an upstream 429 (Scryfall's stated policy).
+            try {
+                JSONObject batch = new JSONObject(new String(payload,StandardCharsets.UTF_8));
+                org.json.JSONArray ids=batch.optJSONArray("identifiers");
+                if(ids==null || ids.length()<1 || ids.length()>75){
+                    respondJson(out,400,"{\"error\":\"Expected 1–75 card identifiers.\"}");return;
+                }
+                for(int i=0;i<ids.length();i++){
+                    JSONObject id=ids.optJSONObject(i);
+                    if(id==null || (!id.has("name")&&!id.has("id")&&!id.has("set"))){
+                        respondJson(out,400,"{\"error\":\"Invalid Scryfall identifier.\"}");return;
+                    }
+                }
+            }catch(Exception invalid){
+                respondJson(out,400,"{\"error\":\"Invalid card collection request.\"}");return;
+            }
+            synchronized(scryfallRequestGate){
+                HttpURLConnection conn=null;
+                try{
+                    long now=android.os.SystemClock.elapsedRealtime();
+                    if(now<scryfallCooldownUntil){
+                        long remaining=Math.max(1,(scryfallCooldownUntil-now+999)/1000);
+                        sendScryfallError(out,429,"Scryfall rate limit is active. Wait before resuming.",remaining);
+                        return;
+                    }
+                    long wait=SCRYFALL_MIN_GAP_MS-(now-scryfallLastRequestAt);
+                    if(scryfallLastRequestAt>0&&wait>0){
+                        try{Thread.sleep(wait);}catch(InterruptedException interrupted){
+                            Thread.currentThread().interrupt();throw new IOException("Interrupted while pacing Scryfall requests");
+                        }
+                    }
+                    scryfallLastRequestAt=android.os.SystemClock.elapsedRealtime();
+                    conn=(HttpURLConnection)new URL("https://api.scryfall.com/cards/collection").openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setConnectTimeout(12000);conn.setReadTimeout(25000);
+                    conn.setDoOutput(true);conn.setRequestProperty("Content-Type","application/json");
+                    conn.setRequestProperty("Accept","application/json");
+                    conn.setRequestProperty("User-Agent","ArcaneVaultAndroid/2.0 (personal collection manager)");
+                    try(OutputStream stream=conn.getOutputStream()){stream.write(payload);}
+                    int status=conn.getResponseCode();
+                    if(status==429 || status==403 || status==400){
+                        long seconds=status==429?120:300;
+                        String retry=conn.getHeaderField("Retry-After");
+                        if(retry!=null){
+                            try{seconds=Math.max(60,Math.min(1800,Long.parseLong(retry.trim())));}
+                            catch(NumberFormatException ignored){
+                                try{
+                                    java.text.SimpleDateFormat format=new java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz",java.util.Locale.US);
+                                    format.setTimeZone(java.util.TimeZone.getTimeZone("GMT"));
+                                    java.util.Date date=format.parse(retry);
+                                    if(date!=null)seconds=Math.max(60,Math.min(1800,(date.getTime()-System.currentTimeMillis()+999)/1000));
+                                }catch(Exception ignoredDate){}
+                            }
+                        }
+                        scryfallCooldownUntil=android.os.SystemClock.elapsedRealtime()+seconds*1000;
+                        sendScryfallError(out,status,"Scryfall temporarily blocked live card lookups (HTTP "+status+"). Resume after the cooldown; existing collections and metadata are preserved.",seconds);
+                        return;
+                    }
+                    InputStream upstream=status>=400?conn.getErrorStream():conn.getInputStream();
+                    byte[] result=upstream==null?"{}".getBytes(StandardCharsets.UTF_8):readBytes(upstream,3_000_000);
+                    // Do not convert ordinary Scryfall errors to 502, which
+                    // would make non-transient errors look retryable.
+                    respond(out,status,"application/json",result);
+                }catch(Exception error){
+                    String msg="Scryfall network request failed: "+(error.getMessage()==null?"check connectivity":error.getMessage());
+                    sendScryfallError(out,502,msg,0);
+                }finally{if(conn!=null)conn.disconnect();}
+            }
+        }
+        private void sendScryfallError(OutputStream out,int code,String message,long cooldownSeconds)throws IOException{
+            JSONObject data=new JSONObject();
+            try{data.put("error",message);if(cooldownSeconds>0)data.put("retryAfterSeconds",cooldownSeconds);}
+            catch(org.json.JSONException exception){throw new IOException(exception);}
+            respondJson(out,code,data.toString());
         }
         private void respondJson(OutputStream o,int code,String s)throws IOException{respond(o,code,"application/json",s.getBytes(StandardCharsets.UTF_8));}
         private void respond(OutputStream out,int code,String type,byte[] data)throws IOException{
