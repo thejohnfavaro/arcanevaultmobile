@@ -467,11 +467,11 @@ public class MainActivity extends Activity {
                     String origin=hdr.getOrDefault("origin","");
                     String local="http://127.0.0.1:"+getPort();
                     if(!host.equals("127.0.0.1:"+getPort()) || (!origin.isEmpty()&&!origin.equals(local))){
-                        respondJson(out,403,"{\\"error\\":\\"Local app only\\"}");return;
+                        respondJson(out,403,new JSONObject().put("error","Local app only").toString());return;
                     }
                     String repo=queryParams(request[1]).getOrDefault("repo","");
                     if(repo.length()>150 || !repo.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+") || repo.contains("..")){
-                        respondJson(out,400,"{\\"error\\":\\"Invalid repository owner/name\\"}");return;
+                        respondJson(out,400,new JSONObject().put("error","Invalid repository owner/name").toString());return;
                     }
                     HttpURLConnection conn=null;
                     try{
@@ -483,7 +483,7 @@ public class MainActivity extends Activity {
                         if(code!=200){respondJson(out,502,new JSONObject().put("error","GitHub returned HTTP "+code).toString());return;}
                         byte[] data=readBytes(conn.getInputStream(),2_000_000);
                         String json=new String(data,StandardCharsets.UTF_8);
-                        if(!json.trim().startsWith("[")){respondJson(out,502,"{\\"error\\":\\"Unexpected GitHub release response\\"}");return;}
+                        if(!json.trim().startsWith("[")){respondJson(out,502,new JSONObject().put("error","Unexpected GitHub release response").toString());return;}
                         respondJson(out,200,json);
                     }catch(Exception ex){
                         respondJson(out,502,new JSONObject().put("error","Native GitHub release check failed: "+(ex.getMessage()==null?"network unavailable":ex.getMessage())).toString());
