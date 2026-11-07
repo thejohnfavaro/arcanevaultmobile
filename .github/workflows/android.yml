@@ -11,7 +11,11 @@ on:
       - 'gradle.properties'
       - '.github/workflows/android.yml'
 permissions:
-  contents: read
+  contents: write           # Required to push code or create releases
+  pull-requests: write      # Required to comment on or manage PRs
+  issues: write             # Required to create or modify issues
+  security-events: write    # Required if uploading SARIF/code scanning reports
+  statuses: write           # Required if updating commit check statuses
 jobs:
   build:
     runs-on: ubuntu-latest
