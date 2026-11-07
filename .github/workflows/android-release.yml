@@ -2,6 +2,9 @@ name: Android Signed Release
 
 on:
   push:
+    branches: [main]
+    paths:
+      - 'app/build.gradle'
     tags:
       - 'android-v*'
   workflow_dispatch:
@@ -11,7 +14,7 @@ permissions:
 
 jobs:
   release:
-    if: startsWith(github.ref, 'refs/tags/android-v')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/android-v')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -33,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then tag="$GITHUB_REF_NAME"; else tag="android-v$(sed -n \"s/.*versionName '\\([^']*\\)'.*/\\1/p\" app/build.gradle | head -n 1)"; fi
           [[ "$tag" =~ ^android-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid tag $tag"; exit 1; }
           version="${tag#android-v}"
           version_name=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)
@@ -45,6 +48,7 @@ jobs:
           done
           echo "RELEASE_NOTES=$notes" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
       - name: Run regression checks
         run: |
           node tests/regression.mjs
@@ -80,7 +84,9 @@ jobs:
           source_apk=app/build/outputs/apk/release/app-release.apk
           test -s "$source_apk"
           # Verify signed APK rather than publishing an unsigned or misnamed artifact.
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$source_apk"
+          apksigner_path=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -n 1)
+          test -n "$apksigner_path" || { echo "Missing Android apksigner tool"; exit 1; }
+          "$apksigner_path" verify --verbose "$source_apk"
           apk="ArcaneVault-Android-v$RELEASE_VERSION.apk"
           cp "$source_apk" "$apk"
           sha256sum "$apk" > "$apk.sha256"
@@ -99,12 +105,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; refusing to replace it."
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing to replace it."
             exit 1
           fi
-          gh release create "$GITHUB_REF_NAME" "$APK_FILE" "$APK_FILE.sha256" \
-            --verify-tag --title "Arcane Vault Android v$RELEASE_VERSION" \
+          gh release create "$RELEASE_TAG" "$APK_FILE" "$APK_FILE.sha256" \
+            --target "$GITHUB_SHA" --title "Arcane Vault Android v$RELEASE_VERSION" \
             --notes-file "$RELEASE_NOTES"
       - name: Remove signing keystore
         if: always()
