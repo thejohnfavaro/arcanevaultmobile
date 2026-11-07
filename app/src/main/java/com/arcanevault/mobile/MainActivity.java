@@ -327,6 +327,13 @@ public class MainActivity extends Activity {
                     }
                 }
                 byte[] bytes = out.toByteArray();
+                // A premature EOF can otherwise produce an opaque JSON parse error,
+                // and must never be treated as a complete collection snapshot.
+                if (declared >= 0 && bytes.length != declared)
+                    throw new IOException("Incomplete Windows transfer: received " + bytes.length +
+                            " of " + declared + " bytes. Retry the same QR/link while it is valid.");
+                if (bytes.length == 0)
+                    throw new IOException("Windows returned an empty collection transfer.");
                 JSONObject data = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
                 if (!"arcane-vault-collection-sync".equals(data.optString("format")) || data.optInt("schema") != 1)
                     throw new IOException("Windows returned an unsupported collection snapshot.");
