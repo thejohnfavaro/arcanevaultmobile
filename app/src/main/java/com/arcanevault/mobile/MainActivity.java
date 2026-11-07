@@ -105,9 +105,9 @@ public class MainActivity extends Activity {
         String[] octets = host.split("\\.");
         int a = Integer.parseInt(octets[0]), b = Integer.parseInt(octets[1]);
         for (String item : octets) if (Integer.parseInt(item) > 255) throw new IOException("Invalid local IP address.");
-        boolean privateLan = a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
+        boolean privateLan = (a == 127 && b == 0 && "127.0.0.1".equals(host)) || a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
         if (!privateLan || url.getPort() < 1 || url.getPort() > 65535 ||
-                !url.getPath().matches("/arcane-vault-sync/[a-f0-9]{48}")) throw new IOException("Not a local Windows Arcane Vault transfer link.");
+                !url.getPath().matches("/arcane-vault-sync/[a-f0-9]{48}")) throw new IOException("Not a Windows Arcane Vault LAN or USB transfer link.");
         return url;
     }
     private void webSyncCallback(String name, String argument) {
