@@ -81,8 +81,11 @@ final class CatalogStore extends SQLiteOpenHelper {
         return c;
     }
     private void sync(){
-        SQLiteDatabase db=getWritableDatabase();
+        SQLiteDatabase db=null;
         try{
+            // Even if opening SQLite fails (for example, storage is exhausted),
+            // always reach finally and clear the busy flag so users can retry.
+            db=getWritableDatabase();
             phase="Discovering Scryfall catalog";
             JSONObject manifest;
             HttpURLConnection c=connect("https://api.scryfall.com/bulk-data");
@@ -149,7 +152,17 @@ final class CatalogStore extends SQLiteOpenHelper {
             try(Cursor cur=db.rawQuery("SELECT value FROM state WHERE key='updated'",null)){if(cur.moveToFirst())updatedAt=cur.getString(0);}
             phase="Ready";
         }catch(Exception ex){error=ex.getMessage()==null?ex.toString():ex.getMessage();phase="Sync failed; previous catalog preserved";Log.e("ArcaneVault","Catalog synchronization failed",ex);}
-        finally {if(db.inTransaction())db.endTransaction();try{db.execSQL("DROP TABLE IF EXISTS cards_stage");db.execSQL("DROP TABLE IF EXISTS variants_stage");db.execSQL("DROP INDEX IF EXISTS cards_stage_unique");db.execSQL("DROP INDEX IF EXISTS variants_stage_unique");}catch(Exception ignored){}syncing.set(false);}
+        finally {
+            // Cleanup failures must never leave the user seeing busy=true forever.
+            try{if(db!=null&&db.inTransaction())db.endTransaction();}
+            catch(Exception cleanup){Log.w("ArcaneVault","Catalog rollback cleanup failed",cleanup);}
+            try{if(db!=null){db.execSQL("DROP TABLE IF EXISTS cards_stage");
+                db.execSQL("DROP TABLE IF EXISTS variants_stage");
+                db.execSQL("DROP INDEX IF EXISTS cards_stage_unique");
+                db.execSQL("DROP INDEX IF EXISTS variants_stage_unique");}}
+            catch(Exception cleanup){Log.w("ArcaneVault","Catalog staging cleanup failed",cleanup);}
+            syncing.set(false);
+        }
     }
     private static String readSmall(InputStream in,int max)throws Exception {ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>max)throw new IOException("Manifest too large");}return out.toString("UTF-8");}
     private static Object parseJson(JsonReader reader)throws IOException {
