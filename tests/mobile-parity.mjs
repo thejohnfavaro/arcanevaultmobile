@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.20'/);
-assert.match(gradle,/versionCode 40/);
+assert.match(gradle,/versionName '2\.0\.21'/);
+assert.match(gradle,/versionCode 41/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -261,3 +261,16 @@ assert.match(html,/if\(status\.stalled\)throw Error/,'Unified Sync must explain 
 assert.match(backend,/SQLiteDatabase db=null;\s*try\{\s*\/\/ Even if opening SQLite fails/);
 assert.match(backend,/syncing\.set\(false\);\s*\}/,'Catalog worker must always clear its busy flag');
 assert.match(backend,/Catalog staging cleanup failed/);
+
+
+// Recovery is opt-in and never uses the legacy quantity-add merge path.
+assert.match(html,/value="identities">Restore verified printing IDs only \(keep quantities\)/);
+assert.match(html,/value="printings">Restore verified physical printing IDs only \(keep quantities\)/);
+assert.match(html,/function avPlanPhysicalIdentityRecovery\(current,source\)/);
+assert.match(html,/if\(existing\.length!==1\)ambiguousNames\+\+/);
+assert.match(html,/if\(originalCounts\.size!==updatedCounts\.size/);
+assert.match(html,/if\(!save\(PHYSICAL_KEY,plan\.entries\)\)/);
+assert.match(html,/function avUndoPhysicalIdentityRecovery\(\)/);
+assert.match(html,/if\(scope==='printings'\)/);
+assert.match(html,/String\(c\.scryfallId\|\|''\)\.trim\(\)\.toLowerCase\(\)/);
+assert.match(html,/physicalCards\.filter\(avPhysicalHasIdentity\)\.length/);
