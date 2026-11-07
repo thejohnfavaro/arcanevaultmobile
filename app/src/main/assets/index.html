@@ -1695,6 +1695,13 @@ async function loadSets(){const req=++setRequest,source=setCollectionSource;
   const ready=await avCatalogStatusRequest();
   if(req!==setRequest||source!==setCollectionSource)return;
   if(ready.busy){
+   // Never query the active SQLite import transaction from Set Progress.
+   setRows=[];setCurrent=null;
+   $('setDrill').classList.add('hidden');
+   $('setGrid').classList.remove('hidden');
+   $('setSummary').classList.remove('hidden');
+   $('setSummary').replaceChildren();
+   $('setGrid').textContent='Indexing the Scryfall printings in the background. Your physical inventory is unchanged; this screen will refresh when indexing completes.';
    $('setStatus').textContent=avCatalogProgressText(ready)+'. Set Progress will load automatically once indexing finishes.';
    return;
   }
