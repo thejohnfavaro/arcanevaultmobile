@@ -46,6 +46,18 @@ assert.match(html,/if\(!ready\.hasPrintings\)/);
 assert.match(html,/if\(\(wasBusy&&!catalogStatus\.busy/);
 assert.match(backend,/\.put\("printings",printings\)/);
 assert.match(backend,/\.put\("hasPrintings",printings>0\)/);
+assert.match(bridge,/new HttpServerLite\(APP_PORT\)/,'App must use stable localhost origin');
+assert.match(bridge,/APP_PORT = 18765/,'Stable port must be explicit');
+assert.match(bridge,/WebStorage\.getInstance\(\)\.getOrigins/,'Previous WebView origins must be inspected for recovery');
+assert.match(bridge,/new WebResourceResponse\(/,'Migration must read each prior origin without requiring old random port listener');
+assert.match(bridge,/writeCollection\(String key,String json\)/,'Native inventory persistence must be available');
+assert.match(bridge,/\.commit\(\)/,'Inventory writes must confirm durable commit');
+assert.match(bridge,/deleteOrigin\(origin\)/,'Redundant old origins must be cleaned');
+assert.match(html,/nativeCollectionKey=key/,'Inventories must be stored natively');
+assert.match(html,/ArcaneAndroid\.writeCollection/,'Browser must commit collections to native storage');
+assert.match(html,/localStorage\.removeItem\('vault_'\+key\)/,'Inventories must not retain duplicate WebView copies');
+assert.match(html,/id="avStorageRecoveryStatus"/,'Recoverability status must be visible');
+
 assert.ok(html.includes('id="setHideZero"'),'Missing hide zero-progress sets checkbox');
 assert.ok(html.includes('setRows.filter(r=>Number(r.owned)>0)'),'Zero-progress sets must be hidden');
 assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persist');
