@@ -213,9 +213,15 @@ final class CatalogStore extends SQLiteOpenHelper {
     private static String printingCte(Map<String,String> p){
         if(!"physical".equals(get(p,"source")))
             return "confirmed AS (SELECT setcode,name,0 AS qty FROM variants WHERE 0)";
-        return "confirmed AS (SELECT v.setcode,v.name,SUM(p.qty) qty FROM variants v JOIN physical_printings p ON "+
-            "(p.print_id!='' AND v.print_id=p.print_id AND v.name=p.name) OR "+
-            "(p.print_id='' AND v.setcode=p.setcode AND v.collector=p.collector AND v.name=p.name) "+
+        // Printing identity, not imported display name, establishes ownership.
+        // A Scryfall ID is authoritative even when two sources spell split/adventure names differently.
+        // If that ID is absent from the catalog, use an exact set+collector identity instead.
+        // Set exports may contain the set's full name rather than its short code.
+        return "confirmed AS (SELECT v.setcode,v.name,SUM(p.qty) qty FROM physical_printings p JOIN variants v ON "+
+            "(p.print_id!='' AND v.print_id=p.print_id COLLATE NOCASE) OR "+
+            "(p.setcode!='' AND p.collector!='' AND v.collector=p.collector COLLATE NOCASE "+
+            "AND (v.setcode=p.setcode COLLATE NOCASE OR v.setname=p.setcode COLLATE NOCASE) "+
+            "AND (p.print_id='' OR NOT EXISTS(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE))) "+
             "GROUP BY v.setcode,v.name)";
     }
     private static String ownershipTable(Map<String,String> p){
@@ -259,6 +265,12 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         return new JSONObject().put("name",name).put("scope",scope).put("count",rows.length()).put("variants",rows).put("source","Scryfall printings (not all Arena cosmetics)");
     }
+    private int matchedPrintingCount(Map<String,String> p){
+        if(!"physical".equals(get(p,"source")))return 0;
+        try(Cursor c=getReadableDatabase().rawQuery("WITH "+printingCte(p)+" SELECT COUNT(*) FROM confirmed",null)){
+            return c.moveToFirst()?c.getInt(0):0;
+        }
+    }
     JSONObject sets(Map<String,String> p)throws Exception{
         String arena=get(p,"arena"),query=get(p,"q");JSONArray rows=new JSONArray();int t=0,owned=0;
         String source=printingCte(p);
@@ -266,7 +278,11 @@ final class CatalogStore extends SQLiteOpenHelper {
         try(Cursor r=getReadableDatabase().rawQuery(sql,new String[]{arena,query,"%"+query+"%","%"+query+"%"})){
             while(r.moveToNext()){int all=r.getInt(2),have=r.getInt(3);t+=all;owned+=have;rows.put(new JSONObject().put("code",r.getString(0)).put("name",r.getString(1)).put("total",all).put("owned",have).put("missing",all-have).put("percentage",all==0?0:Math.round(1000.0*have/all)/10.0).put("releaseDate",r.isNull(4)?"":r.getString(4)));}
         }
-        return new JSONObject().put("sets",rows).put("count",rows.length()).put("totalCards",t).put("ownedCards",owned).put("source","physical".equals(get(p,"source"))?"Confirmed physical printings":"Arena printing identity unavailable").put("note","Only confirmed printings are counted; name-only ownership does not imply a specific set.");
+        return new JSONObject().put("sets",rows).put("count",rows.length()).put("totalCards",t).put("ownedCards",owned)
+            .put("physicalNames",count(getReadableDatabase(),"physical_ownership"))
+            .put("identifiedPrintings",count(getReadableDatabase(),"physical_printings"))
+            .put("matchedCards",matchedPrintingCount(p))
+            .put("source","physical".equals(get(p,"source"))?"Confirmed physical printings":"Arena printing identity unavailable").put("note","Only confirmed printings are counted; name-only ownership does not imply a specific set.");
     }
     JSONObject setCards(Map<String,String> p)throws Exception{
         String code=get(p,"set").toLowerCase(Locale.US),arena=get(p,"arena"),scope=get(p,"ownership");if(!code.matches("[a-z0-9]{2,8}"))throw new IllegalArgumentException("Invalid set code");
