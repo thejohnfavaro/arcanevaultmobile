@@ -35,11 +35,14 @@ assert.match(html,/physicalInit\(\);physicalQrInit\(\)/);
 assert.match(bridge,/scanWindowsQr\(\)/);
 assert.match(bridge,/fetchWindowsSync\(String link\)/);
 assert.match(bridge,/arcane-vault-sync/);
+assert.match(bridge,/127\.0\.0\.1/);
+assert.ok(html.includes('id="physicalSyncJsonFile"'),'Missing USB file-transfer import control');
+assert.match(html,/physicalSyncJsonFile'\)\.onchange/);
 assert.match(gradle,/play-services-code-scanner:16\.1\.0/);
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.3'/);
-assert.match(gradle,/versionCode 23/);
+assert.match(gradle,/versionName '2\.0\.4'/);
+assert.match(gradle,/versionCode 24/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','ownershipTable(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
