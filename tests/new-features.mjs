@@ -16,3 +16,8 @@ assert.match(html,/https:\/\/api\.github\.com\/repos\//,'Updater must check GitH
 assert.match(html,/if\(release\.draft\|\|release\.prerelease\)return false/,'Only stable published releases');
 assert.match(html,/INSTALLED/);
 console.log('PASS: update controls, safe release filtering, type filters, and Liliana Zombie/wipe tags');
+
+// Android Set Progress must default to the source that can confirm printings.
+assert.match(html, /let setCollectionSource=load\('setCollectionSourceV1','physical'\)==='arena'\?'arena':'physical'/);
+assert.match(html, /Arena imports currently contain card names and quantities but no confirmed printing IDs/);
+assert.match(html, /No sets have confirmed owned printings with these filters/);
