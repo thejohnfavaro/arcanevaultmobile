@@ -126,7 +126,13 @@ public class MainActivity extends Activity {
         catalog = new CatalogStore(getApplicationContext());
         artwork = new ArtworkCache(getApplicationContext());
         try {
-            server = new HttpServerLite(APP_PORT);
+            try { server = new HttpServerLite(APP_PORT); }
+            catch (IOException inUse) {
+                // Another local service may briefly own the port. Native inventories
+                // remain safe even if a temporary alternative port is required.
+                server = new HttpServerLite(0);
+                android.util.Log.w("ArcaneVault","Stable local port unavailable; continuing with native durable inventories",inUse);
+            }
             workers.execute(server);
             appUrl = "http://127.0.0.1:" + server.getPort() + "/";
             startLegacyRecovery();
