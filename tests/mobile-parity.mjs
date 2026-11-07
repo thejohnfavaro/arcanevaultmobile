@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.13'/);
-assert.match(gradle,/versionCode 33/);
+assert.match(gradle,/versionName '2\.0\.14'/);
+assert.match(gradle,/versionCode 34/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -115,7 +115,11 @@ console.log('PASS: Set Progress release-date sort and catalog date plumbing');
 assert.match(backend,/physical_printings/);
 assert.match(backend,/if\(oldVersion<3\)/);
 assert.match(backend,/v\.print_id=p\.print_id/);
-assert.match(backend,/v\.setcode=p\.setcode AND v\.collector=p\.collector/);
+assert.match(backend,/v\.collector=p\.collector COLLATE NOCASE/);
+assert.match(backend,/v\.setname=p\.setcode COLLATE NOCASE/);
+assert.match(backend,/NOT EXISTS\(SELECT 1 FROM variants vi WHERE vi\.print_id=p\.print_id/);
+assert.match(html,/matchedCards/);
+assert.match(html,/no set-specific printing identifiers/);
 assert.match(backend,/LEFT JOIN confirmed o ON o\.name=d\.name AND o\.setcode=d\.setcode/);
 assert.match(backend,/LEFT JOIN confirmed o ON o\.name=sc\.name AND o\.setcode=\?/);
 assert.match(html,/function postPhysicalOwnership\(\)\{const payload=physicalCards;/);
