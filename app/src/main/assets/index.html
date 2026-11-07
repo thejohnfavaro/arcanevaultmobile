@@ -1514,8 +1514,8 @@ let setRows=[],setCurrent=null,setPage=0,setCardsPage=[],setRequest=0;
 let setCollectionSource=load('setCollectionSourceV1','physical')==='arena'?'arena':'physical';
 let setCardRequest=0;
 function setSourceUI(){document.querySelectorAll('[data-set-source]').forEach(b=>{const active=b.dataset.setSource===setCollectionSource;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))})}
-function setSourceChange(source){if(source!=='arena'&&source!=='physical')return;setCollectionSource=source;save('setCollectionSourceV1',source);setPage=0;setCardRequest++;setSourceUI();loadSets()}
-setSourceUI();document.querySelectorAll('[data-set-source]').forEach(b=>b.addEventListener('click',()=>setSourceChange(b.dataset.setSource)));
+function setSourceChange(source){if(source!=='arena'&&source!=='physical')return;setCollectionSource=source;save('setCollectionSourceV1',source);$('setArena').value=source==='physical'?'any':'arena';setPage=0;setCardRequest++;setSourceUI();loadSets()}
+$('setArena').value=setCollectionSource==='physical'?'any':'arena';setSourceUI();document.querySelectorAll('[data-set-source]').forEach(b=>b.addEventListener('click',()=>setSourceChange(b.dataset.setSource)));
 
 // Scryfall's public set-symbol SVGs are keyed by set code. If offline or missing,
 // keep the label usable and expose the set code instead of showing a broken image.
