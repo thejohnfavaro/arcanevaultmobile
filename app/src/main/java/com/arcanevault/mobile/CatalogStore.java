@@ -274,7 +274,30 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(!get(p,"q").isEmpty()){where.append(" AND (c.name LIKE ? OR c.oracle LIKE ? OR c.type LIKE ? OR c.setcode LIKE ?)");String q="%"+get(p,"q").substring(0,Math.min(160,get(p,"q").length()))+"%";for(int i=0;i<4;i++)args.add(q);}
         if(!get(p,"type").isEmpty()){where.append(" AND c.type LIKE ?");args.add("%"+get(p,"type")+"%");}
         if(!get(p,"rarity").isEmpty()){where.append(" AND c.rarity=?");args.add(get(p,"rarity"));}
-        if(!color.isEmpty())switch(color){case "C":where.append(" AND c.colors=''");break;case "B+":where.append(" AND c.colors LIKE '%B%'");break;case "WU":where.append(" AND c.colors NOT GLOB '*[BRG]*'");break;default:where.append(" AND c.colors=?");args.add(color);}
+        // Exact color identity choice(s): OR across selections, never fuzzy subsets.
+        // SQL canonicalization handles different letter order in imported records.
+        List<String> identities=new ArrayList<>();
+        for(String candidate:color.split(",")){
+            String token=candidate.trim();
+            if(token.isEmpty())continue;
+            if("C".equals(token)){if(!identities.contains(""))identities.add("");continue;}
+            if(token.length()>5||!token.matches("[WUBRG]+"))continue;
+            StringBuilder canonical=new StringBuilder();
+            for(char ch:"WUBRG".toCharArray())if(token.indexOf(ch)>=0)canonical.append(ch);
+            if(canonical.length()!=token.length())continue;
+            if(!identities.contains(canonical.toString()))identities.add(canonical.toString());
+            if(identities.size()>=32)break;
+        }
+        if(!identities.isEmpty()){
+            String canonicalColors="(CASE WHEN instr(c.colors,'W')>0 THEN 'W' ELSE '' END"+
+                " || CASE WHEN instr(c.colors,'U')>0 THEN 'U' ELSE '' END"+
+                " || CASE WHEN instr(c.colors,'B')>0 THEN 'B' ELSE '' END"+
+                " || CASE WHEN instr(c.colors,'R')>0 THEN 'R' ELSE '' END"+
+                " || CASE WHEN instr(c.colors,'G')>0 THEN 'G' ELSE '' END)";
+            where.append(" AND ").append(canonicalColors).append(" IN (");
+            for(int i=0;i<identities.size();i++){if(i>0)where.append(',');where.append('?');args.add(identities.get(i));}
+            where.append(')');
+        }
         Map<String,String> hints=new HashMap<>();hints.put("Ramp","%add %mana%");hints.put("Removal","%destroy target%");hints.put("Board Wipe","%destroy all%");hints.put("Discard","%discard%");hints.put("Counterspell","%counter target%");hints.put("Card Draw","%draw %card%");hints.put("Card Selection","%scry%");hints.put("Lifegain","%gain %life%");hints.put("Tutor","%search your library%");hints.put("Stax","%can't cast%");hints.put("Haste","%haste%");hints.put("Protection","%hexproof%");hints.put("Recursion","%from your graveyard%");hints.put("Sacrifice","%sacrifice%");hints.put("Tokens","%create %token%");hints.put("Graveyard Hate","%exile %graveyard%");hints.put("Finisher","%loses the game%");hints.put("Equipment","%Equipment%");
         if(hints.containsKey(role)){where.append("Equipment".equals(role)?" AND c.type LIKE ?":" AND c.oracle LIKE ?");args.add(hints.get(role));}
         String from=" FROM cards c LEFT JOIN ownership o ON o.name=c.name"+where;
