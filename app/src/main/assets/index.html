@@ -1555,10 +1555,18 @@ function drawSets(){
  $('setGrid').innerHTML=setCollectionSource==='arena'?'<div class="av-set-empty">Arena imports do not contain confirmed printing identities, so set-specific completion is unavailable. Select Physical to view confirmed printings. Your Arena ownership is preserved.</div>':(tiles||noMatches);
 
 }
+// Local server requests must fail visibly, rather than leave Set Progress pending indefinitely.
+async function avSetProgressFetch(url,options={}){
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),12000);
+ try{return await fetch(url,{...options,signal:controller.signal,cache:'no-store'});}
+ catch(error){if(error?.name==='AbortError')throw Error('Local catalog request timed out. Check Data & Sync and retry; your collection is unchanged.');throw error;}
+ finally{clearTimeout(timeout);}
+}
 async function loadSets(){const req=++setRequest,source=setCollectionSource;
  $('setStatus').textContent='Checking the local printing catalog…';
  try{
-  const sr=await fetch('/api/catalog/status');
+  const sr=await avSetProgressFetch('/api/catalog/status');
   if(!sr.ok)throw Error('Catalog status HTTP '+sr.status);
   const ready=await sr.json();
   if(req!==setRequest||source!==setCollectionSource)return;
@@ -1571,8 +1579,7 @@ async function loadSets(){const req=++setRequest,source=setCollectionSource;
   }
  }catch(e){if(req===setRequest)$('setStatus').textContent='Cannot check catalog readiness: '+e.message;return}
  $('setStatus').textContent='Loading set completion from the local catalog…';
- $('setStatus').textContent='Loading set completion from the local catalog…';
- try{if(source==='physical')await postPhysicalOwnership();if(req!==setRequest||source!==setCollectionSource)return;const u='/api/catalog/sets?arena='+encodeURIComponent($('setArena').value)+'&q='+encodeURIComponent($('setSearch').value.trim())+'&source='+source;const r=await fetch(u);const j=await r.json();if(!r.ok)throw Error(j.error||'Set lookup failed');if(req!==setRequest||source!==setCollectionSource)return;
+ try{if(source==='physical')await postPhysicalOwnership();if(req!==setRequest||source!==setCollectionSource)return;const u='/api/catalog/sets?arena='+encodeURIComponent($('setArena').value)+'&q='+encodeURIComponent($('setSearch').value.trim())+'&source='+source;const r=await avSetProgressFetch(u);const j=await r.json();if(!r.ok)throw Error(j.error||'Set lookup failed');if(req!==setRequest||source!==setCollectionSource)return;
  setRows=j.sets||[];
  const physicalNames=Number(j.physicalNames||0),identified=Number(j.identifiedPrintings||0),matched=Number(j.matchedCards||0);
  $('setStatus').textContent=source==='arena'?'Arena card imports do not include confirmed printing IDs; set-specific progress is unavailable. Switch to Physical to view confirmed progress.':(!physicalNames?'No physical cards are available for Set Progress. Check Physical Collection and restore from a verified backup if the inventory is missing.':!identified?'Physical Collection has '+physicalNames+' card names but no set-specific printing identifiers. Existing names and quantities are preserved; choose owned printings or import a CSV with Scryfall IDs or set and collector numbers.':!matched?'Found '+identified+' printing records but none matched the local Scryfall catalog. Check the catalog sync and your imported set/collector identifiers; existing cards are preserved.':'Matched '+matched+' distinct owned card/set pairs from '+identified+' identified physical printing records. '+setRows.length+' sets found.');
