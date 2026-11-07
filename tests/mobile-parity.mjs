@@ -257,3 +257,7 @@ assert.match(html,/setTimeout\(\(\)=>controller\.abort\(\),12000\)/);
 assert.match(html,/const ready=await avCatalogStatusRequest\(\)/,'Set Progress must use responsive status service');
 assert.match(html,/if\(ready\.busy\)\{/,'Set Progress must not query an actively indexing catalog');
 assert.match(html,/if\(status\.stalled\)throw Error/,'Unified Sync must explain truly stalled imports');
+
+assert.match(backend,/SQLiteDatabase db=null;\s*try\{\s*\/\/ Even if opening SQLite fails/);
+assert.match(backend,/syncing\.set\(false\);\s*\}/,'Catalog worker must always clear its busy flag');
+assert.match(backend,/Catalog staging cleanup failed/);
