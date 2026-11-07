@@ -17,6 +17,11 @@ import android.view.View;
 import android.graphics.Color;
 
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
+import com.google.mlkit.vision.barcode.common.Barcode;
+import org.json.JSONException;
 import java.io.OutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -89,7 +94,73 @@ public class MainActivity extends Activity {
         } catch(IOException e) {toast("Unable to start local app service: " + e.getMessage());}
     }
     private void toast(String message) {runOnUiThread(()-> Toast.makeText(this,message,Toast.LENGTH_LONG).show());}
+    // The Windows QR is an expiring, single-use URL on the local network.
+    // Only numeric RFC1918 IPv4 addresses with the exact Arcane Vault path are accepted.
+    private static URL validatedWindowsSyncUrl(String raw) throws Exception {
+        URL url = new URL(raw == null ? "" : raw.trim());
+        if (!"http".equalsIgnoreCase(url.getProtocol()) || url.getUserInfo() != null ||
+                url.getQuery() != null || url.getRef() != null) throw new IOException("Not a Windows Arcane Vault QR link.");
+        String host = url.getHost();
+        if (!host.matches("[0-9]{1,3}(?:\\\\.[0-9]{1,3}){3}")) throw new IOException("The QR link must use a local IPv4 address.");
+        String[] octets = host.split("\\\\.");
+        int a = Integer.parseInt(octets[0]), b = Integer.parseInt(octets[1]);
+        for (String item : octets) if (Integer.parseInt(item) > 255) throw new IOException("Invalid local IP address.");
+        boolean privateLan = a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
+        if (!privateLan || url.getPort() < 1 || url.getPort() > 65535 ||
+                !url.getPath().matches("/arcane-vault-sync/[a-f0-9]{48}")) throw new IOException("Not a local Windows Arcane Vault transfer link.");
+        return url;
+    }
+    private void webSyncCallback(String name, String argument) {
+        String javascript = "window." + name + "(" + JSONObject.quote(argument) + ")";
+        runOnUiThread(() -> { if(browser != null) browser.evaluateJavascript(javascript, null); });
+    }
+    private void downloadWindowsSync(String link) {
+        workers.execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                URL url = validatedWindowsSyncUrl(link);
+                conn = (HttpURLConnection)url.openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(15000);
+                conn.setInstanceFollowRedirects(false);
+                conn.setRequestProperty("Accept", "application/json");
+                if (conn.getResponseCode() != 200) throw new IOException("Windows rejected the link (expired, already used, or firewall blocked). HTTP " + conn.getResponseCode());
+                int max = 8 * 1024 * 1024;
+                int declared = conn.getContentLength();
+                if (declared > max) throw new IOException("Transfer exceeds 8 MB.");
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try (InputStream in = conn.getInputStream()) {
+                    byte[] buffer = new byte[8192]; int count;
+                    while ((count = in.read(buffer)) >= 0) {
+                        if (out.size() + count > max) throw new IOException("Transfer exceeds 8 MB.");
+                        out.write(buffer, 0, count);
+                    }
+                }
+                byte[] bytes = out.toByteArray();
+                JSONObject data = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+                if (!"arcane-vault-collection-sync".equals(data.optString("format")) || data.optInt("schema") != 1)
+                    throw new IOException("Windows returned an unsupported collection snapshot.");
+                webSyncCallback("arcaneVaultSyncData", Base64.encodeToString(bytes, Base64.NO_WRAP));
+            } catch (Exception ex) { webSyncCallback("arcaneVaultSyncError", ex.getMessage() == null ? "Transfer failed" : ex.getMessage()); }
+            finally { if (conn != null) conn.disconnect(); }
+        });
+    }
     private class AndroidBridge {
+        @JavascriptInterface public void scanWindowsQr() {
+            runOnUiThread(() -> {
+                GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
+                        .setBarcodeFormats(Barcode.FORMAT_QR_CODE).build();
+                GmsBarcodeScanning.getClient(MainActivity.this, options).startScan()
+                        .addOnSuccessListener(barcode -> {
+                            String value = barcode.getRawValue();
+                            if (value != null) webSyncCallback("arcaneVaultScannedQr", value);
+                            else webSyncCallback("arcaneVaultSyncError", "QR code was empty.");
+                        })
+                        .addOnFailureListener(err -> webSyncCallback("arcaneVaultSyncError",
+                                "Camera QR scanner unavailable. Paste the Windows transfer link instead. " + err.getMessage()));
+            });
+        }
+        @JavascriptInterface public void fetchWindowsSync(String link) { downloadWindowsSync(link); }
         @JavascriptInterface public void exportFile(String filename, String mime, String base64) {
             try {
                 byte[] data = Base64.decode(base64,Base64.DEFAULT);
