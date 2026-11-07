@@ -23,10 +23,13 @@ final class CatalogStore extends SQLiteOpenHelper {
     private volatile String phase="Not downloaded", error="", updatedAt=null;
     private volatile long imported=0;
     private volatile int total=0;
+    // Status HTTP requests must never query SQLite while a large catalog transaction is active.
+    private volatile int indexedPrintings=0;
     CatalogStore(Context context) {
         super(context,"arcane_catalog.db",null,3);
         SQLiteDatabase db=getWritableDatabase();
         total=count(db,"cards");
+        indexedPrintings=count(db,"variants");
         try(Cursor c=db.rawQuery("SELECT value FROM state WHERE key='updated'",null)) {if(c.moveToFirst())updatedAt=c.getString(0);}
         phase=total>0?"Ready":"Not downloaded";
     }
@@ -45,7 +48,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(oldVersion<3)db.execSQL("CREATE TABLE IF NOT EXISTS physical_printings(name TEXT NOT NULL COLLATE NOCASE,setcode TEXT NOT NULL COLLATE NOCASE,collector TEXT NOT NULL COLLATE NOCASE,print_id TEXT NOT NULL COLLATE NOCASE,qty INTEGER NOT NULL)");
     }
     private static int count(SQLiteDatabase db,String table){try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM "+table,null)){return c.moveToFirst()?c.getInt(0):0;}}
-    JSONObject status() throws Exception {int printings=count(getReadableDatabase(),"variants");return new JSONObject().put("busy",syncing.get()).put("phase",phase).put("imported",imported).put("total",total).put("printings",printings).put("updatedAt",updatedAt==null?JSONObject.NULL:updatedAt).put("error",error).put("source","Scryfall Default Cards (Android local database)").put("hasPrintings",printings>0);}
+    JSONObject status() throws Exception {int printings=indexedPrintings;return new JSONObject().put("busy",syncing.get()).put("phase",phase).put("imported",imported).put("total",total).put("printings",printings).put("updatedAt",updatedAt==null?JSONObject.NULL:updatedAt).put("error",error).put("source","Scryfall Default Cards (Android local database)").put("hasPrintings",printings>0);}
     boolean start(){if(!syncing.compareAndSet(false,true))return false;imported=0;error="";new Thread(this::sync,"ArcaneCatalogSync").start();return true;}
     private static HttpURLConnection connect(String value)throws Exception{
         URL url=new URL(value);
@@ -105,6 +108,7 @@ final class CatalogStore extends SQLiteOpenHelper {
                 db.setTransactionSuccessful();
             }finally{db.endTransaction();}
             total=count(db,"cards");
+            indexedPrintings=count(db,"variants");
             try(Cursor cur=db.rawQuery("SELECT value FROM state WHERE key='updated'",null)){if(cur.moveToFirst())updatedAt=cur.getString(0);}
             phase="Ready";
         }catch(Exception ex){error=ex.getMessage()==null?ex.toString():ex.getMessage();phase="Sync failed; previous catalog preserved";Log.e("ArcaneVault","Catalog synchronization failed",ex);}
