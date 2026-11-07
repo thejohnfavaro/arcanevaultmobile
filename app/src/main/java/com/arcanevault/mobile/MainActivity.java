@@ -53,6 +53,10 @@ public class MainActivity extends Activity {
     private final List<String> recoveryOrigins = new ArrayList<>();
     private final List<String> matchedRecoveryOrigins = new ArrayList<>();
     private int recoveryIndex = 0, legacyScanned = 0, legacyConflicts = 0;
+    private final Map<String,String> recoveryBest = new HashMap<>();
+    private final Map<String,Integer> recoveryBestSize = new HashMap<>();
+    private final Map<String,JSONObject> legacySnapshots = new HashMap<>();
+    private JSONObject recoveredSettings = new JSONObject();
     private String appUrl;
     private ValueCallback<Uri[]> pickerCallback;
     private byte[] pendingExport;
@@ -127,6 +131,113 @@ public class MainActivity extends Activity {
             startLegacyRecovery();
         } catch(IOException e) {toast("Unable to start local app service: " + e.getMessage());}
     }
+
+    // Enumerate WebView's previous localhost origins. Old builds used an ephemeral
+    // port as the origin, so their localStorage is still on disk but invisible.
+    private void startLegacyRecovery() {
+        WebStorage.getInstance().getOrigins(origins -> runOnUiThread(() -> {
+            recoveryOrigins.clear();
+            if (origins != null) for (String origin : origins.keySet()) {
+                if (origin.matches("http://127\\.0\\.0\\.1:[0-9]{2,5}")
+                        && !origin.equals("http://127.0.0.1:" + APP_PORT))
+                    recoveryOrigins.add(origin);
+            }
+            // Scan older data-rich origins first. Never add quantities from
+            // different snapshots together: they may contain the same cards.
+            recoveryOrigins.sort((a,b)->Long.compare(
+                    origins.get(b)==null?0:origins.get(b).getUsage(),
+                    origins.get(a)==null?0:origins.get(a).getUsage()));
+            if (recoveryOrigins.size() > 64) recoveryOrigins.subList(64,recoveryOrigins.size()).clear();
+            continueLegacyRecovery();
+        }));
+    }
+    private void continueLegacyRecovery() {
+        if (recoveryIndex >= recoveryOrigins.size()) {
+            finishLegacyRecovery();
+            return;
+        }
+        browser.loadUrl(recoveryOrigins.get(recoveryIndex) + RECOVERY_PATH);
+    }
+    private final class RecoveryBridge {
+        @JavascriptInterface public void capture(String json) {
+            runOnUiThread(() -> finishRecoveryOrigin(json));
+        }
+    }
+    private static int collectionSize(String json) {
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(json);
+            if (arr.length() > 150000) return -1;
+            int valid=0;
+            for(int i=0;i<arr.length();i++){
+                JSONObject card=arr.optJSONObject(i);
+                if(card!=null && !card.optString("name","").trim().isEmpty() && card.optInt("qty",0)>0)valid++;
+            }
+            return valid;
+        }catch(Exception ignored){return -1;}
+    }
+    private void finishRecoveryOrigin(String json) {
+        if (recoveryIndex >= recoveryOrigins.size()) return;
+        String origin = recoveryOrigins.get(recoveryIndex);
+        recoveryIndex++;
+        legacyScanned++;
+        if(json!=null)try{
+            JSONObject old = new JSONObject(json);
+            legacySnapshots.put(origin,old);
+            for(String key:new String[]{"vault_cards","vault_physicalCollectionV1"}){
+                String payload=old.optString(key,null);
+                if(payload==null)continue;
+                int size=collectionSize(payload);
+                if(size>recoveryBestSize.getOrDefault(key,-1)){
+                    recoveryBestSize.put(key,size);
+                    recoveryBest.put(key,payload);
+                }
+            }
+            // Keep all non-collection settings from one origin in the
+            // browser's stable origin, without copying redundant collections.
+            for(java.util.Iterator<String> it=old.keys();it.hasNext();){
+                String key=it.next();
+                if(key.equals("vault_cards")||key.equals("vault_physicalCollectionV1"))continue;
+                if(!recoveredSettings.has(key))recoveredSettings.put(key,old.optString(key,""));
+            }
+        }catch(Exception ex){android.util.Log.w("ArcaneVault","Legacy origin read failed: "+origin,ex);}
+        continueLegacyRecovery();
+    }
+    private void finishLegacyRecovery() {
+        int imported=0;
+        for(String key:new String[]{"vault_cards","vault_physicalCollectionV1"}){
+            String candidate=recoveryBest.get(key);
+            if(candidate==null||collectionSize(candidate)<=0)continue;
+            String current=durable.getString(key,null);
+            if(current==null||collectionSize(current)<=0){
+                if(durable.edit().putString(key,candidate).commit()) imported++;
+            }
+        }
+        // Preserve settings in the stable origin before running application JS.
+        if(recoveredSettings.length()>0)
+            durable.edit().putString("migrationSettings",recoveredSettings.toString()).commit();
+        for(Map.Entry<String,JSONObject> entry:legacySnapshots.entrySet()){
+            JSONObject data=entry.getValue();
+            boolean compatible=true;
+            for(String key:new String[]{"vault_cards","vault_physicalCollectionV1"}){
+                String source=data.optString(key,null);
+                if(source==null||collectionSize(source)<=0)continue;
+                String canonical=durable.getString(key,null);
+                if(canonical==null||!canonical.equals(source)){compatible=false;legacyConflicts++;break;}
+            }
+            // An old origin may also contain non-collection settings; cleanup is
+            // deferred until the new WebView has confirmed their restoration.
+            if(compatible)matchedRecoveryOrigins.add(entry.getKey());
+        }
+        android.util.Log.i("ArcaneVault","Legacy origins scanned="+legacyScanned+
+                ", collection types recovered="+imported+", conflicting snapshots="+legacyConflicts);
+        browser.loadUrl(appUrl);
+    }
+    private void cleanVerifiedLegacyOrigins(){
+        if (durable.getString("migrationSettings",null)!=null) return;
+        for(String origin:matchedRecoveryOrigins) WebStorage.getInstance().deleteOrigin(origin);
+        matchedRecoveryOrigins.clear();
+    }
+
     private void toast(String message) {runOnUiThread(()-> Toast.makeText(this,message,Toast.LENGTH_LONG).show());}
     // The Windows QR is an expiring, single-use URL on the local network.
     // Only numeric RFC1918 IPv4 addresses with the exact Arcane Vault path are accepted.
@@ -180,6 +291,26 @@ public class MainActivity extends Activity {
         });
     }
     private class AndroidBridge {
+        private boolean validCollectionKey(String key) {
+            return "cards".equals(key) || "physicalCollectionV1".equals(key);
+        }
+        @JavascriptInterface public String readCollection(String key) {
+            return validCollectionKey(key)?durable.getString("vault_"+key,null):null;
+        }
+        @JavascriptInterface public boolean writeCollection(String key,String json) {
+            if(!validCollectionKey(key)||json==null||json.length()>6_000_000 || collectionSize(json)<0)return false;
+            // Native SharedPreferences is the authoritative single copy for
+            // inventories. Use commit() so a failed write is not reported as saved.
+            return durable.edit().putString("vault_"+key,json).commit();
+        }
+        @JavascriptInterface public String readLegacySettings() {
+            return durable.getString("migrationSettings",null);
+        }
+        @JavascriptInterface public void finishLegacySettings() {
+            // Browser verifies every key before acknowledging the migration.
+            if(durable.edit().remove("migrationSettings").commit())
+                runOnUiThread(() -> cleanVerifiedLegacyOrigins());
+        }
         @JavascriptInterface public void scanWindowsQr() {
             runOnUiThread(() -> {
                 GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
