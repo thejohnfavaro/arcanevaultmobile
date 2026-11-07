@@ -1,5 +1,35 @@
 plugins { id 'com.android.application' }
-android { namespace 'com.arcanevault.mobile'; compileSdk 35
- defaultConfig { applicationId 'com.arcanevault.mobile'; minSdk 26; targetSdk 35; versionCode 20; versionName '2.0.0' }
- compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+android {
+ namespace 'com.arcanevault.mobile'
+ compileSdk 35
+ defaultConfig {
+  applicationId 'com.arcanevault.mobile'
+  minSdk 26
+  targetSdk 35
+  versionCode 20
+  versionName '2.0.0'
+ }
+ // Signing material is supplied by GitHub Actions secrets (or local environment).
+ // Never commit the keystore, its password, or its alias/password to the repository.
+ signingConfigs {
+  release {
+   def storePath = System.getenv('ARCANEVAULT_SIGNING_STORE_FILE')
+   if (storePath) {
+    storeFile file(storePath)
+    storePassword System.getenv('ARCANEVAULT_SIGNING_STORE_PASSWORD')
+    keyAlias System.getenv('ARCANEVAULT_SIGNING_KEY_ALIAS')
+    keyPassword System.getenv('ARCANEVAULT_SIGNING_KEY_PASSWORD')
+   }
+  }
+ }
+ buildTypes {
+  release {
+   signingConfig signingConfigs.release
+   minifyEnabled false
+  }
+ }
+ compileOptions {
+  sourceCompatibility JavaVersion.VERSION_17
+  targetCompatibility JavaVersion.VERSION_17
+ }
 }
