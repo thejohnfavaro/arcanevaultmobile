@@ -106,7 +106,7 @@ assert.match(html,/value="date-desc">Release date \(newest first\)/);
 assert.match(html,/value="date-asc">Release date \(oldest first\)/);
 assert.match(html,/const da=\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(a\.releaseDate/);
 assert.match(html,/save\('setSortV1',\$\('setSort'\)\.value\)/);
-assert.match(html,/Released \$\{escapeHtml\(r\.releaseDate\)\}/);
+assert.match(html,/Released '\+escapeHtml\(r\.releaseDate\)/);
 assert.match(backend,/\.put\("releaseDate",r\.isNull\(4\)\?"":r\.getString\(4\)\)/);
 console.log('PASS: Set Progress release-date sort and catalog date plumbing');
 
@@ -188,3 +188,12 @@ assert.match(html,/if\(\(aa===null\)!==\(bb===null\)\)return aa===null\?1:-1/);
 assert.match(html,/exactId\(c\)\?\{id:c\.scryfallId\}:\{set:c\.set\.toLowerCase\(\),collector_number:String\(c\.number\)\}/);
 
 console.log('PASS: UX refresh navigation, card tabs, sync health and physical price sorting');
+
+// Shared Set Progress redesign must use real catalog rows, not concept mockup data.
+assert.match(html,/id="av-shared-set-visual-system"/);
+assert.match(html,/const shown=rows\.length,completed=rows\.filter/);
+assert.match(html,/rows\.reduce\(\(n,r\)=>n\+Number\(r\.owned\|\|0\),0\)/);
+assert.match(html,/role="progressbar" aria-label="Set completion"/);
+assert.match(html,/aria-valuenow/);
+assert.match(html,/setSymbol\(r\.code\)/);
+assert.match(html,/#sets \.set-tile:focus-visible/);
