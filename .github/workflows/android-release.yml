@@ -1,0 +1,112 @@
+name: Android Signed Release
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: startsWith(github.ref, 'refs/tags/android-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Validate tag, project version and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" =~ ^android-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid tag $tag"; exit 1; }
+          version="${tag#android-v}"
+          version_name=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)
+          [[ "$version_name" == "$version" ]] || { echo "Tag $tag does not match app versionName $version_name"; exit 1; }
+          notes="releases/$tag.md"
+          test -s "$notes" || { echo "Missing release notes: $notes"; exit 1; }
+          for heading in Added Changed Fixed Removed; do
+            grep -qx "## $heading" "$notes" || { echo "Missing section ## $heading in $notes"; exit 1; }
+          done
+          echo "RELEASE_NOTES=$notes" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Run regression checks
+        run: |
+          node tests/regression.mjs
+          node tests/new-features.mjs
+          node tests/mobile-parity.mjs
+      - name: Validate signing credentials
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEYSTORE_B64" || -z "$STORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::Android release signing secrets are not all configured; refusing to publish an unsigned APK."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/arcanevault-release.jks"
+          test -s "$RUNNER_TEMP/arcanevault-release.jks"
+          echo "ARCANEVAULT_SIGNING_STORE_FILE=$RUNNER_TEMP/arcanevault-release.jks" >> "$GITHUB_ENV"
+      - name: Build signed release APK
+        env:
+          ARCANEVAULT_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ARCANEVAULT_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ARCANEVAULT_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: bash ./gradlew --no-daemon :app:assembleRelease
+      - name: Verify APK and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_apk=app/build/outputs/apk/release/app-release.apk
+          test -s "$source_apk"
+          # Verify signed APK rather than publishing an unsigned or misnamed artifact.
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$source_apk"
+          apk="ArcaneVault-Android-v$RELEASE_VERSION.apk"
+          cp "$source_apk" "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          echo "APK_FILE=$apk" >> "$GITHUB_ENV"
+      - name: Upload signed release build as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArcaneVault-Android-signed-${{ env.RELEASE_VERSION }}
+          path: |
+            ${{ env.APK_FILE }}
+            ${{ env.APK_FILE }}.sha256
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; refusing to replace it."
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" "$APK_FILE" "$APK_FILE.sha256" \
+            --verify-tag --title "Arcane Vault Android v$RELEASE_VERSION" \
+            --notes-file "$RELEASE_NOTES"
+      - name: Remove signing keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/arcanevault-release.jks"
