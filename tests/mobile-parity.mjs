@@ -153,6 +153,8 @@ assert.doesNotMatch(html,/Connect Arena and track results/);
 assert.match(html,/data-tab="performance"/);
 assert.match(html,/id="perfManualAdd"/);
 assert.match(html,/id="perfImport"/);
+assert.match(html,/id="perfImportButton"/);
+assert.match(html,/\$\('perfImportButton'\)\.onclick=/);
 assert.match(html,/id="perfExport"/);
 assert.match(html,/function normalizeManualMatches\(/);
 assert.match(html,/Match History/);
