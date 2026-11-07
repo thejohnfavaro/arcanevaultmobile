@@ -99,3 +99,13 @@ assert.ok(matchesStart>0 && matchesEnd>matchesStart);
 const matchesCtx=vm.createContext({Math,Date});vm.runInContext(html.slice(matchesStart,matchesEnd)+';globalThis.norm=normalizeManualMatches;',matchesCtx);
 const rows=matchesCtx.norm([{matchId:'id1',result:'win'},{matchId:'id1',result:'loss'},{matchId:'id2',result:'draw'}]);assert.equal(rows.length,2);
 console.log('PASS: Android 2.0 grouped navigation, physical CSV formats, Set Progress scopes, isolated SQLite ownership, backup and manual match deduplication');
+
+// Set Progress release-date sorting contract: both scopes use the catalog's earliest
+// printing date, missing dates sort last, and preferences survive navigation.
+assert.match(html,/value="date-desc">Release date \(newest first\)/);
+assert.match(html,/value="date-asc">Release date \(oldest first\)/);
+assert.match(html,/const da=\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(a\.releaseDate/);
+assert.match(html,/save\('setSortV1',\$\('setSort'\)\.value\)/);
+assert.match(html,/Released \$\{escapeHtml\(r\.releaseDate\)\}/);
+assert.match(backend,/\.put\("releaseDate",r\.isNull\(4\)\?"":r\.getString\(4\)\)/);
+console.log('PASS: Set Progress release-date sort and catalog date plumbing');
