@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.16'/);
-assert.match(gradle,/versionCode 36/);
+assert.match(gradle,/versionName '2\.0\.17'/);
+assert.match(gradle,/versionCode 37/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -205,3 +205,18 @@ assert.match(backend,/Map<String,Integer> restored=new HashMap/);
 assert.match(backend,/\.put\("scryfallId",c\.getString\(3\)\)/);
 assert.match(backend,/boolean preservePrintings=!hasIdentifiers&&prior\.equals\(incoming\)/);
 assert.match(backend,/if\(!preservePrintings\)db\.delete\("physical_printings",null,null\)/);
+
+ // Exact multi-select color identity UX + rarity display regression coverage.
+ assert.match(html,/id="avIdentityPicker"/);
+ assert.match(html,/id="avIdentityChoices"/);
+ assert.match(html,/data-identity-preset="boros"/);
+ assert.match(html,/colors:selectedColorIdentities\.join\(','\)/);
+ assert.match(html,/selectedColorIdentities\.includes\(avIdentityKey\(m\.colors\)\)/);
+ assert.match(html,/selectedColorIdentitiesV1/);
+ assert.match(html,/avRarityLabel\(value,fallback='Unverified'\)/);
+ assert.match(html,/mythic:'Mythic Rare'/);
+ assert.match(html,/av-rarity-common/);
+ assert.match(html,/av-rarity-uncommon/);
+ assert.match(html,/av-rarity-rare/);
+ assert.match(html,/av-rarity-mythic/);
+ assert.doesNotMatch(html,/<select id="colors">/);
