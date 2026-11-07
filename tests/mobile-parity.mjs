@@ -75,9 +75,9 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.9'/);
-assert.match(gradle,/versionCode 29/);
-for(const marker of ['physical_ownership','synchronized void physicalOwnership','ownershipTable(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
+assert.match(gradle,/versionName '2\.0\.10'/);
+assert.match(gradle,/versionCode 30/);
+for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
 const pStart=html.indexOf('const PHYSICAL_KEY='),pEnd=html.indexOf('const index=new Map()',pStart);
@@ -109,3 +109,36 @@ assert.match(html,/save\('setSortV1',\$\('setSort'\)\.value\)/);
 assert.match(html,/Released \$\{escapeHtml\(r\.releaseDate\)\}/);
 assert.match(backend,/\.put\("releaseDate",r\.isNull\(4\)\?"":r\.getString\(4\)\)/);
 console.log('PASS: Set Progress release-date sort and catalog date plumbing');
+
+
+// Printing-specific progress cannot be credited through card names alone.
+assert.match(backend,/physical_printings/);
+assert.match(backend,/if\(oldVersion<3\)/);
+assert.match(backend,/v\.print_id=p\.print_id/);
+assert.match(backend,/v\.setcode=p\.setcode AND v\.collector=p\.collector/);
+assert.match(backend,/LEFT JOIN confirmed o ON o\.name=d\.name AND o\.setcode=d\.setcode/);
+assert.match(backend,/LEFT JOIN confirmed o ON o\.name=sc\.name AND o\.setcode=\?/);
+assert.match(html,/function postPhysicalOwnership\(\)\{const payload=physicalCards;/);
+console.log('PASS: printing-identified physical ownership with migration and exact set matching');
+
+
+// Multi-face card detail lookups must match the exact composite name and
+// retry by first face only after a full-name miss.
+assert.match(html,/function avCardNameParts\(/);
+assert.match(html,/function avCardMatchesName\(/);
+assert.match(html,/function avResolveCardResult\(/);
+assert.match(html,/const retry=await avSyncBatchRequest\(\[first\]\)/);
+assert.match(html,/const raw=avResolveCardResult\(c\.name,data\.data\)/);
+const nameStart=html.indexOf('function avCardNameParts(');
+const nameEnd=html.indexOf('async function avSyncBatchRequest(',nameStart);
+assert.ok(nameStart>0&&nameEnd>nameStart);
+const nameCtx={};
+vm.createContext(nameCtx);
+vm.runInContext(html.slice(nameStart,nameEnd)+';globalThis.avTest={avCardMatchesName,avResolveCardResult};',nameCtx);
+const split={name:'Fire // Ice',card_faces:[{name:'Fire'},{name:'Ice'}]};
+const adventure={name:'Brazen Borrower',card_faces:[{name:'Brazen Borrower'},{name:'Petty Theft'}]};
+assert.equal(nameCtx.avTest.avCardMatchesName('Fire // Ice',split),true);
+assert.equal(nameCtx.avTest.avCardMatchesName('Fire // Water',split),false);
+assert.equal(nameCtx.avTest.avCardMatchesName('Brazen Borrower // Petty Theft',adventure),true);
+assert.equal(nameCtx.avTest.avCardMatchesName('Fire // Ice',{name:'Fire'}),false);
+console.log('PASS: verified multi-face name resolution');
