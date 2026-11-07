@@ -109,3 +109,14 @@ assert.match(html,/save\('setSortV1',\$\('setSort'\)\.value\)/);
 assert.match(html,/Released \$\{escapeHtml\(r\.releaseDate\)\}/);
 assert.match(backend,/\.put\("releaseDate",r\.isNull\(4\)\?"":r\.getString\(4\)\)/);
 console.log('PASS: Set Progress release-date sort and catalog date plumbing');
+
+
+// Printing-specific progress cannot be credited through card names alone.
+assert.match(backend,/physical_printings/);
+assert.match(backend,/if\(oldVersion<3\)/);
+assert.match(backend,/v\.print_id=p\.print_id/);
+assert.match(backend,/v\.setcode=p\.setcode AND v\.collector=p\.collector/);
+assert.match(backend,/LEFT JOIN confirmed o ON o\.name=d\.name AND o\.setcode=d\.setcode/);
+assert.match(backend,/LEFT JOIN confirmed o ON o\.name=sc\.name AND o\.setcode=\?/);
+assert.match(html,/function postPhysicalOwnership\(\)\{const payload=physicalCards;/);
+console.log('PASS: printing-identified physical ownership with migration and exact set matching');
