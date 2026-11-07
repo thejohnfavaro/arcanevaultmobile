@@ -13,7 +13,7 @@ for(const [,body] of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))
  if(body.trim().startsWith('{'))continue;
  new vm.Script(body);
 }
-for(const id of ['browse','sets','physical','shortlist','builder','library','deck','planner','workbench','archetypes','synergy','arena','performance','settings']){
+for(const id of ['browse','sets','physical','shortlist','builder','library','deck','planner','workbench','archetypes','synergy','performance','settings']){
  assert.ok(html.includes('id="'+id+'"'),'Missing section '+id);
  assert.ok(html.includes('data-tab="'+id+'"'),'Missing navigation '+id);
 }
@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.10'/);
-assert.match(gradle,/versionCode 30/);
+assert.match(gradle,/versionName '2\.0\.11'/);
+assert.match(gradle,/versionCode 31/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -142,3 +142,20 @@ assert.equal(nameCtx.avTest.avCardMatchesName('Fire // Water',split),false);
 assert.equal(nameCtx.avTest.avCardMatchesName('Brazen Borrower // Petty Theft',adventure),true);
 assert.equal(nameCtx.avTest.avCardMatchesName('Fire // Ice',{name:'Fire'}),false);
 console.log('PASS: verified multi-face name resolution');
+
+
+// Android must not expose desktop-only Arena log scraping/connection UI.
+assert.doesNotMatch(html,/data-tab="arena"/);
+assert.doesNotMatch(html,/<section id="arena"/);
+assert.doesNotMatch(html,/\/api\/arena\/(?:config|status)/);
+assert.doesNotMatch(html,/arenaFetch\(/);
+assert.doesNotMatch(html,/Connect Arena and track results/);
+assert.match(html,/data-tab="performance"/);
+assert.match(html,/id="perfManualAdd"/);
+assert.match(html,/id="perfImport"/);
+assert.match(html,/id="perfImportButton"/);
+assert.match(html,/\$\('perfImportButton'\)\.onclick=/);
+assert.match(html,/id="perfExport"/);
+assert.match(html,/function normalizeManualMatches\(/);
+assert.match(html,/Match History/);
+console.log('PASS: mobile-only navigation excludes Windows log connector and retains manual match history');
