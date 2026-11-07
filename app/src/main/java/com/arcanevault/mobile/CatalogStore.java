@@ -136,6 +136,29 @@ final class CatalogStore extends SQLiteOpenHelper {
         db.insertWithOnConflict("variants_stage",null,p,SQLiteDatabase.CONFLICT_REPLACE);imported++;
         if(imported%2000==0 && db.inTransaction()){db.setTransactionSuccessful();db.endTransaction();db.beginTransaction();}
     }
+    // Last-resort recovery from the indexed ownership mirrors. This can recover
+    // card names and quantities, but not distinct physical printing attributes.
+    JSONObject recoverIndexedOwnership() throws Exception {
+        JSONObject result=new JSONObject();
+        SQLiteDatabase db=getReadableDatabase();
+        for(String kind:new String[]{"arena","physical"}){
+            String table="physical".equals(kind)?"physical_ownership":"ownership";
+            JSONArray rows=new JSONArray();
+            try(Cursor cursor=db.rawQuery("SELECT name,qty FROM "+table+" WHERE qty>0 ORDER BY name COLLATE NOCASE",null)){
+                while(cursor.moveToNext()){
+                    JSONObject card=new JSONObject().put("name",cursor.getString(0)).put("qty",cursor.getInt(1));
+                    if("arena".equals(kind)){
+                        card.put("sets",new JSONArray()).put("tags",new JSONArray()).put("uses",new JSONArray());
+                    }else{
+                        card.put("set","").put("number","").put("finish","nonfoil");
+                    }
+                    rows.put(card);
+                }
+            }
+            result.put(kind,rows);
+        }
+        return result;
+    }
     void ownership(JSONObject input)throws Exception{
         JSONArray cards=input.getJSONArray("cards");if(cards.length()>150000)throw new IllegalArgumentException("Too many ownership entries");
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("ownership",null,null);
