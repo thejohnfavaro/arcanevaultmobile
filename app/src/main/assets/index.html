@@ -1088,14 +1088,29 @@ async function avSyncAllCardData(){
 // Only confirmed Scryfall responses are cached, and ownership is never modified.
 let avFetchDetailsRunning=false;
 function avDetailMissing(meta){
- return !meta||!meta.type||!meta.oracle||!meta.rarity||!meta.image||
+ // Some fully verified Scryfall cards (e.g., basic lands or vanilla creatures)
+ // legitimately have no Oracle text. Do not refetch them forever.
+ return !meta||!meta.type||!meta.rarity||!meta.image||
         !meta.legalities||Object.keys(meta.legalities).length===0;
+}
+function avStoreMetadataConfirmed(key,metadata){
+ return new Promise((resolve,reject)=>{
+  if(!db){reject(new Error('Local metadata database is unavailable. Card details were not saved; check Android storage and restart the app.'));return}
+  try{
+   const tx=db.transaction('metadata','readwrite');
+   tx.oncomplete=()=>resolve();
+   tx.onerror=()=>reject(tx.error||new Error('Cannot save card details to local storage'));
+   tx.onabort=()=>reject(tx.error||new Error('Saving card details was interrupted'));
+   tx.objectStore('metadata').put(metadata,key);
+  }catch(e){reject(e)}
+ });
 }
 async function avFetchAllDetails(){
  if(avFetchDetailsRunning||syncing||avSyncAllRunning)return;
  const button=$('avFetchAllDetails'),line=$('avFetchDetailsStatus');
  avFetchDetailsRunning=true;button.disabled=true;syncStop=false;$('stopSync').disabled=false;
  const force=$('avFetchRefreshExisting').checked;
+ const retryUnmatched=!!$('retryUnmatched')?.checked;
  let checked=0,updated=0,unmatched=0,skipped=0;
  try{
   const owned=ownedCollectionCards();
@@ -1104,6 +1119,7 @@ async function avFetchAllDetails(){
    const key=String(card.name||'').trim().toLowerCase();
    if(key&&!unique.has(key))unique.set(key,card);
   }
+  if(!db)throw Error('The metadata database is not available. Restart the app; existing card ownership is untouched.');
   const targets=[];
   for(const [key,card] of unique){
    if(!force&&avDetailMissing(card.meta)){
@@ -1114,7 +1130,7 @@ async function avFetchAllDetails(){
     }
    }
    if(force||avDetailMissing(card.meta)){
-    if(!force&&card.syncUnmatched){skipped++;continue;}
+    if(!force&&card.syncUnmatched&&!retryUnmatched){skipped++;continue;}
     targets.push(card);
    }else skipped++;
   }
@@ -1122,15 +1138,19 @@ async function avFetchAllDetails(){
   for(let i=0;i<targets.length;i+=75){
    if(syncStop)break;
    const batch=targets.slice(i,i+75),byName=new Map(batch.map(c=>[c.name.toLowerCase(),c]));
+   line.textContent='Fetching batch '+(Math.floor(i/75)+1)+' of '+Math.ceil(targets.length/75)+' ('+checked+' / '+targets.length+' checked)…';
    const response=await syncBatch(batch.map(c=>c.name));
-   for(const raw of response.data||[]){
-    const name=String(raw.name||'').toLowerCase();
-    const item=batch.find(c=>avCardMatchesName(c.name,raw));
-    if(!item)continue;
-    const key=item.name.toLowerCase();
-    item.meta=jsonMeta(raw);
-    dbput(key,item.meta);
-    if(!index.has(key))catalogIndex.set(key,item);
+   // Resolve each requested name, including multi-face and split-card variants.
+   // Await durable IndexedDB commits before reporting the batch as completed.
+   for(const item of batch){
+    const raw=avResolveCardResult(item.name,response.data);
+    if(!raw)continue;
+    const key=item.name.toLowerCase(),metadata=jsonMeta(raw);
+    await avStoreMetadataConfirmed(key,metadata);
+    item.meta=metadata;
+    const owned=index.get(key);
+    if(owned)owned.meta=metadata;
+    else catalogIndex.set(key,item);
     delete item.syncUnmatched;
     updated++;
    }
@@ -1148,10 +1168,10 @@ async function avFetchAllDetails(){
    await pause(140);
   }
   if(updated)recordDetailsSync();
-  line.textContent=(syncStop?'Stopped; rerun to continue. ':'Finished. ')+updated+' updated, '+skipped+' already cached, '+unmatched+' unmatched. Ownership unchanged.';
+  line.textContent=(syncStop?'Stopped; rerun to continue. ':'Finished. ')+updated+' saved, '+skipped+' cached or skipped, '+unmatched+' unmatched. Ownership unchanged.';
   render();renderStudio();
  }catch(e){
-  line.textContent='Paused after '+checked+' cards: '+(e.message||String(e))+'. Completed metadata is saved; rerun to continue.';
+  line.textContent='Paused after '+checked+' cards: '+(e.message||String(e))+'. Previous completed batches are saved; rerun to resume. For unmatched names, enable Retry previously unmatched names.';
  }finally{avFetchDetailsRunning=false;button.disabled=false;$('stopSync').disabled=true;}
 }
 async function syncOne(name){const c=index.get(name.toLowerCase());if(!c)return;try{const data=await syncBatch([c.name]);const raw=avResolveCardResult(c.name,data.data);if(!raw)throw new Error('Not found on Scryfall. This may be an Arena-only card or a mismatched name.');c.meta=jsonMeta(raw);dbput(c.name.toLowerCase(),c.meta);recordDetailsSync();render();renderStudio();openCard(name)}catch(e){alert(e.message)}}
