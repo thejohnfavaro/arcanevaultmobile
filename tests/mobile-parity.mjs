@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.18'/);
-assert.match(gradle,/versionCode 38/);
+assert.match(gradle,/versionName '2\.0\.19'/);
+assert.match(gradle,/versionCode 39/);
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.
@@ -234,3 +234,9 @@ assert.match(backend,/if\(!preservePrintings\)db\.delete\("physical_printings",n
  assert.match(html,/tx\.oncomplete=\(\)=>resolve\(\)/);
  assert.match(html,/if\(!db\)throw Error\('The metadata database is not available/);
  assert.doesNotMatch(html,/!meta\.oracle\|\|!meta\.rarity/);
+
+// Card Details: moving SECTION children detaches them from info.
+// The tab bar must be inserted against a still-attached action row.
+assert.match(html,/info\.insertBefore\(nav,info\.querySelector\('\.actions'\)\|\|null\)/);
+assert.match(html,/for\(const panel of panels\.values\(\)\)\{panelAnchor\.after\(panel\);panelAnchor=panel;\}/);
+assert.doesNotMatch(html,/info\.insertBefore\(nav,first\|\|null\)/);
