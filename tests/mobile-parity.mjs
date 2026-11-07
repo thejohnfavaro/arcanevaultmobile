@@ -53,6 +53,11 @@ assert.match(bridge,/new WebResourceResponse\(/,'Migration must read each prior 
 assert.match(bridge,/writeCollection\(String key,String json\)/,'Native inventory persistence must be available');
 assert.match(bridge,/\.commit\(\)/,'Inventory writes must confirm durable commit');
 assert.match(bridge,/deleteOrigin\(origin\)/,'Redundant old origins must be cleaned');
+assert.match(bridge,/catalog\.recoverIndexedOwnership\(\)/,'Recover missed inventories from indexed ownership');
+assert.match(bridge,/if\(current!=null\)continue/,'Never overwrite a deliberately empty collection');
+assert.match(backend,/JSONObject recoverIndexedOwnership\(\)/,'Catalog must expose recovery fallback');
+assert.match(html,/localStorage\.getItem\(key\)===String\(values\[key\]\)/,'Legacy cleanup must verify exact preference values');
+
 assert.match(html,/nativeCollectionKey=key/,'Inventories must be stored natively');
 assert.match(html,/ArcaneAndroid\.writeCollection/,'Browser must commit collections to native storage');
 assert.match(html,/localStorage\.removeItem\('vault_'\+key\)/,'Inventories must not retain duplicate WebView copies');
