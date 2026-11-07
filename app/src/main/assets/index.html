@@ -288,7 +288,7 @@ button,input,select,textarea {font-size:16px}button {min-height:42px}.actions,.v
  <div class="panel"><div class="studio-heading"><h2>Recent matches</h2><span class="note" id="perfStatus"></span></div><div class="v3table-wrap"><table class="v3table"><thead><tr><th>Played (local)</th><th>Deck / Version</th><th>Queue</th><th>Match</th><th>Games</th><th>Review / Edit</th></tr></thead><tbody id="perfMatches"></tbody></table></div></div>
 <dialog id="perfEditDialog" class="dialog"><div class="panel"><h2>Review match</h2><div class="studio-line"><label>Played deck<select class="field" id="perfEditDeck"></select></label><label>Result<select class="field" id="perfEditResult"><option value="win">Win</option><option value="loss">Loss</option><option value="draw">Draw</option><option value="unknown">Unknown</option></select></label><label>Version<input class="field" id="perfEditVersion"></label></div><div class="actions" style="margin-top:14px"><button id="perfEditSave" class="primary">Save match</button><button id="perfEditDelete">Delete match</button><button id="perfEditCancel">Cancel</button></div></div></dialog>
 </section>
-<section id="settings" class="hidden"><h1 class="h1">Options, Collection & Metadata</h1><div class="panel av-update-panel"><h2>Application updates</h2><p class="note">Optionally check GitHub Releases for newer versions. Nothing is downloaded or installed without your action. Android requires an Android APK release (not a Windows ZIP or Android Studio source archive). Use a correctly signed APK when installing updates.</p><div class="av-update-controls"><label>GitHub repository (owner/repo)<input id="avUpdateRepo" class="field" placeholder="e.g. RNGesus/ArcaneVault" autocomplete="off" spellcheck="false"></label><label class="v3check"><input type="checkbox" id="avAutoUpdateCheck"> Check once per week on launch</label><button type="button" id="avCheckUpdates">Check for updates</button></div><p id="avUpdateStatus" class="note" role="status" aria-live="polite">Set a release repository to enable update checks.</p><div id="avUpdateResult" class="av-update-result" hidden></div></div><div class="panel"><h2>Getting started</h2><p class="note">Explore the main features of Arcane Vault again at any time. The guide appears automatically only once per installation/browser profile.</p><button id="avReplayGuide" type="button">✦ View getting-started guide</button></div>
+<section id="settings" class="hidden"><h1 class="h1">Options, Collection & Metadata</h1><div class="panel av-update-panel"><h2>Application updates</h2><p class="note">Optionally check GitHub Releases for newer versions. Nothing is downloaded or installed without your action. Android requires an Android APK release (not a Windows ZIP or Android Studio source archive). Use a correctly signed APK when installing updates.</p><div class="av-update-controls"><label>GitHub repository (owner/repo)<input id="avUpdateRepo" class="field" placeholder="thejohnfavaro/arcanevaultmobile" autocomplete="off" spellcheck="false"></label><label class="v3check"><input type="checkbox" id="avAutoUpdateCheck"> Check once per week on launch</label><button type="button" id="avCheckUpdates">Check for updates</button></div><p id="avUpdateStatus" class="note" role="status" aria-live="polite">Set a release repository to enable update checks.</p><div id="avUpdateResult" class="av-update-result" hidden></div></div><div class="panel"><h2>Getting started</h2><p class="note">Explore the main features of Arcane Vault again at any time. The guide appears automatically only once per installation/browser profile.</p><button id="avReplayGuide" type="button">✦ View getting-started guide</button></div>
 <div class="panel"><h2>Appearance</h2><p class="note">Choose a classic theme or one of all 32 Magic color identities. Your selection is saved locally.</p>
 <label for="themeChoice">Color theme</label>
 <select id="themeChoice" class="field" style="max-width:310px;margin:8px 0 10px">
@@ -1311,6 +1311,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 /* Arcane Vault: opt-in release checks and type-aware card tags. */
 (function(){'use strict';
 const PLATFORM='android', INSTALLED='2.0.1';
+const DEFAULT_UPDATE_REPO='thejohnfavaro/arcanevaultmobile';
 const key=n=>'arcaneVault.update.'+PLATFORM+'.'+n;
 const loadPref=(n,fallback='')=>{try{return localStorage.getItem(key(n))??fallback}catch{return fallback}};
 const savePref=(n,value)=>{try{localStorage.setItem(key(n),value)}catch{}};
@@ -1381,7 +1382,7 @@ async function checkUpdates(silent=false){
  if(button)button.disabled=true;if(status)status.textContent='Checking published '+PLATFORM+' releases…';if(result)result.hidden=true;
  try{
   const response=await fetch('https://api.github.com/repos/'+repo+'/releases?per_page=50',{headers:{Accept:'application/vnd.github+json'}});
-  if(!response.ok)throw Error('GitHub returned HTTP '+response.status);
+  if(!response.ok)throw Error(response.status===404?'Repository '+repo+' was not found. Use '+DEFAULT_UPDATE_REPO+' in the GitHub repository field':'GitHub returned HTTP '+response.status);
   const items=await response.json();if(!Array.isArray(items))throw Error('Unexpected GitHub response');
   const found=items.map(releaseMatch).filter(Boolean).sort((a,b)=>semverCompare(b.version,a.version))[0];
   if(!found){
@@ -1406,7 +1407,7 @@ async function checkUpdates(silent=false){
 }
 function init(){
  const repo=$av('avUpdateRepo'),auto=$av('avAutoUpdateCheck');
- if(repo){repo.value=loadPref('repo');repo.addEventListener('change',()=>savePref('repo',repo.value.trim()))}
+ if(repo){repo.value=loadPref('repo',DEFAULT_UPDATE_REPO);repo.addEventListener('change',()=>savePref('repo',repo.value.trim()))}
  if(auto){auto.checked=loadPref('auto','false')==='true';auto.addEventListener('change',()=>savePref('auto',String(auto.checked)))}
  $av('avCheckUpdates')?.addEventListener('click',()=>checkUpdates());
  const last=Date.parse(loadPref('lastChecked'));
