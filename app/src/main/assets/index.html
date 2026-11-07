@@ -166,7 +166,12 @@ body[data-theme="mtg-WUBRG"]{--bg:#161820;--panel:#242833;--panel2:#2f333f;--lin
 body[data-theme^="mtg-"] .sidebar{background:var(--sidebar)}body[data-theme^="mtg-"] .nav button.active{background:var(--activeNav);color:var(--activeText);border-color:var(--accent)}body[data-theme^="mtg-"] .primary{background:var(--mtg-gradient);border-color:var(--accent);color:#0c1017;font-weight:750}body[data-theme^="mtg-"] .top h1,body[data-theme^="mtg-"] .h1{background:var(--mtg-gradient);background-clip:text;-webkit-background-clip:text;color:transparent}body[data-theme^="mtg-"] .panel,body[data-theme^="mtg-"] .stat{border-color:var(--line)}
 </style><style>
 /* Android edition: thumb-first layout, no permanent sidebar. */
-html { -webkit-text-size-adjust:100%; } body {padding-bottom:calc(78px + env(safe-area-inset-bottom, 0px));}
+html { -webkit-text-size-adjust:100%; width:100%; max-width:100%; overflow-x:hidden; }
+body {width:100%;max-width:100%;overflow-x:hidden;padding-bottom:calc(78px + env(safe-area-inset-bottom, 0px));}
+.shell,.main,.main>section {min-width:0;max-width:100%}
+.panel,.two,.studio-grid,.av-update-controls {min-width:0;max-width:100%}
+input,select,textarea {max-width:100%}
+pre,code,.note,.subtitle {overflow-wrap:anywhere}
 .shell {display:block;min-height:100vh} .sidebar {position:relative;top:auto;width:100%;height:auto;display:block;padding:14px 14px 8px;overflow:visible;border:0;background:var(--panel)}
 .sidebar .brand {font-size:20px} .sidebar .sub {display:none}.sidebar .nav {display:none!important}.sidebar.av-mobile-nav-open .nav{display:grid!important}
 .main {padding:14px 12px;max-width:100%;overflow-x:hidden}.h1 {font-size:23px}.top {gap:10px}.statgrid {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.stat {padding:10px}.stat strong {font-size:20px}
@@ -1310,7 +1315,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script>
 /* Arcane Vault: opt-in release checks and type-aware card tags. */
 (function(){'use strict';
-const PLATFORM='android', INSTALLED='2.0.1';
+const PLATFORM='android', INSTALLED='2.0.2';
 const DEFAULT_UPDATE_REPO='thejohnfavaro/arcanevaultmobile';
 const key=n=>'arcaneVault.update.'+PLATFORM+'.'+n;
 const loadPref=(n,fallback='')=>{try{return localStorage.getItem(key(n))??fallback}catch{return fallback}};
