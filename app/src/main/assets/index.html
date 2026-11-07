@@ -1384,7 +1384,48 @@ async function checkUpdates(silent=false){
   if(!response.ok)throw Error('GitHub returned HTTP '+response.status);
   const items=await response.json();if(!Array.isArray(items))throw Error('Unexpected GitHub response');
   const found=items.map(releaseMatch).filter(Boolean).sort((a,b)=>semverCompare(b.version,a.version))[0];
-  if(!found){if(status)status.textContent='No published '+PLATFORM+' release with a compatible tag. Use '+(PLATFORM==='windows'?'windows-v4.9.3':'android-v2.0.0')+' or a newer version.';return}
+  if(!found){
+   if(status){
+    const samePlatform=items.filter(r=>!r.draft&&new RegExp('^(?:'+(PLATFORM==='windows'?'windows|win|desktop':'android|mobile')+')[-_]?v?[0-9]+\\.[0-9]+\\.[0-9]+
+  if(semverCompare(found.version,INSTALLED)<=0){if(status)status.textContent='Up to date — installed '+INSTALLED+', latest '+found.version+'.';return}
+  if(status)status.textContent='Update available: '+INSTALLED+' → '+found.version+'.';
+  if(result){result.hidden=false;result.replaceChildren();const title=document.createElement('strong');title.textContent='New Arcane Vault '+PLATFORM+' release '+found.version;result.append(title);
+   const notes=document.createElement('p');notes.textContent=String(found.release.body||'No release notes provided.').slice(0,900);result.append(notes);
+   const url=String(found.release.html_url||'');if(/^https:\/\/github\.com\//.test(url)){const link=document.createElement('a');link.href=url;link.textContent='View release and download update';link.target='_blank';link.rel='noopener noreferrer';result.append(link)}
+   const later=document.createElement('button');later.type='button';later.textContent='Remind me later';later.style.marginLeft='10px';later.onclick=()=>{result.hidden=true;status.textContent='Update '+found.version+' available. Check again when ready.'};result.append(later);
+  }
+ }catch(e){if(status)status.textContent='Could not check for updates: '+(e?.message||'Network error')+'. Existing app data was not changed.'}
+ finally{if(button)button.disabled=false}
+}
+function init(){
+ const repo=$av('avUpdateRepo'),auto=$av('avAutoUpdateCheck');
+ if(repo){repo.value=loadPref('repo');repo.addEventListener('change',()=>savePref('repo',repo.value.trim()))}
+ if(auto){auto.checked=loadPref('auto','false')==='true';auto.addEventListener('change',()=>savePref('auto',String(auto.checked)))}
+ $av('avCheckUpdates')?.addEventListener('click',()=>checkUpdates());
+ const last=Date.parse(loadPref('lastChecked'));
+ if(auto?.checked&&repo?.value&&(!Number.isFinite(last)||Date.now()-last>7*86400000))checkUpdates(true);
+ updateTribeSelectors();
+ $av('avStudioTribe')?.addEventListener('change',e=>{window.avDeckTribeFilter=e.target.value;if(typeof renderStudioResults==='function')renderStudioResults()});
+ // Keep selectors up to date as Studio deck changes.
+ $av('studioCommander')?.addEventListener('change',updateTribeSelectors);
+ $av('studioDeckRows')&&new MutationObserver(()=>{const timer=setTimeout(updateTribeSelectors,0);}).observe($av('studioDeckRows'),{childList:true});
+ if(typeof openCard==='function'){
+  const original=openCard;
+  openCard=function(name){original(name);addCardTypesToModal(name)};
+ }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
+</script>
+</body></html>
+,'i').test(String(r.tag_name||'')));
+    const olderOnly=samePlatform.length&&samePlatform.every(r=>r.prerelease||(PLATFORM==='android'&&!r.assets?.some(a=>/\\.apk$/i.test(String(a.name||'')))));
+    status.textContent=olderOnly
+     ?'Only prerelease or non-installable '+PLATFORM+' packages were found. A published stable '+(PLATFORM==='android'?'android-vX.Y.Z release with a signed APK':'windows-vX.Y.Z release')+' is required.'
+     :'No stable '+PLATFORM+' release has been published for this repository yet. Installed version: '+INSTALLED+'. This does not mean your app is outdated.';
+   }
+   return;
+  }
   if(semverCompare(found.version,INSTALLED)<=0){if(status)status.textContent='Up to date — installed '+INSTALLED+', latest '+found.version+'.';return}
   if(status)status.textContent='Update available: '+INSTALLED+' → '+found.version+'.';
   if(result){result.hidden=false;result.replaceChildren();const title=document.createElement('strong');title.textContent='New Arcane Vault '+PLATFORM+' release '+found.version;result.append(title);
