@@ -1,6 +1,12 @@
 package com.arcanevault.mobile;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
+import android.webkit.WebStorage;
+import android.webkit.WebResourceResponse;
+import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
+import java.util.List;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -39,7 +45,15 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private static final int FILE_PICK = 21, FILE_SAVE = 22;
+    private static final int APP_PORT = 18765;
+    private static final String COLLECTION_PREFS = "arcane_vault_collections_v1";
+    private static final String RECOVERY_PATH = "/__arcane_recover__";
     private WebView browser;
+    private SharedPreferences durable;
+    private final List<String> recoveryOrigins = new ArrayList<>();
+    private final List<String> matchedRecoveryOrigins = new ArrayList<>();
+    private int recoveryIndex = 0, legacyScanned = 0, legacyConflicts = 0;
+    private String appUrl;
     private ValueCallback<Uri[]> pickerCallback;
     private byte[] pendingExport;
     private HttpServerLite server;
@@ -51,6 +65,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().setStatusBarColor(Color.rgb(13,16,23));
         getWindow().setNavigationBarColor(Color.rgb(13,16,23));
+        durable = getSharedPreferences(COLLECTION_PREFS, MODE_PRIVATE);
         browser = new WebView(this);
         browser.setBackgroundColor(Color.rgb(13,16,23));
         setContentView(browser);
@@ -62,6 +77,7 @@ public class MainActivity extends Activity {
         webSettings.setAllowContentAccess(true);
         webSettings.setMediaPlaybackRequiresUserGesture(true);
         browser.addJavascriptInterface(new AndroidBridge(), "ArcaneAndroid");
+        browser.addJavascriptInterface(new RecoveryBridge(), "ArcaneRecovery");
         browser.setWebChromeClient(new WebChromeClient(){
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params){
                 if(pickerCallback != null) pickerCallback.onReceiveValue(null);
@@ -77,6 +93,23 @@ public class MainActivity extends Activity {
             }
         });
         browser.setWebViewClient(new WebViewClient(){
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri url = request.getUrl();
+                if (RECOVERY_PATH.equals(url.getPath()) && "127.0.0.1".equals(url.getHost())
+                        && "http".equals(url.getScheme())) {
+                    String page = "<!doctype html><meta charset=utf-8><script>(function(){var d={};"
+                            + "for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);"
+                            + "if(k==='vault_cards'||k==='vault_physicalCollectionV1')d[k]=localStorage.getItem(k)}"
+                            + "ArcaneRecovery.capture(JSON.stringify(d))})()</script>";
+                    return new WebResourceResponse("text/html","UTF-8",
+                            new ByteArrayInputStream(page.getBytes(StandardCharsets.UTF_8)));
+                }
+                return null;
+            }
+            @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                if (request.isForMainFrame() && RECOVERY_PATH.equals(request.getUrl().getPath()))
+                    runOnUiThread(() -> finishRecoveryOrigin(null));
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request){
                 Uri u = request.getUrl();
                 if("127.0.0.1".equals(u.getHost()) && u.getPort() == server.getPort()) return false;
@@ -88,9 +121,10 @@ public class MainActivity extends Activity {
         catalog = new CatalogStore(getApplicationContext());
         artwork = new ArtworkCache(getApplicationContext());
         try {
-            server = new HttpServerLite();
+            server = new HttpServerLite(APP_PORT);
             workers.execute(server);
-            browser.loadUrl("http://127.0.0.1:" + server.getPort() + "/");
+            appUrl = "http://127.0.0.1:" + server.getPort() + "/";
+            startLegacyRecovery();
         } catch(IOException e) {toast("Unable to start local app service: " + e.getMessage());}
     }
     private void toast(String message) {runOnUiThread(()-> Toast.makeText(this,message,Toast.LENGTH_LONG).show());}
@@ -209,8 +243,8 @@ public class MainActivity extends Activity {
         private final ServerSocket listener;
         private volatile boolean open=true;
         private final byte[] page;
-        HttpServerLite() throws IOException {
-            listener=new ServerSocket(0,12,InetAddress.getByName("127.0.0.1"));
+        HttpServerLite(int port) throws IOException {
+            listener=new ServerSocket(port,12,InetAddress.getByName("127.0.0.1"));
             try(InputStream stream=getAssets().open("index.html")){page=readBytes(stream,5_000_000);}
         }
         int getPort(){return listener.getLocalPort();}
