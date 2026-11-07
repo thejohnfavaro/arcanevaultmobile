@@ -39,6 +39,14 @@ assert.match(bridge,/127\.0\.0\.1/);
 assert.ok(html.includes('id="physicalSyncJsonFile"'),'Missing USB file-transfer import control');
 assert.match(html,/physicalSyncJsonFile'\)\.onchange/);
 assert.match(gradle,/play-services-code-scanner:16\.1\.0/);
+for(const id of ['avSyncAllData','avSyncAllStatus']) assert.ok(html.includes('id="'+id+'"'),'Missing unified sync control '+id);
+assert.match(html,/function avSyncAllCardData\(/);
+assert.match(html,/await syncAll\(true\)/);
+assert.match(html,/if\(!ready\.hasPrintings\)/);
+assert.match(html,/if\(\(wasBusy&&!catalogStatus\.busy/);
+assert.match(backend,/\.put\("printings",printings\)/);
+assert.match(backend,/\.put\("hasPrintings",printings>0\)/);
+
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
 assert.match(gradle,/versionName '2\.0\.4'/);
