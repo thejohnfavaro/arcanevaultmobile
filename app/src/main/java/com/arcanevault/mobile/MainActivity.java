@@ -221,7 +221,7 @@ public class MainActivity extends Activity {
             String candidate=recoveryBest.get(key);
             if(candidate==null||collectionSize(candidate)<=0)continue;
             String current=durable.getString(key,null);
-            if(current==null||collectionSize(current)<=0){
+            if(current==null){
                 if(durable.edit().putString(key,candidate).commit()) imported++;
             }
         }
@@ -234,7 +234,7 @@ public class MainActivity extends Activity {
             for(String kind:new String[]{"arena","physical"}){
                 String key="arena".equals(kind)?"vault_cards":"vault_physicalCollectionV1";
                 String current=durable.getString(key,null);
-                if(current!=null&&collectionSize(current)>0)continue;
+                if(current!=null)continue;
                 org.json.JSONArray rows=indexed.optJSONArray(kind);
                 if(rows!=null&&rows.length()>0&&durable.edit().putString(key,rows.toString()).commit())
                     indexedRecovered++;
