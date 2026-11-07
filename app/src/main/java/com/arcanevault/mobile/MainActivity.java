@@ -138,7 +138,8 @@ public class MainActivity extends Activity {
     private void startLegacyRecovery() {
         WebStorage.getInstance().getOrigins(origins -> runOnUiThread(() -> {
             recoveryOrigins.clear();
-            if (origins != null) for (String origin : origins.keySet()) {
+            if (origins != null) for (Object originKey : origins.keySet()) {
+                String origin = String.valueOf(originKey);
                 if (origin.matches("http://127\\.0\\.0\\.1:[0-9]{2,5}")
                         && !origin.equals("http://127.0.0.1:" + APP_PORT))
                     recoveryOrigins.add(origin);
@@ -146,8 +147,8 @@ public class MainActivity extends Activity {
             // Scan older data-rich origins first. Never add quantities from
             // different snapshots together: they may contain the same cards.
             recoveryOrigins.sort((a,b)->Long.compare(
-                    origins.get(b)==null?0:origins.get(b).getUsage(),
-                    origins.get(a)==null?0:origins.get(a).getUsage()));
+                    origins.get(b) instanceof WebStorage.Origin ? ((WebStorage.Origin)origins.get(b)).getUsage() : 0L,
+                    origins.get(a) instanceof WebStorage.Origin ? ((WebStorage.Origin)origins.get(a)).getUsage() : 0L));
             // Scan every app-local origin, including older versions. No old data is
             // deleted until a verified copy exists in the stable storage location.
             continueLegacyRecovery();
