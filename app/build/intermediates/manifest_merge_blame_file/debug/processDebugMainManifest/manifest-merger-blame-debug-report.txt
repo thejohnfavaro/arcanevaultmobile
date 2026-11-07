@@ -1,0 +1,50 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.arcanevault.mobile"
+4    android:versionCode="20"
+5    android:versionName="2.0.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:3:2-64
+11-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:3:19-61
+12
+13    <application
+13-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:4:2-8:16
+14        android:allowBackup="true"
+14-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:4:187-213
+15        android:debuggable="true"
+16        android:extractNativeLibs="false"
+17        android:icon="@drawable/arcane_vault_icon"
+17-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:4:44-86
+18        android:label="Arcane Vault"
+18-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:4:15-43
+19        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+19-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:4:87-150
+20        android:usesCleartextTraffic="true" >
+20-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:4:151-186
+21        <activity
+21-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:5:2-7:13
+22            android:name="com.arcanevault.mobile.MainActivity"
+22-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:5:12-40
+23            android:exported="true"
+23-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:5:41-64
+24            android:windowSoftInputMode="adjustResize" >
+24-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:5:65-107
+25            <intent-filter>
+25-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:6:2-143
+26                <action android:name="android.intent.action.MAIN" />
+26-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:6:17-68
+26-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:6:25-66
+27
+28                <category android:name="android.intent.category.LAUNCHER" />
+28-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:6:68-127
+28-->C:\Users\ourlo\Downloads\ArcaneVault_Android_2_0_0_AndroidStudio_Source\ArcaneVault_Android_2_0_0_AndroidStudio\app\src\main\AndroidManifest.xml:6:78-125
+29            </intent-filter>
+30        </activity>
+31    </application>
+32
+33</manifest>

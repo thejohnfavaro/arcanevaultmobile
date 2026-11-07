@@ -1,0 +1,1 @@
+com.arcanevault.mobile:drawable/arcane_vault_icon = 0x7f010000
