@@ -107,3 +107,19 @@ console.log('PASS: exact mixed Boros/mono-color identities and normalized rarity
  assert.doesNotThrow(()=>run(),'Detail layout must remain idempotent');
 }
 console.log('PASS: Android card detail tab DOM insertions and repeated opens');
+
+
+// Exercise the shipped human-readable indexing status formatter.
+{
+ const source=html.match(/function avCatalogProgressText\(status\)\{[\s\S]*?\n\}/)?.[0];
+ assert.ok(source,'Missing catalog progress display helper');
+ const progress=new Function(source+';return avCatalogProgressText')();
+ const active=progress({phase:'Downloading and indexing card printings',imported:12000,
+  downloadedBytes:10485760,expectedBytes:52428800,idleSeconds:2,stalled:false});
+ assert.match(active,/12,000 printings indexed/);
+ assert.match(active,/10\.0 \/ 50\.0 MiB downloaded/);
+ const stalled=progress({phase:'Indexing card printings',imported:0,idleSeconds:188,stalled:true});
+ assert.match(stalled,/may be stalled/);
+ assert.match(stalled,/Existing collections are safe/);
+}
+console.log('PASS: indexing status reports activity and actionable stalled states');
