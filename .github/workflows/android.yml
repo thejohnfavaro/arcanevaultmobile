@@ -80,5 +80,6 @@ jobs:
             echo "Release $tag already exists; not overwriting a published APK."
             exit 0
           fi
-          sha256sum "$apk" > ArcaneVault-Android-v2.0.25.apk.sha256
-          gh release create "$tag" "$apk#ArcaneVault-Android-v2.0.25.apk" ArcaneVault-Android-v2.0.25.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Arcane Vault Android v2.0.25" --notes-file releases/android-v2.0.25.md
+          cp "$apk" ArcaneVault-Android-v2.0.25.apk
+          sha256sum ArcaneVault-Android-v2.0.25.apk > ArcaneVault-Android-v2.0.25.apk.sha256
+          gh release create "$tag" ArcaneVault-Android-v2.0.25.apk ArcaneVault-Android-v2.0.25.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Arcane Vault Android v2.0.25" --notes-file releases/android-v2.0.25.md
