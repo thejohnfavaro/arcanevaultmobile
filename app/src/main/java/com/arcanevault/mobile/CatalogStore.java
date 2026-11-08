@@ -266,9 +266,33 @@ final class CatalogStore extends SQLiteOpenHelper {
             try(Cursor c=db.rawQuery("SELECT name,qty FROM physical_ownership",null)){
                 while(c.moveToNext())prior.put(c.getString(0).toLowerCase(Locale.ROOT),c.getInt(1));
             }
-            boolean preservePrintings=!hasIdentifiers&&prior.equals(incoming)&&count(db,"physical_printings")>0;
+            // Keep verified identities for unchanged card-name quantities even when
+            // a Windows QR snapshot contains a mix of identified and name-only rows.
+            // Never infer an identity from a card name and never carry identities
+            // across a quantity change (that might represent another printing).
+            java.util.Set<String> incomingIdentified=new java.util.HashSet<>();
+            for(int i=0;i<rows.length();i++){
+                JSONObject item=rows.optJSONObject(i);if(item==null)continue;
+                String name=item.optString("name","").trim().toLowerCase(Locale.ROOT);
+                if(!item.optString("scryfallId","").trim().isEmpty() ||
+                   (!item.optString("set","").trim().isEmpty()&&!item.optString("number","").trim().isEmpty()))
+                    incomingIdentified.add(name);
+            }
+            java.util.List<ContentValues> preserved=new java.util.ArrayList<>();
+            try(Cursor c=db.rawQuery("SELECT name,setcode,collector,print_id,qty FROM physical_printings WHERE qty>0",null)){
+                while(c.moveToNext()){
+                    String key=c.getString(0).toLowerCase(Locale.ROOT);
+                    if(incomingIdentified.contains(key) || !incoming.containsKey(key) ||
+                       !incoming.get(key).equals(prior.get(key)))continue;
+                    ContentValues v=new ContentValues();
+                    v.put("name",c.getString(0));v.put("setcode",c.getString(1));
+                    v.put("collector",c.getString(2));v.put("print_id",c.getString(3));
+                    v.put("qty",c.getInt(4));preserved.add(v);
+                }
+            }
             db.delete("physical_ownership",null,null);
-            if(!preservePrintings)db.delete("physical_printings",null,null);
+            db.delete("physical_printings",null,null);
+            for(ContentValues saved:preserved)db.insertOrThrow("physical_printings",null,saved);
             // Aggregate name duplicates before inserting. Android API 26's older SQLite
             // does not support the modern ON CONFLICT ... DO UPDATE syntax.
             Map<String,Integer> quantities=new LinkedHashMap<>();
@@ -284,7 +308,7 @@ final class CatalogStore extends SQLiteOpenHelper {
                 String collector=item.optString("number","").trim();
                 String id=item.optString("scryfallId","").trim();
                 // An unspecified printing must never create set-specific progress.
-                if(!preservePrintings&&(!id.isEmpty() || (!set.isEmpty() && !collector.isEmpty()))){
+                if(!id.isEmpty() || (!set.isEmpty() && !collector.isEmpty())){
                     ContentValues ownedPrinting=new ContentValues();
                     ownedPrinting.put("name",name);
                     ownedPrinting.put("setcode",set);
