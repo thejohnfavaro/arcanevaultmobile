@@ -748,7 +748,8 @@ function portableQrReset(){portableQrPending=null;$('physicalQrPreview').classLi
 function portableQrReady(data){
  const collections=portableQrValidated(data);
  portableQrPending={...collections,art:data.preferredArtwork,exportedAt:String(data.exportedAt||'unknown')};
- $('physicalQrSummary').textContent='Windows snapshot from '+portableQrPending.exportedAt+' · '+collections.physical.length.toLocaleString()+' physical printings ('+collections.physical.reduce((n,c)=>n+c.qty,0).toLocaleString()+' cards) · '+collections.arena.length.toLocaleString()+' Arena card names.';
+ const identified=collections.physical.filter(avPhysicalHasIdentity).length;
+ $('physicalQrSummary').textContent='Windows snapshot from '+portableQrPending.exportedAt+' · '+collections.physical.length.toLocaleString()+' physical inventory rows · '+identified+' confirmed printing identities · '+collections.physical.reduce((n,c)=>n+c.qty,0)+' copies · '+collections.arena.length+' Arena names. Android currently has '+physicalCards.filter(avPhysicalHasIdentity).length+' identified rows.';
  $('physicalQrPreview').classList.remove('hidden');portableQrStatus('Snapshot received. Choose what to replace, then review the confirmation. Nothing has been imported yet.');
 }
 window.arcaneVaultScannedQr=url=>{const field=$('physicalWindowsQrUrl');field.value=String(url||'');portableQrFetch()};
@@ -765,9 +766,25 @@ function portableQrFetch(){
  if(!window.ArcaneAndroid?.fetchWindowsSync){portableQrStatus('Native Android QR transfer is not supported by this app build.');return}
  portableQrReset();portableQrStatus('Connecting to Windows over '+(raw.includes('127.0.0.1')?'USB (ADB reverse)':'your local Wi-Fi')+'…');window.ArcaneAndroid.fetchWindowsSync(raw);
 }
+// Preserve exact user-confirmed printings across name-only transfers only when
+// all copies for a card have a known printing and quantities are unchanged.
+function avPreserveVerifiedPrintings(incoming,existing){
+ const old=new Map(),next=new Map();
+ for(const c of physicalNormalize(existing)){const k=c.name.toLowerCase();if(!old.has(k))old.set(k,[]);old.get(k).push(c)}
+ for(const c of physicalNormalize(incoming)){const k=c.name.toLowerCase();if(!next.has(k))next.set(k,[]);next.get(k).push(c)}
+ const result=[];let preserved=0,unidentified=0;
+ for(const [key,rows] of next){
+  const prior=old.get(key)||[];
+  const sum=items=>items.reduce((n,c)=>n+c.qty,0);
+  if(rows.every(c=>!avPhysicalHasIdentity(c))&&prior.length&&prior.every(avPhysicalHasIdentity)&&sum(rows)===sum(prior)){
+   result.push(...prior);preserved+=prior.length;
+  }else{result.push(...rows);unidentified+=rows.filter(c=>!avPhysicalHasIdentity(c)).length}
+ }
+ return {cards:physicalNormalize(result),preserved,unidentified};
+}
 function portableQrApply(data,scope){
  const physical=scope==='physical'||scope==='both',arena=scope==='arena'||scope==='both';
- if(physical){physicalCards=physicalNormalize(data.physical);physicalPage=0;physicalSave()}
+ if(physical){physicalCards=avPreserveVerifiedPrintings(data.physical,physicalCards).cards;physicalPage=0;physicalSave()}
  if(arena){cards=data.arena.map(c=>({...c}));save('cards',cards);rebuildIndex();postOwnership();hydrateCache().then(()=>{render();renderStudio()});render()}
  if(data.art&&physical&&typeof data.art==='object'&&!Array.isArray(data.art)){
   const safe={};for(const [name,item] of Object.entries(data.art).slice(0,30000))
@@ -803,13 +820,15 @@ function physicalQrInit(){
    return;
   }
   const names=scope==='both'?'Arena and physical inventories':scope+' inventory';
-  if(!confirm('Replace '+names+' with the Windows snapshot? This does not merge quantities. Your current inventory will be saved as a local rollback snapshot.'))return;
+  const preview=(scope==='physical'||scope==='both')?avPreserveVerifiedPrintings(portableQrPending.physical,physicalCards):null;
+  const printingNotice=preview?'\\n\\nPrinting identities received: '+portableQrPending.physical.filter(avPhysicalHasIdentity).length+'. Existing verified rows safely retained: '+preview.preserved+'. Still unidentified: '+preview.unidentified+'. Unidentified rows do not count toward Set Progress.':'';
+  if(!confirm('Replace '+names+' with the Windows snapshot? This does not merge quantities. Your current inventory will be saved as a local rollback snapshot.'+printingNotice))return;
   const rollback={format:'arcane-vault-collection-sync',schema:1,arena:cards.map(({meta,...c})=>c),physical:physicalCards.map(c=>({...c})),art:load('preferredArtworkV1',{}),exportedAt:new Date().toISOString()};
   try{
    const json=JSON.stringify(rollback);
    localStorage.setItem('vault_'+PORTABLE_ANDROID_UNDO,json);
    portableQrApply(portableQrPending,scope);portableQrReset();
-   portableQrStatus('Imported '+names+' successfully. Previous inventories saved for Undo.');
+   portableQrStatus('Imported '+names+'. '+(preview?preview.unidentified+' printing rows still unidentified; '+preview.preserved+' verified printing rows preserved. ':'')+'Previous inventories saved for Undo. Refresh Set Progress > Physical.');
   }catch(e){portableQrStatus('Import was not completed: '+e.message)}
  };
  $('physicalQrUndo').onclick=()=>{
