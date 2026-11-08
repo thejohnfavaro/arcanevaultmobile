@@ -203,8 +203,15 @@ assert.match(html,/\$\('setArena'\)\.value=setCollectionSource==='physical'\?'an
 assert.match(html,/\$\('setArena'\)\.value=source==='physical'\?'any':'arena'/);
 assert.match(backend,/Map<String,Integer> restored=new HashMap/);
 assert.match(backend,/\.put\("scryfallId",c\.getString\(3\)\)/);
-assert.match(backend,/boolean preservePrintings=!hasIdentifiers&&prior\.equals\(incoming\)/);
-assert.match(backend,/if\(!preservePrintings\)db\.delete\("physical_printings",null,null\)/);
+// Mixed Windows QR snapshots must retain unchanged identified printings,
+ // without inventing printing ownership for name-only cards.
+assert.match(backend,/incomingIdentified=new java\.util\.HashSet/);
+assert.match(backend,/!incoming\.get\(key\)\.equals\(prior\.get\(key\)\)/);
+assert.match(backend,/db\.delete\("physical_printings",null,null\)/);
+assert.match(backend,/for\(ContentValues saved:preserved\)/);
+assert.match(html,/function avPreserveVerifiedPrintings\(incoming,existing\)/);
+assert.match(html,/prior\.every\(avPhysicalHasIdentity\)&&sum\(rows\)===sum\(prior\)/);
+assert.match(html,/confirmed printing identities/);
 
  // Exact multi-select color identity UX + rarity display regression coverage.
  assert.match(html,/id="avIdentityPicker"/);
