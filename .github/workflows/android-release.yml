@@ -4,8 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'app/build.gradle'
-      - 'tests/**'
+      # Only explicit versioned release notes trigger a new main-branch release.
+      # App/QA-only commits build in android.yml without trying to republish
+      # the existing signed version and without requiring signing secrets.
       - 'releases/android-v*.md'
     tags:
       - 'android-v*'
@@ -58,6 +59,8 @@ jobs:
           node tests/regression.mjs
           node tests/new-features.mjs
           node tests/mobile-parity.mjs
+      - name: Test printing-aware ownership contract
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Validate signing credentials
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
