@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
 
@@ -20,7 +21,7 @@ public final class PrintingReconciliationTest {
         return text == null ? null : UUID.fromString(text);
     }
 
-    private static String optional(JSONObject o, String key) {
+    private static String optional(JSONObject o, String key) throws JSONException {
         return o.isNull(key) ? null : o.getString(key);
     }
 
@@ -31,7 +32,7 @@ public final class PrintingReconciliationTest {
         }
     }
 
-    private static List<PrintingReconciliation.CatalogPrinting> catalog(JSONArray items) {
+    private static List<PrintingReconciliation.CatalogPrinting> catalog(JSONArray items) throws JSONException {
         List<PrintingReconciliation.CatalogPrinting> rows = new ArrayList<>();
         for (int i = 0; i < items.length(); i++) {
             JSONObject o = items.getJSONObject(i);
@@ -42,7 +43,7 @@ public final class PrintingReconciliationTest {
         return rows;
     }
 
-    private static List<PrintingReconciliation.PhysicalLine> lines(JSONArray items) {
+    private static List<PrintingReconciliation.PhysicalLine> lines(JSONArray items) throws JSONException {
         List<PrintingReconciliation.PhysicalLine> rows = new ArrayList<>();
         for (int i = 0; i < items.length(); i++) {
             JSONObject o = items.getJSONObject(i);
@@ -86,8 +87,9 @@ public final class PrintingReconciliationTest {
         assertEquals(unresolved.length(), observed.unresolvedLines.size());
         for (int i = 0; i < unresolved.length(); i++) {
             JSONObject want = unresolved.getJSONObject(i);
+            UUID expectedId = uuid(want.getString("lineId"));
             PrintingReconciliation.UnresolvedLine got = observed.unresolvedLines.stream()
-                .filter(row -> row.lineId.equals(uuid(want.getString("lineId"))))
+                .filter(row -> row.lineId.equals(expectedId))
                 .findFirst().orElse(null);
             assertNotNull(got);
             assertEquals(want.getLong("copies"), got.copies);
