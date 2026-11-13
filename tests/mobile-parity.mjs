@@ -75,7 +75,7 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.26'/);
+assert.match(gradle,/versionName '2\.0\.27'/);
 assert.match(gradle,/versionCode 46/);
 for (const id of ['avInventoryResetPanel','avClearScope','avClearPhrase','avClearAcknowledged',
  'avClearExecute','avClearUndo','avClearStatus'])
