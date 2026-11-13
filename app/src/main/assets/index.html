@@ -611,8 +611,12 @@ function avInventoryClearInit(){
  let busy=false;
  function validate(){
   const required=words[scope.value];
-  hint.textContent=required?'Type exactly '+required+' to confirm.':'Choose the scope to see the required phrase.';
-  action.disabled=busy||!required||phrase.value.trim()!==required||!ack.checked;
+  const matches=!!required&&phrase.value.trim().toUpperCase()===required;
+  hint.textContent=!required?'Choose the scope to see the required phrase.'
+   :!matches?'Type '+required+' (capitalization does not matter).'
+   :!ack.checked?'Phrase accepted. Check the full-backup acknowledgement to enable clearing.'
+   :'Ready to clear the selected inventory. An undo copy is kept until the next clear.';
+  action.disabled=busy||!matches||!ack.checked;
   undo.disabled=busy;
  }
  scope.addEventListener('change',()=>{phrase.value='';ack.checked=false;validate()});
