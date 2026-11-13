@@ -28,6 +28,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import org.json.JSONException;
+import com.arcanevault.mobile.next.InventoryClearPlan;
 import java.io.OutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -346,14 +347,82 @@ public class MainActivity extends Activity {
         private boolean validCollectionKey(String key) {
             return "cards".equals(key) || "physicalCollectionV1".equals(key);
         }
-        @JavascriptInterface public String readCollection(String key) {
+        @JavascriptInterface public synchronized String readCollection(String key) {
             return validCollectionKey(key)?durable.getString("vault_"+key,null):null;
         }
-        @JavascriptInterface public boolean writeCollection(String key,String json) {
+        @JavascriptInterface public synchronized boolean writeCollection(String key,String json) {
             if(!validCollectionKey(key)||json==null||json.length()>6_000_000 || collectionSize(json)<0)return false;
             // Native SharedPreferences is the authoritative single copy for
             // inventories. Use commit() so a failed write is not reported as saved.
             return durable.edit().putString("vault_"+key,json).commit();
+        }
+        private boolean matchCollectionSnapshot(String expectedArena, String expectedPhysical) {
+            return java.util.Objects.equals(durable.getString("vault_cards", null), expectedArena) &&
+                   java.util.Objects.equals(durable.getString("vault_physicalCollectionV1", null), expectedPhysical);
+        }
+        private boolean validScope(String scope) {
+            return "physical".equals(scope) || "arena".equals(scope) || "both".equals(scope);
+        }
+        // Atomic native inventory reset; explicit empty [] is an important
+        // tombstone. Legacy and SQLite recovery must not recreate cleared data
+        // after app restart. The most recent clear retains its prior native
+        // arrays until another clear (or explicit successful undo).
+        @JavascriptInterface public synchronized String clearInventories(
+                String scope, String expectedArena, String expectedPhysical) {
+            if(!validScope(scope))return "invalid-scope";
+            if(!matchCollectionSnapshot(expectedArena, expectedPhysical))return "stale-collection";
+            String arena=durable.getString("vault_cards",null);
+            String physical=durable.getString("vault_physicalCollectionV1",null);
+            if((arena!=null&&collectionSize(arena)<0) ||
+               (physical!=null&&collectionSize(physical)<0))return "invalid-inventory";
+            InventoryClearPlan.Plan plan=InventoryClearPlan.create(scope,arena,physical);
+            boolean resetArena=plan.clearArena;
+            boolean resetPhysical=plan.clearPhysical;
+            if(plan.alreadyEmpty)return "already-empty";
+            SharedPreferences.Editor edit=durable.edit()
+                .putString("vault_lastInventoryClearScope",scope)
+                .putString("vault_lastInventoryClearDate",
+                    java.time.Instant.now().toString());
+            if(resetArena){
+                edit.putString("vault_lastInventoryClearArena",arena);
+                edit.putString("vault_cards","[]");
+            }else edit.remove("vault_lastInventoryClearArena");
+            if(resetPhysical){
+                edit.putString("vault_lastInventoryClearPhysical",physical);
+                edit.putString("vault_physicalCollectionV1","[]");
+            }else edit.remove("vault_lastInventoryClearPhysical");
+            return edit.commit()?"ok":"storage-error";
+        }
+        @JavascriptInterface public synchronized String undoLastInventoryClear(
+                String expectedArena, String expectedPhysical) {
+            if(!matchCollectionSnapshot(expectedArena,expectedPhysical))return "stale-collection";
+            String scope=durable.getString("vault_lastInventoryClearScope",null);
+            if(!validScope(scope))return "no-clear-to-undo";
+            boolean resetArena="arena".equals(scope)||"both".equals(scope);
+            boolean resetPhysical="physical".equals(scope)||"both".equals(scope);
+            if(!InventoryClearPlan.canUndo(scope,
+                    durable.getString("vault_cards",null),
+                    durable.getString("vault_physicalCollectionV1",null)))
+                return "inventory-changed-since-clear";
+            String arena=durable.getString("vault_lastInventoryClearArena",null);
+            String physical=durable.getString("vault_lastInventoryClearPhysical",null);
+            if((resetArena && arena!=null && collectionSize(arena)<0) ||
+               (resetPhysical && physical!=null && collectionSize(physical)<0))
+                return "invalid-recovery";
+            SharedPreferences.Editor edit=durable.edit();
+            if(resetArena){
+                if(arena==null)edit.remove("vault_cards");
+                else edit.putString("vault_cards",arena);
+            }
+            if(resetPhysical){
+                if(physical==null)edit.remove("vault_physicalCollectionV1");
+                else edit.putString("vault_physicalCollectionV1",physical);
+            }
+            edit.remove("vault_lastInventoryClearScope")
+                .remove("vault_lastInventoryClearDate")
+                .remove("vault_lastInventoryClearArena")
+                .remove("vault_lastInventoryClearPhysical");
+            return edit.commit()?"ok":"storage-error";
         }
         @JavascriptInterface public String readRecoveryReport() {
             return durable.getString("recoveryReport","Storage protection active. Collections are saved in native app storage.");

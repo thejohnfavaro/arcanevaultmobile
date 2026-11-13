@@ -75,8 +75,27 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.25'/);
-assert.match(gradle,/versionCode 45/);
+assert.match(gradle,/versionName '2\.0\.26'/);
+assert.match(gradle,/versionCode 46/);
+for (const id of ['avInventoryResetPanel','avClearScope','avClearPhrase','avClearAcknowledged',
+ 'avClearExecute','avClearUndo','avClearStatus'])
+ assert.ok(html.includes('id="'+id+'"'),'Missing guarded inventory-reset UI: '+id);
+for (const part of ['function avInventoryClearInit()', 'avInventoryClearInit();',
+ 'bridge.clearInventories(kind,existingArena,existingPhysical)',
+ 'bridge.undoLastInventoryClear(oldArena,oldPhysical)',
+ "kind==='physical'", "kind==='arena'", "kind==='both'",
+ "await postPhysicalOwnership()", "await postOwnership()",
+ "localStorage.removeItem('vault_'+PHYSICAL_KEY)"])
+ assert.ok(html.includes(part),'Missing native clear workflow: '+part);
+for (const marker of ['synchronized String clearInventories(', 
+ 'synchronized String undoLastInventoryClear(',
+ '"vault_lastInventoryClearScope"', '"vault_lastInventoryClearPhysical"',
+ '"vault_lastInventoryClearArena"', '"vault_physicalCollectionV1","[]"',
+ '"vault_cards","[]"', 'matchCollectionSnapshot(expectedArena, expectedPhysical)',
+ 'edit.commit()?"ok":"storage-error"'])
+ assert.ok(bridge.includes(marker),'Missing native inventory clear safety: '+marker);
+assert.match(html,/value="replace">Replace physical collection/,'Physical CSV must default to nonadditive replacement');
+assert.match(html,/value="merge">Add quantities to physical collection/,'Additive physical mode must be explicit');
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
 assert.ok(bridge.includes('/api/catalog/physical-ownership'));
 // Exercise the shipping CSV parser + printing normalization, not a duplicate implementation.

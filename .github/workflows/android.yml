@@ -52,36 +52,10 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ArcaneVault-Android-2.0.0-debug
+          name: ArcaneVault-Android-2.0.26-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      # Publish a real installable update only when a persistent release signing
-      # key has been configured. Debug APKs are not safe replacement updates.
-      - name: Publish signed Android v2.0.25 update
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SIGNING_KEYSTORE_B64: ${{ secrets.ARCANEVAULT_SIGNING_KEYSTORE_BASE64 }}
-          ARCANEVAULT_SIGNING_STORE_PASSWORD: ${{ secrets.ARCANEVAULT_SIGNING_STORE_PASSWORD }}
-          ARCANEVAULT_SIGNING_KEY_ALIAS: ${{ secrets.ARCANEVAULT_SIGNING_KEY_ALIAS }}
-          ARCANEVAULT_SIGNING_KEY_PASSWORD: ${{ secrets.ARCANEVAULT_SIGNING_KEY_PASSWORD }}
-        run: |
-          if [[ -z "$SIGNING_KEYSTORE_B64" || -z "$ARCANEVAULT_SIGNING_STORE_PASSWORD" || -z "$ARCANEVAULT_SIGNING_KEY_ALIAS" || -z "$ARCANEVAULT_SIGNING_KEY_PASSWORD" ]]; then
-            echo "::warning::Signed release skipped: configure all four ARCANEVAULT signing secrets to publish an in-app detectable update."
-            exit 0
-          fi
-          export ARCANEVAULT_SIGNING_STORE_FILE="$RUNNER_TEMP/arcanevault-signing.jks"
-          printf '%s' "$SIGNING_KEYSTORE_B64" | base64 --decode > "$ARCANEVAULT_SIGNING_STORE_FILE"
-          chmod 600 "$ARCANEVAULT_SIGNING_STORE_FILE"
-          bash ./gradlew --no-daemon :app:assembleRelease
-          apk="app/build/outputs/apk/release/app-release.apk"
-          test -s "$apk"
-          tag="android-v2.0.25"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $tag already exists; not overwriting a published APK."
-            exit 0
-          fi
-          cp "$apk" ArcaneVault-Android-v2.0.25.apk
-          sha256sum ArcaneVault-Android-v2.0.25.apk > ArcaneVault-Android-v2.0.25.apk.sha256
-          gh release create "$tag" ArcaneVault-Android-v2.0.25.apk ArcaneVault-Android-v2.0.25.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Arcane Vault Android v2.0.25" --notes-file releases/android-v2.0.25.md
+      # Signed production builds are published only by android-release.yml,
+      # which checks the persistent signing certificate and versioned notes.
+      # Never publish an unrelated debug-signed APK as an update.
