@@ -101,6 +101,51 @@ public final class PrintingReconciliationTest {
         assertEquals(8, physical.size()); // No inventory line silently dropped.
     }
 
+    @Test public void repeatedPrintingsAndNameOnlyTransfersNeverFakeSetProgress() {
+        UUID printingId = UUID.fromString("00000000-0000-4000-8000-000000000a01");
+        PrintingReconciliation.CatalogPrinting printing =
+            new PrintingReconciliation.CatalogPrinting(printingId,
+                "Split // Name", "TST", "007");
+        List<PrintingReconciliation.CatalogPrinting> catalog =
+            Collections.singletonList(printing);
+        List<PrintingReconciliation.PhysicalLine> lines = Arrays.asList(
+            new PrintingReconciliation.PhysicalLine(
+                UUID.fromString("00000000-0000-4000-8000-000000000b01"),
+                "Split // Name", 2, printingId, "tst", "007", "foil"),
+            new PrintingReconciliation.PhysicalLine(
+                UUID.fromString("00000000-0000-4000-8000-000000000b02"),
+                "Split // Name", 1, printingId, "TST", "007", "nonfoil"),
+            new PrintingReconciliation.PhysicalLine(
+                UUID.fromString("00000000-0000-4000-8000-000000000b03"),
+                "Split // Name", 4, null, "TST", "007", "nonfoil"));
+
+        PrintingReconciliation.Result result =
+            PrintingReconciliation.reconcile(lines, catalog);
+        assertEquals("All copies remain represented", 7L, result.totalCopies);
+        assertEquals("Only explicit matching print IDs are confirmed", 3L,
+            result.confirmedCopies);
+        assertEquals("Name-only rows stay unresolved despite exact set hints", 4L,
+            result.unresolvedCopies);
+        assertEquals("Multiple finishes of one printing count once for set completion",
+            1, result.confirmedDistinctPrintings);
+        PrintingReconciliation.SetCount set = result.confirmedBySet.get("tst");
+        assertNotNull(set);
+        assertEquals(3L, set.copies);
+        assertEquals(1, set.distinctPrintings);
+        assertEquals(1, result.unresolvedLines.size());
+        assertEquals(PrintingReconciliation.UnresolvedReason.NoPrintId,
+            result.unresolvedLines.get(0).reason);
+
+        // A second read must not change totals or mutate the input snapshot.
+        PrintingReconciliation.Result second =
+            PrintingReconciliation.reconcile(lines, catalog);
+        assertEquals(result.confirmedCopies, second.confirmedCopies);
+        assertEquals(result.unresolvedCopies, second.unresolvedCopies);
+        assertNull("No assignment of previously missing printing identity",
+            lines.get(2).printId);
+        assertEquals(3, lines.size());
+    }
+
     @Test public void rejectsInvalidLinesWithoutEditingCollections() throws Exception {
         JSONObject document = fixture();
         List<PrintingReconciliation.CatalogPrinting> catalog = catalog(document.getJSONArray("catalogPrintings"));
