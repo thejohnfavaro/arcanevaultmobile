@@ -58,7 +58,7 @@ jobs:
 
       # Publish a real installable update only when a persistent release signing
       # key has been configured. Debug APKs are not safe replacement updates.
-      - name: Publish signed Android v2.0.25 update
+      - name: Publish signed Android v2.0.26 update
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -77,11 +77,11 @@ jobs:
           bash ./gradlew --no-daemon :app:assembleRelease
           apk="app/build/outputs/apk/release/app-release.apk"
           test -s "$apk"
-          tag="android-v2.0.25"
+          tag="android-v2.0.26"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists; not overwriting a published APK."
             exit 0
           fi
-          cp "$apk" ArcaneVault-Android-v2.0.25.apk
-          sha256sum ArcaneVault-Android-v2.0.25.apk > ArcaneVault-Android-v2.0.25.apk.sha256
-          gh release create "$tag" ArcaneVault-Android-v2.0.25.apk ArcaneVault-Android-v2.0.25.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Arcane Vault Android v2.0.25" --notes-file releases/android-v2.0.25.md
+          cp "$apk" ArcaneVault-Android-v2.0.26.apk
+          sha256sum ArcaneVault-Android-v2.0.26.apk > ArcaneVault-Android-v2.0.26.apk.sha256
+          gh release create "$tag" ArcaneVault-Android-v2.0.26.apk ArcaneVault-Android-v2.0.26.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Arcane Vault Android v2.0.25" --notes-file releases/android-v2.0.26.md
