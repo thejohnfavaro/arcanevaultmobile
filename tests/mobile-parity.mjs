@@ -75,8 +75,8 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.0\.26'/);
-assert.match(gradle,/versionCode 46/);
+assert.match(gradle,/versionName '2\.0\.27'/);
+assert.match(gradle,/versionCode 47/);
 for (const id of ['avInventoryResetPanel','avClearScope','avClearPhrase','avClearAcknowledged',
  'avClearExecute','avClearUndo','avClearStatus'])
  assert.ok(html.includes('id="'+id+'"'),'Missing guarded inventory-reset UI: '+id);
@@ -94,6 +94,16 @@ for (const marker of ['synchronized String clearInventories(',
  '"vault_cards","[]"', 'matchCollectionSnapshot(expectedArena, expectedPhysical)',
  'edit.commit()?"ok":"storage-error"'])
  assert.ok(bridge.includes(marker),'Missing native inventory clear safety: '+marker);
+assert.ok(html.includes("phrase.value.trim().toUpperCase()===required"),
+ 'Typed inventory clear phrase must be case-insensitive on Android');
+assert.ok(html.includes("Phrase accepted. Check the full-backup acknowledgement"),
+ 'Disabled clear button must explain backup acknowledgement requirement');
+assert.ok(html.includes("action.disabled=busy;"),
+ 'Reset button must stay clickable when idle so it can explain missing requirements');
+assert.ok(html.includes("if(!required||!phraseMatches||!ack.checked)") &&
+          html.includes("No data was changed.") &&
+          html.includes("Check the full-backup acknowledgement below the phrase first."),
+ 'Click-time validation must refuse to clear without scope, accepted phrase and backup acknowledgement');
 assert.match(html,/value="replace">Replace physical collection/,'Physical CSV must default to nonadditive replacement');
 assert.match(html,/value="merge">Add quantities to physical collection/,'Additive physical mode must be explicit');
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
