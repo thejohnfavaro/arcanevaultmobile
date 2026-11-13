@@ -28,6 +28,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import org.json.JSONException;
+import com.arcanevault.mobile.next.InventoryClearPlan;
 import java.io.OutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -374,10 +375,10 @@ public class MainActivity extends Activity {
             String physical=durable.getString("vault_physicalCollectionV1",null);
             if((arena!=null&&collectionSize(arena)<0) ||
                (physical!=null&&collectionSize(physical)<0))return "invalid-inventory";
-            boolean resetArena="arena".equals(scope)||"both".equals(scope);
-            boolean resetPhysical="physical".equals(scope)||"both".equals(scope);
-            if((!resetArena || "[]".equals(arena)) &&
-               (!resetPhysical || "[]".equals(physical)))return "already-empty";
+            InventoryClearPlan.Plan plan=InventoryClearPlan.create(scope,arena,physical);
+            boolean resetArena=plan.clearArena;
+            boolean resetPhysical=plan.clearPhysical;
+            if(plan.alreadyEmpty)return "already-empty";
             SharedPreferences.Editor edit=durable.edit()
                 .putString("vault_lastInventoryClearScope",scope)
                 .putString("vault_lastInventoryClearDate",
@@ -399,8 +400,9 @@ public class MainActivity extends Activity {
             if(!validScope(scope))return "no-clear-to-undo";
             boolean resetArena="arena".equals(scope)||"both".equals(scope);
             boolean resetPhysical="physical".equals(scope)||"both".equals(scope);
-            if((resetArena && !"[]".equals(durable.getString("vault_cards",null))) ||
-               (resetPhysical && !"[]".equals(durable.getString("vault_physicalCollectionV1",null))))
+            if(!InventoryClearPlan.canUndo(scope,
+                    durable.getString("vault_cards",null),
+                    durable.getString("vault_physicalCollectionV1",null)))
                 return "inventory-changed-since-clear";
             String arena=durable.getString("vault_lastInventoryClearArena",null);
             String physical=durable.getString("vault_lastInventoryClearPhysical",null);
