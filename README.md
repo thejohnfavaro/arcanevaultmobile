@@ -1,14 +1,21 @@
-# Arcane Vault for Android — 2.0.0 (Android Studio project)
+# Arcane Vault for Android — v2.0.25 (Android Studio project)
 
-**This archive contains Android application source, not a precompiled APK.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
+**This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
 ## Building an APK
 
 1. Open this folder in **Android Studio** with **Android SDK 35** and **JDK 17**.
-2. Install/sync Gradle **8.11.1** (required by the Android Gradle Plugin 8.9.2) and run **Build → Build APK(s)**. Alternatively run `BUILD_ANDROID_APK.bat` if you have a compatible Gradle installation.
+2. Use the checked-in Gradle **8.13** wrapper (`gradlew`/`gradlew.bat`) with a compatible Android Gradle Plugin and run **Build → Build APK(s)**. Alternatively run `BUILD_ANDROID_APK.bat` if you have a compatible Gradle installation.
 3. The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`. This is a personal testing build, not a signed production release.
 4. Alternatively, upload the project contents to the root of an Android GitHub repository and run the bundled `Android Debug APK` GitHub Actions workflow. Its build artifact is the debug APK.
 5. Before updating an existing installation, export **Import & Data → Save full backup**. The package ID is unchanged (`com.arcanevault.mobile`), but an APK signed with a different debug key cannot be installed over an existing version without first uninstalling the old app. Uninstalling clears local app data; keep a backup.
+
+## Current Android source and update safety (v2.0.25)
+
+- The latest observed `main` CI run (November 10, 2026) **passed**, including JavaScript regressions, the JVM printing-identity golden test, and debug APK packaging. This is **not** the same as an on-device validation or a signed release.
+- A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
+- Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
+- The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
 ## Notable Android 2.0 features
 
@@ -21,7 +28,7 @@
 
 ## Validation status
 
-JavaScript syntax checks and `node tests/regression.mjs`, `node tests/new-features.mjs`, `node tests/mobile-parity.mjs` pass. A headless Chromium smoke test of the page initialized without JavaScript errors, opened the mobile grouped sidebar, added a physical card, switched Set Progress to Physical and recorded a manual match. This is not Android WebView or on-device testing. **Android compilation, emulator testing and physical-device installation have not been performed in the preparation environment**, which does not contain Gradle or the Android SDK. The included GitHub Actions workflow is configured but has not been run against this source archive.
+The November 10, 2026 GitHub Actions Android Debug APK job passed its JavaScript regressions, JVM print reconciliation test and debug APK packaging. Original archive preparation notes below are retained for history; a green CI run does not replace physical-device QA. A headless Chromium smoke test of the page initialized without JavaScript errors, opened the mobile grouped sidebar, added a physical card, switched Set Progress to Physical and recorded a manual match. This is not Android WebView or on-device testing. **Physical-device installation and production update acceptance are still required.** Android Studio/CI build success does not guarantee that an installed release-signed app updates cleanly.
 
 ---
 
