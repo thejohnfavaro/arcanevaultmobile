@@ -2,7 +2,7 @@
 
 ## Added
 
-- Clear Inventory now provides actionable live feedback: enter the scope's confirmation phrase, check the saved-backup acknowledgement, or proceed when both are satisfied.
+- Clear Inventory keeps its action clickable when idle. A click validates the selected scope, typed phrase and saved-backup acknowledgement, and displays a clear reason without changing data if any are missing.
 - Android mobile parity regression checks confirm that mixed-case phrases pass without bypassing the backup acknowledgement.
 
 ## Changed
@@ -13,7 +13,7 @@
 
 ## Fixed
 
-- The **Clear selected inventory** button no longer stays inactive merely because users type the example in title case instead of uppercase.
+- The **Clear selected inventory** button no longer silently stays inactive. It accepts title-case confirmation text and reports missing backup acknowledgement or scope explicitly.
 
 ## Removed
 
@@ -24,7 +24,7 @@
 1. Export a complete backup before using Clear Inventory; verify it exists outside the app.
 2. Upgrade via the **signed Android update channel**, without uninstalling the currently installed app.
 3. Go to **Data & Sync → Clear inventory**, choose Physical only and type `Clear Physical`; confirm the live prompt acknowledges the phrase.
-4. Confirm the action remains disabled until the backup acknowledgement is checked. Uncheck it again; the action must disable.
+4. Click Clear before checking the backup acknowledgement; it must refuse the reset and explain the missing checkbox. Uncheck it again after a valid phrase and verify no clear is performed.
 5. Change the selected scope; the old phrase and acknowledgement must no longer authorize a clear.
 6. Cancel without clearing or test a verified Physical-only clear and native Undo. Confirm Arena, decks, printed Set Progress and reopen/restart behavior are unchanged outside the chosen scope.
 7. Reimport the same full CSV twice in **Replace physical collection** mode; ownership must not compound.
