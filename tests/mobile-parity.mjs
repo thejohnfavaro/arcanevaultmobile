@@ -94,6 +94,12 @@ for (const marker of ['synchronized String clearInventories(',
  '"vault_cards","[]"', 'matchCollectionSnapshot(expectedArena, expectedPhysical)',
  'edit.commit()?"ok":"storage-error"'])
  assert.ok(bridge.includes(marker),'Missing native inventory clear safety: '+marker);
+assert.ok(html.includes("phrase.value.trim().toUpperCase()===required"),
+ 'Typed inventory clear phrase must be case-insensitive on Android');
+assert.ok(html.includes("Phrase accepted. Check the full-backup acknowledgement"),
+ 'Disabled clear button must explain backup acknowledgement requirement');
+assert.ok(html.includes("action.disabled=busy||!matches||!ack.checked"),
+ 'Case-insensitive phrase must never bypass explicit saved-backup acknowledgement');
 assert.match(html,/value="replace">Replace physical collection/,'Physical CSV must default to nonadditive replacement');
 assert.match(html,/value="merge">Add quantities to physical collection/,'Additive physical mode must be explicit');
 for(const marker of ['physical_ownership','synchronized void physicalOwnership','printingCte(p)','if(oldVersion<2)'])assert.ok(backend.includes(marker),'Native DB missing: '+marker);
