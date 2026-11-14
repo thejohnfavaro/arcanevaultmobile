@@ -163,7 +163,6 @@ final class NativeCatalogScreen {
         advancedFilters=VaultNativeStyle.column(activity);
         advancedFilters.setPadding(dp(10),dp(5),dp(10),dp(7));
         VaultNativeStyle.surface(activity,advancedFilters,false);
-        layout.addView(advancedFilters);
         buildAdvancedFilters();
         advancedFilters.setVisibility(View.GONE);
         advancedButton.setOnClickListener(v->{
@@ -175,7 +174,10 @@ final class NativeCatalogScreen {
         ScrollView scroll = new ScrollView(activity);
         results = new LinearLayout(activity);
         results.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(results);
+        LinearLayout browseContent=VaultNativeStyle.column(activity);
+        browseContent.addView(advancedFilters);
+        browseContent.addView(results);
+        scroll.addView(browseContent);
         layout.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         schedule();
     }
