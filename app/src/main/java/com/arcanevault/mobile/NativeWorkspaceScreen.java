@@ -477,9 +477,11 @@ final class NativeWorkspaceScreen {
                             try{
                                 String saved=NativePeerInventoryApply.restoreLast(
                                     activity,prefs,catalog);
-                                ui.post(()->info("Previous inventory restored. "+
-                                    "Reopen the Catalog to refresh. Current inventory "+
-                                    "saved at "+saved));
+                                ui.post(()->{
+                                    ((MainActivity)activity).refreshAfterPeerInventory();
+                                    info("Previous inventory restored. Reopen the Catalog "+
+                                        "to refresh. Current inventory saved at "+saved);
+                                });
                             }catch(Exception error){
                                 ui.post(()->info("Inventory restore rejected: "+
                                     error.getMessage()));
