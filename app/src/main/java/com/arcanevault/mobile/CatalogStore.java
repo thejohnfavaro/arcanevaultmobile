@@ -485,6 +485,50 @@ final class CatalogStore extends SQLiteOpenHelper {
             return c.moveToFirst()?c.getInt(0):0;
         }
     }
+    /** Scoped read-only printing browser for native Set Progress. */
+    JSONObject setPrintings(Map<String,String> p)throws Exception{
+        String set=get(p,"set");
+        if(!set.matches("[A-Za-z0-9]{2,12}"))throw new IllegalArgumentException("Invalid set code");
+        int page=clamp(get(p,"page"),0,100000,0);
+        int size=clamp(get(p,"size"),1,80,48);
+        String match="WITH identified AS ("+
+            " SELECT v.print_id id,p.qty qty FROM physical_printings p JOIN variants v ON "+
+            " p.print_id!='' AND p.print_id=v.print_id COLLATE NOCASE "+
+            " WHERE p.qty>0 AND (p.setcode='' OR p.setcode=v.setcode COLLATE NOCASE "+
+            " OR p.setcode=v.setname COLLATE NOCASE) "+
+            " AND (p.collector='' OR p.collector=v.collector COLLATE NOCASE) "+
+            " UNION ALL "+
+            " SELECT v.print_id id,p.qty qty FROM physical_printings p JOIN variants v ON "+
+            " p.print_id='' AND p.setcode!='' AND p.collector!='' "+
+            " AND (p.setcode=v.setcode COLLATE NOCASE OR p.setcode=v.setname COLLATE NOCASE) "+
+            " AND p.collector=v.collector COLLATE NOCASE "+
+            " WHERE p.qty>0 AND NOT EXISTS(SELECT 1 FROM variants other "+
+            " WHERE other.print_id!=v.print_id AND "+
+            " (other.setcode=p.setcode COLLATE NOCASE OR other.setname=p.setcode COLLATE NOCASE) "+
+            " AND other.collector=p.collector COLLATE NOCASE)"+
+            " ), confirmed AS (SELECT id,SUM(qty) qty FROM identified GROUP BY id) ";
+        SQLiteDatabase db=getReadableDatabase();
+        int total;
+        try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM variants WHERE setcode=? COLLATE NOCASE",new String[]{set})){
+            total=c.moveToFirst()?c.getInt(0):0;
+        }
+        JSONArray rows=new JSONArray();
+        String query=match+"SELECT v.name,v.print_id,v.setcode,v.setname,v.collector,v.rarity,"+
+            "v.image,COALESCE(o.qty,0) FROM variants v "+
+            "LEFT JOIN confirmed o ON o.id=v.print_id "+
+            "WHERE v.setcode=? COLLATE NOCASE ORDER BY v.name COLLATE NOCASE,v.collector "+
+            "LIMIT ? OFFSET ?";
+        try(Cursor c=db.rawQuery(query,new String[]{set,Integer.toString(size),Integer.toString(page*size)})){
+            while(c.moveToNext()){
+                rows.put(new JSONObject().put("name",c.getString(0)).put("id",c.getString(1))
+                    .put("set",c.getString(2)).put("setName",c.getString(3))
+                    .put("collectorNumber",c.getString(4)).put("rarity",c.getString(5))
+                    .put("image",c.getString(6)).put("confirmedPhysicalCopies",c.getInt(7)));
+            }
+        }
+        return new JSONObject().put("total",total).put("page",page).put("printings",rows);
+    }
+
     JSONObject sets(Map<String,String> p)throws Exception{
         String arena=get(p,"arena"),query=get(p,"q");JSONArray rows=new JSONArray();int t=0,owned=0;
         String source=printingCte(p);
