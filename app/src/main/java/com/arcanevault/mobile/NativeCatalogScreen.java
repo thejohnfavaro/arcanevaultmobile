@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.widget.ImageView;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.view.Gravity;
 import android.graphics.drawable.GradientDrawable;
@@ -73,6 +74,7 @@ final class NativeCatalogScreen {
     private String source = "both", owned = "all", query = "";
     private boolean onlyOwnedPhysicalPrintings = false;
     private String setCode="",typeFilter="",rarityFilter="",roleFilter="",sortMode="";
+    private String manaValueMin="",manaValueMax="";
     private String exactColorIdentity="";
     private boolean advancedOpen=false;
     private boolean artGrid=false;
@@ -300,6 +302,8 @@ final class NativeCatalogScreen {
         filterPicker("RARITY",RARITY_NAMES,RARITY_VALUES,value->rarityFilter=value);
         filterPicker("UTILIZATION TAG",ROLE_NAMES,ROLE_NAMES,value->
             roleFilter="All roles".equals(value)?"":value);
+        filterField("MANA VALUE / CMC MIN","Minimum mana value (0 or more)",value->manaValueMin=value);
+        filterField("MANA VALUE / CMC MAX","Maximum; same as min for exact",value->manaValueMax=value);
         filterPicker("SORT BY",SORT_NAMES,SORT_VALUES,value->sortMode=value);
         TextView colorLabel=text("COLOR IDENTITY · EXACT MATCH",11,true);
         colorLabel.setTextColor(VaultNativeStyle.SUBTEXT);
@@ -334,7 +338,7 @@ final class NativeCatalogScreen {
         advancedFilters.addView(reset,new LinearLayout.LayoutParams(-1,dp(42)));
         reset.setOnClickListener(v->{
             setCode="";typeFilter="";rarityFilter="";roleFilter="";
-            sortMode="";exactColorIdentity="";
+            sortMode="";exactColorIdentity="";manaValueMin="";manaValueMax="";
             advancedFilters.removeAllViews();identityButtons.clear();
             buildAdvancedFilters();page=0;schedule();
         });
@@ -375,7 +379,8 @@ final class NativeCatalogScreen {
         final String q=query, src=source, scope=owned;
         final String selectedSet=setCode, selectedType=typeFilter,
             selectedRarity=rarityFilter, selectedRole=roleFilter,
-            selectedSort=sortMode, selectedIdentity=exactColorIdentity;
+            selectedSort=sortMode, selectedIdentity=exactColorIdentity,
+            selectedMvMin=manaValueMin,selectedMvMax=manaValueMax;
         final boolean printingMode=onlyOwnedPhysicalPrintings && "physical".equals(src);
         final int selectedPage=page;
         status.setText("Searching your catalog…");
@@ -386,6 +391,7 @@ final class NativeCatalogScreen {
                 options.put("set",selectedSet);options.put("type",selectedType);
                 options.put("rarity",selectedRarity);options.put("role",selectedRole);
                 options.put("sort",selectedSort);options.put("colors",selectedIdentity);
+                options.put("mvMin",selectedMvMin);options.put("mvMax",selectedMvMax);
                 options.put("source",src);
                 // A physical collection is not the same as cards unavailable on Arena.
                 // All Cards searches the full catalog and ownership across both inventories.
@@ -450,6 +456,46 @@ final class NativeCatalogScreen {
         queuedPageArt.clear();
     }
 
+    /** Official, printing-matched alternate face. Badge occupies the bottom
+     * right of the artwork and never changes catalog selection or ownership. */
+    private FrameLayout flippableArt(String name,String front,String reverse,
+            int width,int height) {
+        FrameLayout container=new FrameLayout(activity);
+        ImageView image=new ImageView(activity);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        image.setContentDescription("Official card artwork for "+name);
+        image.setBackground(VaultNativeStyle.rounded(activity,
+            VaultNativeStyle.ELEVATED,VaultNativeStyle.BORDER,8));
+        container.addView(image,new FrameLayout.LayoutParams(-1,-1));
+        loadThumbnail(image,front);
+        boolean hasBack=front.startsWith("https://cards.scryfall.io/") &&
+            reverse.startsWith("https://cards.scryfall.io/") &&
+            !front.equals(reverse);
+        if(hasBack) {
+            final boolean[] showingBack={false};
+            Button flip=VaultNativeStyle.button(activity,"⟳",false);
+            flip.setTextSize(19);
+            flip.setAllCaps(false);
+            flip.setContentDescription("Flip double-faced card "+name);
+            FrameLayout.LayoutParams position=new FrameLayout.LayoutParams(
+                dp(43),dp(43),Gravity.BOTTOM|Gravity.RIGHT);
+            position.setMargins(dp(4),dp(4),dp(4),dp(4));
+            container.addView(flip,position);
+            flip.setOnClickListener(v->{
+                showingBack[0]=!showingBack[0];
+                image.setImageDrawable(null);
+                loadThumbnail(image,showingBack[0]?reverse:front);
+                image.setContentDescription((showingBack[0]?"Alternate":"Front")+
+                    " card face for "+name);
+                flip.setContentDescription("Show "+(showingBack[0]?"front":"alternate")+
+                    " card face for "+name);
+            });
+        }
+        container.setContentDescription(name+
+            (hasBack?", double-faced card with flip control":""));
+        return container;
+    }
+
     private void render(JSONObject response,int selectedPage,String src,boolean printingMode) {
         results.removeAllViews();
         int total=response.optInt("total",0);
@@ -490,15 +536,10 @@ final class NativeCatalogScreen {
             entry.setPadding(dp(10),dp(10),dp(12),dp(10));
             VaultNativeStyle.surface(activity,entry,false);
             String imageUrl=meta==null?"":meta.optString("image","");
-            ImageView thumb=new ImageView(activity);
-            thumb.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            thumb.setContentDescription("Card artwork for "+name);
-            thumb.setBackground(VaultNativeStyle.rounded(activity,VaultNativeStyle.ELEVATED,
-                VaultNativeStyle.BORDER,8));
+            String imageBack=meta==null?"":meta.optString("imageBack","");
+            FrameLayout thumb=flippableArt(name,imageUrl,imageBack,dp(66),dp(93));
             LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
             imageParams.rightMargin=dp(14);entry.addView(thumb,imageParams);
-            thumb.setImageDrawable(null);
-            loadThumbnail(thumb,imageUrl);
             LinearLayout detail=VaultNativeStyle.column(activity);
             TextView nameView=text(name,16,true);
             nameView.setMaxLines(2);
@@ -521,7 +562,7 @@ final class NativeCatalogScreen {
             entry.setContentDescription(name+", "+type+", "+rarityLabel+
                 (physicalQty>0?", Physical copies "+physicalQty:"")+
                 (arenaQty>0?", Arena copies "+arenaQty:"")+". Tap to inspect");
-            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,arenaQty,physicalQty));
+            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
             lp.bottomMargin=dp(9);
             results.addView(entry,lp);
@@ -554,12 +595,11 @@ final class NativeCatalogScreen {
         LinearLayout tile=VaultNativeStyle.column(activity);
         tile.setPadding(dp(8),dp(8),dp(8),dp(9));
         VaultNativeStyle.surface(activity,tile,false);
-        ImageView image=new ImageView(activity);
-        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        image.setContentDescription("Official card artwork for "+name);
+        String imageBack=meta==null?"":meta.optString("imageBack","");
+        FrameLayout image=flippableArt(name,imageUrl,imageBack,cardWidth-dp(16),
+            Math.round((cardWidth-dp(16))*1.4f));
         tile.addView(image,new LinearLayout.LayoutParams(-1,
             Math.round((cardWidth-dp(16))*1.4f)));
-        loadThumbnail(image,imageUrl);
         TextView label=text(name,13,true);
         label.setMaxLines(2);
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -573,7 +613,7 @@ final class NativeCatalogScreen {
         tile.setContentDescription(name+", "+(physicalQty+arenaQty)+
             " owned copies. Tap to inspect");
         tile.setOnClickListener(v->
-            showDetails(name,type,oracle,rarity,imageUrl,arenaQty,physicalQty));
+            showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty));
         GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
         cell.width=cardWidth;
         cell.height=-2;
@@ -594,15 +634,11 @@ final class NativeCatalogScreen {
         LinearLayout card=VaultNativeStyle.row(activity);
         card.setPadding(dp(10),dp(10),dp(12),dp(10));
         VaultNativeStyle.surface(activity,card,false);
-        ImageView art=new ImageView(activity);
-        art.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        art.setContentDescription("Owned printing artwork for "+name+" "+set+" "+collector);
-        art.setBackground(VaultNativeStyle.rounded(activity,VaultNativeStyle.ELEVATED,
-            VaultNativeStyle.BORDER,8));
+        FrameLayout art=flippableArt(name,imageUrl,
+            printing.optString("imageBack",""),dp(66),dp(93));
         LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
         imageParams.rightMargin=dp(14);
         card.addView(art,imageParams);
-        loadThumbnail(art,imageUrl);
         LinearLayout labels=VaultNativeStyle.column(activity);
         TextView title=text(name,16,true);title.setMaxLines(2);labels.addView(title);
         TextView setInfo=text(set+" #"+collector+" • "+printing.optString("setName",""),12,false);
@@ -621,6 +657,7 @@ final class NativeCatalogScreen {
 
     /** Artwork is loaded off-thread, using the existing guarded Scryfall cache. */
     private void loadThumbnail(ImageView target,String imageUrl) {
+        target.setTag(imageUrl);
         if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
         artworkWorker.execute(() -> {
             try {
@@ -630,7 +667,7 @@ final class NativeCatalogScreen {
                 Bitmap bitmap=BitmapFactory.decodeByteArray(encoded,0,encoded.length,options);
                 if(bitmap==null)return;
                 ui.post(() -> {
-                    if(disposed || activity.isFinishing() || target.getWindowToken()==null) {
+                    if(disposed || activity.isFinishing() || !imageUrl.equals(target.getTag())) {
                         bitmap.recycle();return;
                     }
                     target.setImageBitmap(bitmap);
@@ -663,24 +700,17 @@ final class NativeCatalogScreen {
         browseScroll.setVisibility(View.VISIBLE);
     }
 
-    private void addInspectorArtwork(String name,String imageUrl) {
-        ImageView art=new ImageView(activity);
-        art.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        art.setContentDescription("Official card artwork for "+name);
-        art.setBackground(VaultNativeStyle.rounded(activity,
-            VaultNativeStyle.SURFACE,VaultNativeStyle.BORDER,12));
+    private void addInspectorArtwork(String name,String imageUrl,String imageBack) {
+        FrameLayout art=flippableArt(name,imageUrl,imageBack,-1,dp(330));
         LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(330));
-        params.topMargin=dp(8);
-        params.bottomMargin=dp(8);
+        params.topMargin=dp(8);params.bottomMargin=dp(8);
         inspectorContent.addView(art,params);
-        // Use the same guarded Scryfall cache as the catalog tiles.
-        loadThumbnail(art,imageUrl);
     }
 
     private void showDetails(String name,String type,String oracle,String rarity,
-            String imageUrl,int arenaQty,int physicalQty) {
+            String imageUrl,String imageBack,int arenaQty,int physicalQty) {
         openInspector(name);
-        addInspectorArtwork(name,imageUrl);
+        addInspectorArtwork(name,imageUrl,imageBack);
         TextView typeLine=text(type,14,true);
         typeLine.setTextColor(VaultNativeStyle.SUBTEXT);
         inspectorContent.addView(typeLine);
@@ -703,7 +733,7 @@ final class NativeCatalogScreen {
             "View printings & edit physical ownership",true);
         inspectorContent.addView(browsePrintings,new LinearLayout.LayoutParams(-1,dp(48)));
         browsePrintings.setOnClickListener(v->showInlinePrintings(name,
-            ()->showDetails(name,type,oracle,rarity,imageUrl,arenaQty,physicalQty)));
+            ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty)));
     }
 
     private void showInlinePrintings(String name,Runnable previous) {
@@ -798,7 +828,7 @@ final class NativeCatalogScreen {
         inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(44)));
         back.setOnClickListener(v->previous.run());
         String imageUrl=printing.optString("image","");
-        addInspectorArtwork(name,imageUrl);
+        addInspectorArtwork(name,imageUrl,printing.optString("imageBack",""));
         inspectorContent.addView(text(printing.optString("setName","")+
             " · "+printing.optString("rarity","")+
             "\\nConfirmed physical copies: "+printing.optInt("confirmedPhysicalCopies",0)+

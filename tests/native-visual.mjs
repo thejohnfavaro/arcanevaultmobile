@@ -13,8 +13,8 @@ assert.match(shell,/HorizontalScrollView scroller/,'Five navigation destinations
 assert.match(shell,/FrameLayout stage/,'Native Catalog must fill available space');
 assert.doesNotMatch(shell,/dp\(540\)/,'Do not clip Catalog to a hardcoded partial-height window');
 assert.match(shell,/VaultNativeStyle\.surface/,'Dashboard and collection rows use themed surfaces');
-assert.match(catalog,/ImageView thumb=new ImageView\(activity\)/,'Each catalog card must show a real artwork thumbnail');
-assert.match(catalog,/loadThumbnail\(thumb,imageUrl\)/);
+assert.match(catalog,/FrameLayout thumb=flippableArt/,'Cards retain official artwork with optional flip control');
+assert.match(catalog,/loadThumbnail/);
 assert.match(catalog,/artworkWorker\.execute/,'Artwork decoding must not block SQLite search or the UI');
 assert.match(catalog,/options\.inSampleSize=4/,'Thumbnails should be sampled to save memory');
 assert.match(catalog,/VaultNativeStyle\.search/,'Native search fields must use the dark theme');

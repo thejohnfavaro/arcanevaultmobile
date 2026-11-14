@@ -62,6 +62,7 @@ jobs:
           node tests/native-auto-baseline.mjs
           node tests/native-card-browsing.mjs
           node tests/native-inline-card-inspector.mjs
+          node tests/native-cross-platform-parity.mjs
           node tests/native-first-usb-sync.mjs
       - name: Test printing-aware ownership contract
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
