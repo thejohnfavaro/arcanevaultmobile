@@ -282,6 +282,66 @@ public final class NativePeerSync {
             .put("safeToAutoApply",false);
     }
 
+
+    /** Per-printing/per-card change summary for reviewed Android inventory apply.
+     * The candidate was already derived by the guarded three-way merge.
+     * This comparison is relative to Android's current state, NOT a sum of
+     * whole collection totals. Replaying an unchanged peer is a no-op.
+     */
+    public static JSONObject inventoryDelta(JSONObject local,JSONObject proposal)throws Exception {
+        JSONObject current=require(local);
+        JSONObject candidate=proposal.getJSONObject("candidate");
+        JSONArray changes=new JSONArray();
+        long added=0,removed=0;
+        for(String group:new String[]{"physicalCards","cards"}){
+            Map<String,JSONObject> before=index(group,current.getJSONArray(group));
+            Map<String,JSONObject> after=index(group,candidate.getJSONArray(group));
+            Set<String> ids=new TreeSet<>();
+            ids.addAll(before.keySet());
+            ids.addAll(after.keySet());
+            for(String id:ids){
+                JSONObject a=before.get(id),b=after.get(id);
+                if(equivalent(a,b))continue;
+                if(a!=null&&b==null)
+                    throw new IllegalArgumentException("Inventory deletion requires an explicit tombstone");
+                int oldQty=quantity(a);
+                int newQty=quantity(b);
+                long delta=(long)newQty-oldQty;
+                if(delta>0)added+=delta;
+                else if(delta<0)removed-=delta;
+                changes.put(new JSONObject()
+                    .put("group",group)
+                    .put("name",b!=null?b.optString("name","Unknown"):a.optString("name","Unknown"))
+                    .put("set",b!=null?b.optString("set",""):a.optString("set",""))
+                    .put("number",b!=null?b.optString("number",""):a.optString("number",""))
+                    .put("from",oldQty).put("to",newQty).put("delta",delta)
+                    .put("metadataChanged",!equivalent(withoutQuantity(a),withoutQuantity(b))));
+            }
+        }
+        return new JSONObject().put("changes",changes)
+            .put("addedCopies",added).put("removedCopies",removed)
+            .put("changedEntries",changes.length());
+    }
+
+    private static JSONObject withoutQuantity(JSONObject row)throws Exception {
+        if(row==null)return null;
+        JSONObject copy=new JSONObject(row.toString());
+        copy.remove("qty");
+        copy.remove("quantity");
+        return copy;
+    }
+    private static int quantity(JSONObject row)throws Exception {
+        if(row==null)return 0;
+        Object raw=row.has("qty")?row.get("qty"):row.opt("quantity");
+        if(!(raw instanceof Number))throw new IllegalArgumentException(
+            "Inventory entry has no numeric quantity: "+row.optString("name"));
+        long value=((Number)raw).longValue();
+        if(value<0||value>Integer.MAX_VALUE ||
+            ((Number)raw).doubleValue()!=value)
+            throw new IllegalArgumentException("Invalid inventory quantity");
+        return (int)value;
+    }
+
     /** Overview only; never writes either local storage or SQLite. */
     public static JSONObject preview(JSONObject local,JSONObject incoming)throws Exception {
         JSONObject data=require(incoming);
