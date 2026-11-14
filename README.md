@@ -17,6 +17,12 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.0.33: native UX and card art
+
+- The native Android screens now use a consistent dark Arcane Vault design with better contrast, rounded surfaces, scrollable navigation and full-height catalog layout.
+- Native Catalog results show actual Scryfall card art thumbnails with card name, type and relevant ownership metadata. Tap a card for a larger image and readable Oracle text; printing previews remain available.
+- Image retrieval runs off the UI thread and reuses the bounded official art cache. Read-only inventories and existing WebView Legacy tools remain untouched.
+
 ## Android v2.0.32: native printing inspection
 
 - In the native Catalog, open a card and tap **Browse printings & physical copies** to inspect official sets, collector numbers, printings and cached card artwork.
