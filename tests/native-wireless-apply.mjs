@@ -12,7 +12,7 @@ assert.match(activity,/applyPeerInventorySnapshot\(\(\)->received,data\.getData\
 assert.match(activity,/JSONObject remote=incoming\.load\(\)/);
 assert.match(activity,/NativePeerSync\s*\n\s*\.prepareMerge\(local,remote,original\)/);
 assert.match(activity,/NativePeerInventoryApply\.applyInventoryPart\(/);
-assert.match(screen,/Scan QR & apply Windows inventory/);
+assert.match(screen,/Scan QR & review Windows changes/);
 assert.match(screen,/baseline and explicit confirmation/);
 const download=activity.indexOf('.receive(link)');
 const approval=activity.indexOf('chooseWirelessApplyBaseline(remote)');
