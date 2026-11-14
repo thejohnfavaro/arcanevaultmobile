@@ -6,6 +6,8 @@
 - Reuse the Android three-way merge, explicit approval, recovery journal, optimistic inventory checks and undo controls for physical and Arena inventories.
 
 ## Changed
+- A **zero-difference wireless comparison** offers to remember the current matching peer snapshot as an Android local baseline. Existing baseline versions are preserved.
+- QR receive-and-apply offers the previously confirmed local baseline with a manual file-picker fallback.
 - QR scanning can now request a reviewed write-back flow instead of exclusively displaying a read-only comparison.
 - Read-only scan/receive, existing file-based apply, backup and undo remain available.
 
