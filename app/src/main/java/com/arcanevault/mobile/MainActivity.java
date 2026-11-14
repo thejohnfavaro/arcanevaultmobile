@@ -634,22 +634,42 @@ public class MainActivity extends Activity {
                                 candidate.getJSONObject("preferredArtwork")))
                             throw new IllegalStateException("Deck/artwork changes need Windows "+
                                 "write-back for now. Android only applies native inventory.");
-                        int count=proposal.getInt("incomingChanges");
+                        JSONObject delta=com.arcanevault.mobile.next.NativePeerSync
+                            .inventoryDelta(local,proposal);
+                        int count=delta.getInt("changedEntries");
                         if(count==0){
-                            runOnUiThread(()->toast("No new peer inventory changes to apply."));
+                            runOnUiThread(()->toast("Android inventory already includes these changes."));
                             return;
                         }
+                        org.json.JSONArray entries=delta.getJSONArray("changes");
+                        StringBuilder preview=new StringBuilder()
+                            .append(count).append(" inventory entries changed")
+                            .append("\nCopies to add: +").append(delta.getLong("addedCopies"))
+                            .append("\nCopies to remove: -").append(delta.getLong("removedCopies"))
+                            .append("\nAndroid-only edits preserved: ")
+                            .append(proposal.optInt("localChanges",0))
+                            .append("\n\n");
+                        for(int i=0;i<Math.min(12,entries.length());i++){
+                            JSONObject entry=entries.getJSONObject(i);
+                            long change=entry.getLong("delta");
+                            preview.append(change>0?"+":"").append(change)
+                                .append("  ").append(entry.optString("name","Unknown"));
+                            String set=entry.optString("set","");
+                            if(!set.isEmpty())preview.append(" (").append(set)
+                                .append(" #").append(entry.optString("number","")).append(")");
+                            if(entry.optBoolean("metadataChanged") && change==0)
+                                preview.append(" · details updated");
+                            preview.append("\n");
+                        }
+                        if(entries.length()>12)
+                            preview.append("… and ").append(entries.length()-12).append(" more entries\n");
+                        preview.append("\nOnly these reviewed inventory differences will be applied. "+
+                            "Unchanged cards remain untouched. Conflicts and ambiguous deletions "+
+                            "are refused. A full recovery file is saved before the write. "+
+                            "Windows will not be changed.");
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                            .setTitle("Apply Windows inventory changes?")
-                            .setMessage("Incoming record changes: "+count+
-                                "\nPreserved Android-only edits: "+
-                                proposal.optInt("localChanges",0)+
-                                "\n\nThis will change physical/Arena inventory only. "+
-                                "Simultaneous edits and ambiguous deletions were rejected. "+
-                                "This manually selected baseline has not yet been authenticated "+
-                                "by paired-device checkpoints. A full inventory recovery file "+
-                                "will be saved before any write.\n\n"+
-                                "Windows will NOT change during this operation.")
+                            .setTitle("Apply Windows inventory differences?")
+                            .setMessage(preview.toString())
                             .setNegativeButton("Cancel",null)
                             .setPositiveButton("Apply to Android",(dialog,which)->{
                                 workers.execute(()->{
@@ -660,7 +680,7 @@ public class MainActivity extends Activity {
                                             refreshAfterPeerInventory();
                                             new android.app.AlertDialog.Builder(this)
                                             .setTitle("Android inventory updated")
-                                            .setMessage("Applied "+count+" peer records. "+
+                                            .setMessage("Applied "+count+" reviewed inventory changes. "+
                                                 "Previous inventories saved for recovery. "+
                                                 "Reopen the native Catalog and Sets to refresh.\n\n"+
                                                 "Backup: "+recovery)
