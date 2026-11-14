@@ -331,15 +331,15 @@ public class MainActivity extends Activity {
                                         !local.optString("deviceId").equalsIgnoreCase(
                                             remote.optString("deviceId"));
                                     runOnUiThread(()->{
-                                        android.app.AlertDialog.Builder dialog=
+                                        android.app.AlertDialog.Builder baselineDialog=
                                             new android.app.AlertDialog.Builder(this)
                                             .setTitle("Windows peer snapshot")
                                             .setMessage(message.toString())
                                             .setPositiveButton("Close",null);
-                                        if(same)dialog.setNeutralButton(
+                                        if(same)baselineDialog.setNeutralButton(
                                             "Remember shared baseline",
                                             (d,w)->rememberMatchingWirelessBaseline(remote));
-                                        dialog.show();
+                                        baselineDialog.show();
                                     });
                                 }
                             }catch(Exception error){runOnUiThread(()->toast(
