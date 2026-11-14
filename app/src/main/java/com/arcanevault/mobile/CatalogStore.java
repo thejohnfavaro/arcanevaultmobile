@@ -529,9 +529,17 @@ final class CatalogStore extends SQLiteOpenHelper {
         return new JSONObject().put("total",total).put("page",page).put("printings",rows);
     }
 
+    /** Arena set coverage is card-name ownership, never inferred physical printing ownership. */
+    private static String setProgressCte(Map<String,String> p) {
+        if(!"arena".equals(get(p,"source")))return printingCte(p);
+        return "confirmed AS (SELECT d.setcode,d.name,COALESCE(o.qty,0) qty "+
+            "FROM (SELECT DISTINCT setcode,name FROM variants WHERE arena=1) d "+
+            "LEFT JOIN ownership o ON o.name=d.name COLLATE NOCASE)";
+    }
+
     JSONObject sets(Map<String,String> p)throws Exception{
         String arena=get(p,"arena"),query=get(p,"q");JSONArray rows=new JSONArray();int t=0,owned=0;
-        String source=printingCte(p);
+        String source=setProgressCte(p);
         String sql="WITH distinct_cards AS (SELECT DISTINCT setcode,name FROM variants WHERE (?!='arena' OR arena=1)), "+source+", per_set AS (SELECT d.setcode,COUNT(*) total,SUM(CASE WHEN COALESCE(o.qty,0)>0 THEN 1 ELSE 0 END) owned FROM distinct_cards d LEFT JOIN confirmed o ON o.name=d.name AND o.setcode=d.setcode GROUP BY d.setcode),names AS (SELECT setcode,MAX(setname) setname,MIN(CASE WHEN length(release)=10 AND release GLOB '????-??-??' THEN release END) released FROM variants GROUP BY setcode) SELECT p.setcode,n.setname,p.total,p.owned,n.released FROM per_set p JOIN names n ON n.setcode=p.setcode WHERE (?='' OR p.setcode LIKE ? OR n.setname LIKE ?) ORDER BY n.setname COLLATE NOCASE";
         try(Cursor r=getReadableDatabase().rawQuery(sql,new String[]{arena,query,"%"+query+"%","%"+query+"%"})){
             while(r.moveToNext()){int all=r.getInt(2),have=r.getInt(3);t+=all;owned+=have;rows.put(new JSONObject().put("code",r.getString(0)).put("name",r.getString(1)).put("total",all).put("owned",have).put("missing",all-have).put("percentage",all==0?0:Math.round(1000.0*have/all)/10.0).put("releaseDate",r.isNull(4)?"":r.getString(4)));}
@@ -545,7 +553,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     JSONObject setCards(Map<String,String> p)throws Exception{
         String code=get(p,"set").toLowerCase(Locale.US),arena=get(p,"arena"),scope=get(p,"ownership");if(!code.matches("[a-z0-9]{2,8}"))throw new IllegalArgumentException("Invalid set code");
         int page=clamp(get(p,"page"),0,10000,0),size=clamp(get(p,"size"),1,100,48);
-        String confirmed=printingCte(p);
+        String confirmed=setProgressCte(p);
         String filter="";if("owned".equals(scope))filter=" AND COALESCE(o.qty,0)>0";else if("missing".equals(scope))filter=" AND COALESCE(o.qty,0)=0";
         String sql="WITH setcards AS (SELECT DISTINCT name FROM variants WHERE setcode=? AND (?!='arena' OR arena=1)), "+confirmed+" SELECT sc.name,COALESCE(o.qty,0),COALESCE(v.image,c.image,''),COALESCE(c.type,''),COALESCE(c.rarity,''),COALESCE(c.uri,'') FROM setcards sc LEFT JOIN confirmed o ON o.name=sc.name AND o.setcode=? LEFT JOIN cards c ON c.name=sc.name LEFT JOIN variants v ON v.print_id=(SELECT print_id FROM variants WHERE setcode=? AND name=sc.name AND (?!='arena' OR arena=1) ORDER BY release DESC LIMIT 1) WHERE 1=1"+filter+" ORDER BY sc.name COLLATE NOCASE LIMIT ? OFFSET ?";
         JSONArray rows=new JSONArray();try(Cursor r=getReadableDatabase().rawQuery(sql,new String[]{code,arena,code,code,arena,""+size,""+(page*size)})){
