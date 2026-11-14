@@ -73,7 +73,7 @@ final class NativeCatalogScreen {
         });
         LinearLayout filters = new LinearLayout(activity);
         filters.setOrientation(LinearLayout.HORIZONTAL);
-        for (String item : new String[]{"All cards", "Arena", "Paper-only"}) {
+        for (String item : new String[]{"All cards", "Arena", "Not on Arena"}) {
             Button b = button(item);
             filters.addView(b,new LinearLayout.LayoutParams(0,dp(48),1));
             b.setOnClickListener(v -> {
@@ -84,11 +84,11 @@ final class NativeCatalogScreen {
         layout.addView(filters);
         LinearLayout ownership = new LinearLayout(activity);
         ownership.setOrientation(LinearLayout.HORIZONTAL);
-        for (String item : new String[]{"Any ownership", "Owned", "Unowned"}) {
+        for (String item : new String[]{"Any Arena qty", "Arena owned", "Arena missing"}) {
             Button b = button(item);
             ownership.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));
             b.setOnClickListener(v -> {
-                owned = item.equals("Owned") ? "owned" : item.equals("Unowned") ? "unowned" : "all";
+                owned = item.equals("Arena owned") ? "owned" : item.equals("Arena missing") ? "unowned" : "all";
                 page = 0; schedule();
             });
         }
