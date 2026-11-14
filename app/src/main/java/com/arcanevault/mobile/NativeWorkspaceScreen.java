@@ -43,6 +43,7 @@ final class NativeWorkspaceScreen {
     private final TextView status;
     private volatile boolean closed;
     private int page=0;
+    private String syncSection="devices";
     private int setRequestId=0;
     private String setQuery="";
     private String setSource="physical";
@@ -386,7 +387,31 @@ final class NativeWorkspaceScreen {
 
     private void dataSync(){
         content.removeAllViews();
-        status.setText("Local-first tools · existing collection preserved");
+        status.setText("Windows ↔ Android · review before applying changes");
+        LinearLayout categories=VaultNativeStyle.row(activity);
+        HorizontalScrollView categoriesScroll=new HorizontalScrollView(activity);
+        categoriesScroll.setHorizontalScrollBarEnabled(false);
+        String[] sections={"devices","snapshots","imports","updates"};
+        String[] labels={"Device Sync","Snapshots","Import & Export","Updates"};
+        for(int i=0;i<sections.length;i++){
+            final String target=sections[i];
+            Button tab=VaultNativeStyle.button(activity,labels[i],target.equals(syncSection));
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,dp(45));
+            params.rightMargin=dp(7);
+            categories.addView(tab,params);
+            tab.setOnClickListener(v->{syncSection=target;dataSync();});
+        }
+        categoriesScroll.addView(categories);
+        content.addView(categoriesScroll);
+        TextView introText=VaultNativeStyle.label(activity,
+            syncSection.equals("devices")?"Compare and review changes before applying to either device.":
+            syncSection.equals("snapshots")?"Create one-tap backups and restore only with confirmation.":
+            syncSection.equals("imports")?"Move verified collection exports and legacy data.":
+            "Sync card metadata and install signed app updates.",
+            13,VaultNativeStyle.SUBTEXT,false);
+        introText.setPadding(0,dp(10),0,dp(16));
+        content.addView(introText);
+        if(syncSection.equals("snapshots")) {
         row("Collection storage","Physical and Arena inventories are stored separately in native Android storage.",null);
         row("Safe recovery snapshot",prefs.contains("vault_nativePhysicalBackupV1")?
             "A prior physical collection snapshot is available. Restore only if needed.":
@@ -397,8 +422,12 @@ final class NativeWorkspaceScreen {
             "Instantly saves the current collection, decks and artwork locally. "+
             "Previous snapshots are retained. A local snapshot is not automatically "+
             "a confirmed common baseline shared with Windows.",null);
+        }
+        if(syncSection.equals("imports")) {
         button("Export physical inventory backup",()->shareInventory("physical"));
         button("Export Arena inventory backup",()->shareInventory("arena"));
+        }
+        if(syncSection.equals("snapshots")) {
         button("Restore pre-edit physical snapshot",()->{
             String old=prefs.getString("vault_nativePhysicalBackupV1",null);
             if(old==null){info("No native editing snapshot exists.");return;}
@@ -432,6 +461,8 @@ final class NativeWorkspaceScreen {
                     });
                 }).show();
         });
+        }
+        if(syncSection.equals("updates")) {
         button("Full Scryfall catalog sync",()->new AlertDialog.Builder(activity)
             .setTitle("Sync official Scryfall catalog?")
             .setMessage("This downloads the official card catalog and printings. "+
@@ -451,6 +482,8 @@ final class NativeWorkspaceScreen {
                     (state.optString("error","").isEmpty()?"":"\n"+state.optString("error","")));
             }catch(Exception e){info("Sync status unavailable: "+e.getMessage());}
         });
+        }
+        if(syncSection.equals("devices")) {
         row("PC ↔ Android inventory sync",
             "Compare Windows and Android against their shared baseline, then review "+
             "per-card quantity changes before applying them to Android.",null);
@@ -502,9 +535,14 @@ final class NativeWorkspaceScreen {
             ()->((MainActivity)activity).reviewAndApplyPeerInventory());
         button("Three-way compare (known shared baseline)",
             ()->((MainActivity)activity).previewThreeWayPeerSync());
+        }
+        if(syncSection.equals("imports")) {
         button("Open advanced imports, QR and USB sync",legacy);
+        }
+        if(syncSection.equals("updates")) {
         row("Updater and security","Signed updates are opt-in. Do not dismiss Play Protect warnings without reviewing their details.",null);
         button("Check for app updates",()->new NativeAppUpdater(activity).check());
+        }
     }
     private void shareInventory(String kind){
         executor.execute(()->{
