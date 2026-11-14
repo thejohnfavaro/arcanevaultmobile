@@ -65,6 +65,10 @@ public class MainActivity extends Activity {
     private Uri pendingPeerComparison;
     private boolean pendingPeerApply;
     private JSONObject pendingWirelessIncoming;
+    // Legacy WebView remains the sole owner of saved decks and artwork preferences.
+    // Native peer exports queue until that background origin has finished loading.
+    private boolean peerDataPageReady;
+    private final List<PeerDataCallback> pendingPeerData = new ArrayList<>();
     private HttpServerLite server;
     private ExecutorService workers;
     private CatalogStore catalog;
@@ -116,6 +120,17 @@ public class MainActivity extends Activity {
             }
         });
         browser.setWebViewClient(new WebViewClient(){
+            @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon) {
+                peerDataPageReady=false;
+            }
+            @Override public void onPageFinished(WebView view,String url) {
+                if(appUrl==null || !appUrl.equals(url))return;
+                peerDataPageReady=true;
+                if(pendingPeerData.isEmpty())return;
+                List<PeerDataCallback> ready=new ArrayList<>(pendingPeerData);
+                pendingPeerData.clear();
+                for(PeerDataCallback callback:ready)readPeerData(callback);
+            }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri url = request.getUrl();
                 if (RECOVERY_PATH.equals(url.getPath()) && "127.0.0.1".equals(url.getHost())
@@ -133,6 +148,14 @@ public class MainActivity extends Activity {
             @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                 if (request.isForMainFrame() && RECOVERY_PATH.equals(request.getUrl().getPath()))
                     runOnUiThread(() -> finishRecoveryOrigin(null));
+                else if(request.isForMainFrame() && appUrl!=null &&
+                        appUrl.equals(request.getUrl().toString())) {
+                    peerDataPageReady=false;
+                    if(!pendingPeerData.isEmpty()) {
+                        pendingPeerData.clear();
+                        toast("Could not load saved decks/artwork. Snapshot was not created.");
+                    }
+                }
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request){
                 Uri u = request.getUrl();
@@ -191,12 +214,32 @@ public class MainActivity extends Activity {
         setContentView(nativeRoot);
     }
 
-    /** Reads deck/art data from the authoritative legacy origin, fail-closed. */
+    /** Fetch saved decks/artwork from the authoritative background WebView.
+     * The native Data & Sync screen must work after a cold start: it never
+     * needs users to open Legacy tools first or creates a duplicate store.
+     */
     private interface PeerDataCallback { void use(String decks,String art); }
     private void withPeerData(PeerDataCallback callback) {
-        String url=browser.getUrl();
-        if(url==null || appUrl==null || !url.startsWith(appUrl)){
-            toast("Open Legacy tools once to load saved decks before peer sync");
+        if(appUrl==null || browser==null) {
+            toast("Collection source is unavailable. Snapshot was not created.");
+            return;
+        }
+        if(peerDataPageReady && appUrl.equals(browser.getUrl())) {
+            readPeerData(callback);
+            return;
+        }
+        pendingPeerData.add(callback);
+        // During normal startup finishLegacyRecovery already loads this URL.
+        // Only request a background load if we're not currently navigating
+        // to the canonical app origin. Never replace an in-progress recovery.
+        String current=browser.getUrl();
+        if(nativeHomeVisible && (current==null || !current.startsWith(appUrl))) {
+            browser.loadUrl(appUrl);
+        }
+    }
+    private void readPeerData(PeerDataCallback callback) {
+        if(!peerDataPageReady || !appUrl.equals(browser.getUrl())) {
+            pendingPeerData.add(callback);
             return;
         }
         browser.evaluateJavascript(
@@ -205,6 +248,8 @@ public class MainActivity extends Activity {
             "return JSON.stringify({decks:JSON.parse(d||'[]'),art:JSON.parse(a||'{}')})"+
             "}catch(e){return 'SYNC_ERROR'}})()", result -> {
                 try {
+                    if(!peerDataPageReady || !appUrl.equals(browser.getUrl()))
+                        throw new IllegalStateException("Collection source navigated during export");
                     Object decoded=new org.json.JSONTokener(result).nextValue();
                     if(!(decoded instanceof String) || "SYNC_ERROR".equals(decoded))
                         throw new IllegalStateException("Stored deck data is not readable");
