@@ -1,9 +1,25 @@
-# Android v2.1.1 — Peer Sync foundation (export and review)
+# Arcane Vault Android v2.1.1 — PC / Android peer sync preview
 
-- Adds **Export peer sync file** and **Preview Windows / Android peer file** under native Data & Sync.
-- Snapshot includes native physical and Arena records, saved deck library and preferred artwork from their existing authoritative storage; no separate invented collection or deck database.
-- Saves a stable Android peer UUID and exports cross-platform schema-1 peer envelope containing the full schema-2 workspace fields.
-- Preview compares exact record identities, shows additions, differences and peer-absent records, and refuses duplicate/missing identities.\n- **Three-way compare (known shared baseline)** accepts a peer file and an explicitly chosen previously common snapshot. It distinguishes incoming-only, local-only and conflicting edits, with no writes. Object member order is normalized to avoid false differences across serializers.
-- Documents selected with the Android file picker are read with a strict 30-MiB limit.
-- **This milestone does not apply incoming edits or guarantee conflict-free synchronization.** There is no automatic merge; both platforms must eventually agree on a common baseline. Backups and existing one-way QR/USB transfers remain available.
-- Play Protect report #36 remains under investigation. No weakening of install security.
+## Added
+- **Export peer sync file** and **Preview Windows / Android peer file** in native Data & Sync.
+- Export native physical and Arena inventories, saved decks and preferred artwork from their existing authoritative stores in one portable peer snapshot.
+- Stable Android peer device ID and a cross-platform schema-1 envelope containing schema-2 collection and deck data.
+- **Three-way compare (known shared baseline)** for distinguishing incoming-only changes, local-only changes and concurrent conflicts using an explicitly selected prior common snapshot.
+
+## Changed
+- Normalize JSON object ordering during comparisons to avoid false differences between Windows and Android serializers.
+- Use unambiguous length-prefixed physical-printing identity keys.
+- Read user-selected peer files through the Android document picker, with a 30 MiB size limit.
+
+## Fixed
+- Reject duplicate or missing record identities instead of guessing which printings or decks match.
+- Render comparison summaries with readable line breaks and clear counts.
+- Never infer that a missing peer record was intentionally deleted.
+
+## Removed
+- No existing features removed. Legacy QR/USB collection transfer and backup features remain available.
+
+## Safety
+- **This version supports export and read-only reconciliation previews, not automatic bidirectional synchronization.**
+- Incoming changes are not applied. Authenticated pairing, saved common-base checkpoints, explicit conflict approval and atomic write/recovery on both platforms are still required.
+- Google Play Protect report #36 remains open. Signing and successful CI do not guarantee Play Protect clearance.
