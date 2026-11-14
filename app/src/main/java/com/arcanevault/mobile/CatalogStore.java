@@ -440,23 +440,76 @@ final class CatalogStore extends SQLiteOpenHelper {
             " (other.setcode=p.setcode COLLATE NOCASE OR other.setname=p.setcode COLLATE NOCASE) "+
             " AND other.collector=p.collector COLLATE NOCASE)"+
             " ), confirmed AS (SELECT id,SUM(qty) qty FROM matches GROUP BY id) ";
-        String from=" FROM confirmed o JOIN variants v ON v.print_id=o.id "+
+        StringBuilder from=new StringBuilder(" FROM confirmed o JOIN variants v ON v.print_id=o.id "+
             " LEFT JOIN cards c ON c.name=v.name WHERE o.qty>0 "+
-            " AND (?='' OR v.name LIKE ? OR v.setcode LIKE ? OR v.setname LIKE ? OR v.collector LIKE ?)";
+            " AND (?='' OR v.name LIKE ? OR v.setcode LIKE ? OR v.setname LIKE ? OR v.collector LIKE ?)");
         String pattern="%"+term+"%";
-        String[] filter=new String[]{term,pattern,pattern,pattern,pattern};
+        ArrayList<String> filter=new ArrayList<>(Arrays.asList(term,pattern,pattern,pattern,pattern));
+        String chosenSet=get(p,"set");
+        if(!chosenSet.isEmpty()){
+            if(!chosenSet.matches("[a-zA-Z0-9]{1,12}"))
+                throw new IllegalArgumentException("Set code must be 1–12 letters or digits");
+            from.append(" AND v.setcode=? COLLATE NOCASE");
+            filter.add(chosenSet);
+        }
+        if(!get(p,"rarity").isEmpty()){
+            from.append(" AND v.rarity=?");
+            filter.add(get(p,"rarity"));
+        }
+        if(!get(p,"type").isEmpty()){
+            from.append(" AND c.type LIKE ?");
+            filter.add("%"+get(p,"type")+"%");
+        }
+        String exactColors=get(p,"colors");
+        if(!exactColors.isEmpty()){
+            if(!exactColors.equals("C")&&!exactColors.matches("[WUBRG]{1,5}"))
+                throw new IllegalArgumentException("Invalid color identity");
+            StringBuilder normalized=new StringBuilder();
+            for(char symbol:"WUBRG".toCharArray())
+                if(exactColors.indexOf(symbol)>=0)normalized.append(symbol);
+            if(!exactColors.equals("C")&&normalized.length()!=exactColors.length())
+                throw new IllegalArgumentException("Invalid color identity");
+            String canonical="(CASE WHEN instr(COALESCE(c.colors,''),'W')>0 THEN 'W' ELSE '' END"+
+                " || CASE WHEN instr(COALESCE(c.colors,''),'U')>0 THEN 'U' ELSE '' END"+
+                " || CASE WHEN instr(COALESCE(c.colors,''),'B')>0 THEN 'B' ELSE '' END"+
+                " || CASE WHEN instr(COALESCE(c.colors,''),'R')>0 THEN 'R' ELSE '' END"+
+                " || CASE WHEN instr(COALESCE(c.colors,''),'G')>0 THEN 'G' ELSE '' END)";
+            from.append(" AND ").append(canonical).append("=?");
+            filter.add("C".equals(exactColors)?"":normalized.toString());
+        }
+        String role=get(p,"role");
+        Map<String,String> hints=new HashMap<>();
+        hints.put("Ramp","%add %mana%");hints.put("Removal","%destroy target%");
+        hints.put("Board Wipe","%destroy all%");hints.put("Discard","%discard%");
+        hints.put("Counterspell","%counter target%");hints.put("Card Draw","%draw %card%");
+        hints.put("Card Selection","%scry%");hints.put("Lifegain","%gain %life%");
+        hints.put("Tutor","%search your library%");hints.put("Stax","%can't cast%");
+        hints.put("Haste","%haste%");hints.put("Protection","%hexproof%");
+        hints.put("Recursion","%from your graveyard%");hints.put("Sacrifice","%sacrifice%");
+        hints.put("Tokens","%create %token%");hints.put("Graveyard Hate","%exile %graveyard%");
+        hints.put("Finisher","%loses the game%");hints.put("Equipment","%Equipment%");
+        if(hints.containsKey(role)){
+            from.append("Equipment".equals(role)?" AND c.type LIKE ?":" AND c.oracle LIKE ?");
+            filter.add(hints.get(role));
+        }
         SQLiteDatabase db=getReadableDatabase();
         int found;
-        try(Cursor c=db.rawQuery(confirmed+"SELECT COUNT(*)"+from,filter)){
+        try(Cursor c=db.rawQuery(confirmed+"SELECT COUNT(*)"+from,filter.toArray(new String[0]))){
             found=c.moveToFirst()?c.getInt(0):0;
         }
-        ArrayList<String> args=new ArrayList<>(Arrays.asList(filter));
+        ArrayList<String> args=new ArrayList<>(filter);
         args.add(Integer.toString(size));args.add(Integer.toString(page*size));
         JSONArray rows=new JSONArray();
+        String sort=get(p,"sort");
+        String order="v.name COLLATE NOCASE,v.release DESC,v.collector";
+        if("qty".equals(sort))order="o.qty DESC,v.name COLLATE NOCASE,v.collector";
+        if("rarity".equals(sort))order="CASE v.rarity WHEN 'mythic' THEN 4 WHEN 'rare' THEN 3 "+
+            "WHEN 'uncommon' THEN 2 ELSE 1 END DESC,v.name COLLATE NOCASE";
+        if("mv".equals(sort))order="COALESCE(c.mv,0) ASC,v.name COLLATE NOCASE";
         String query=confirmed+"SELECT v.name,v.print_id,v.setcode,v.setname,v.collector,v.rarity,"+
             "v.image,v.release,o.qty,COALESCE(c.type,''),COALESCE(c.oracle,''),"+
             "COALESCE(c.arena,0)"+from+
-            " ORDER BY v.name COLLATE NOCASE,v.release DESC,v.collector LIMIT ? OFFSET ?";
+            " ORDER BY "+order+" LIMIT ? OFFSET ?";
         try(Cursor c=db.rawQuery(query,args.toArray(new String[0]))){
             while(c.moveToNext()){
                 JSONObject meta=new JSONObject()
