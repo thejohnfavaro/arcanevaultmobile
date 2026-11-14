@@ -47,6 +47,19 @@ public final class NativePeerSyncTest {
         assertEquals(1,preview.getInt("conflicts"));
         assertEquals(before,local.toString());
     }
+    @Test public void serializerPropertyOrderDoesNotCreateConflicts()throws Exception {
+        JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
+        JSONObject remote=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONArray ordered=new JSONArray().put(new JSONObject()
+            .put("qty",4).put("name","Lightning Bolt"));
+        remote.getJSONObject("data").put("cards",ordered);
+        remote.getJSONObject("data").put("preferredArtwork",
+            new JSONObject().put("sol ring",new JSONObject()
+                .put("image","https://cards.scryfall.io/test.jpg")));
+        JSONObject comparison=NativePeerSync.preview(local,remote);
+        assertEquals(0,comparison.getJSONArray("changes").length());
+    }
+
     @Test public void malformedAndDuplicateDecksRejected()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject peer=peer("00000000-0000-4000-8000-000000000702",4);
