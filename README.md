@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.0.27 (Android Studio project)
+# Arcane Vault for Android — v2.0.28 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
@@ -16,6 +16,11 @@
 - A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
+
+## Android v2.0.28: Set Progress help
+
+- Expand **Showing 0% or missing owned cards?** in Set Progress for source selection, catalog troubleshooting and safe physical printing-identity recovery without changing quantities.
+- This is explanatory only; it does not fabricate missing set ownership or change any inventory.
 
 ## Android v2.0.27: clearer inventory reset confirmation
 
