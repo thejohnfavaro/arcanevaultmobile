@@ -704,7 +704,7 @@ public class MainActivity extends Activity {
                 JSONObject.quote(target.optJSONArray("deckLibrary").toString())+","+
                 JSONObject.quote(target.optJSONObject("preferredArtwork").toString())+
             "];"+
-            "const norm=(s)=>JSON.stringify(JSON.parse(s));"+
+            "const norm=(s)=>{const stable=(v)=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v);return JSON.stringify(stable(JSON.parse(s)));};"+
             "if(keys.some((k,i)=>norm(old[i]|| (i===0?'[]':'{}'))!==norm(before[i])))"+
                 "return JSON.stringify({ok:false,error:'Decks or artwork changed since review'});"+
             "try{keys.forEach((k,i)=>localStorage.setItem(k,next[i]));"+
@@ -794,6 +794,7 @@ public class MainActivity extends Activity {
                                             String recovery=null;
                                             try {
                                                 String saved=saveFullPeerRecovery(live);
+                                                recovery=saved;
                                                 boolean inventoryNeeded=inventoryCount>0;
                                                 if(inventoryNeeded)
                                                     NativePeerInventoryApply.applyInventoryPart(
@@ -852,6 +853,89 @@ public class MainActivity extends Activity {
                 toast("Cannot read Android sync snapshot: "+error.getMessage());
             }
         });
+    }
+
+    /** Manual reversal of the latest full peer write. A new snapshot of the
+     * present state is saved first, so restoration is itself reversible. */
+    void restoreLatestFullPeerSnapshot() {
+        java.io.File folder=new java.io.File(getFilesDir(),"peer-full-recovery");
+        java.io.File[] files=folder.listFiles((dir,name)->
+            name.matches("pre-peer-[a-f0-9-]{36}\\\\.json"));
+        if(files==null||files.length==0){
+            toast("No full pre-sync recovery snapshot is available.");
+            return;
+        }
+        java.util.Arrays.sort(files,(a,b)->Long.compare(b.lastModified(),a.lastModified()));
+        java.io.File selected=files[0];
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Restore previous full workspace?")
+            .setMessage("Restore the physical and Arena inventories, saved decks, "+
+                "and preferred artwork from the latest pre-sync snapshot? "+
+                "A new backup of your CURRENT state is created first. "+
+                "Any changes made since that snapshot will be replaced.\\n\\n"+
+                selected.getName())
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Restore full snapshot",(dialog,which)->
+                withPeerData((decks,art)->{
+                    try{
+                        JSONObject current=com.arcanevault.mobile.next.NativePeerSync
+                            .export(durable,peerId(),decks,art);
+                        workers.execute(()->{
+                            try{
+                                JSONObject backup=new JSONObject(new String(
+                                    java.nio.file.Files.readAllBytes(selected.toPath()),
+                                    StandardCharsets.UTF_8));
+                                JSONObject destination=backup.getJSONObject("data");
+                                JSONObject source=current.getJSONObject("data");
+                                // Validate known snapshot shape, including groups.
+                                destination.getJSONArray("cards");
+                                destination.getJSONArray("physicalCards");
+                                destination.getJSONArray("deckLibrary");
+                                destination.getJSONObject("preferredArtwork");
+                                String safety=saveFullPeerRecovery(current);
+                                boolean inventoryChanged=
+                                    !NativePeerInventoryApply.canonicalEqual(
+                                        source.getJSONArray("cards"),destination.getJSONArray("cards")) ||
+                                    !NativePeerInventoryApply.canonicalEqual(
+                                        source.getJSONArray("physicalCards"),
+                                        destination.getJSONArray("physicalCards"));
+                                if(inventoryChanged){
+                                    JSONObject candidate=new JSONObject()
+                                        .put("candidate",destination);
+                                    NativePeerInventoryApply.applyInventoryPart(
+                                        this,durable,catalog,current,candidate);
+                                }
+                                runOnUiThread(()->writePeerWebData(
+                                    source,destination,error->{
+                                        if(error==null){
+                                            refreshAfterPeerInventory();
+                                            new android.app.AlertDialog.Builder(this)
+                                                .setTitle("Full workspace restored")
+                                                .setMessage("Inventories, decks and artwork "+
+                                                    "restored from the saved snapshot.\\n\\n"+
+                                                    "Backup of pre-restore state: "+safety)
+                                                .setPositiveButton("OK",null).show();
+                                        }else{
+                                            new android.app.AlertDialog.Builder(this)
+                                                .setTitle("Recovery requires attention")
+                                                .setMessage("Inventory may have been restored, "+
+                                                    "but deck/artwork verification failed: "+
+                                                    error+"\\n\\nPrevious state: "+safety)
+                                                .setPositiveButton("OK",null).show();
+                                        }
+                                    }));
+                            }catch(Exception error){
+                                runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                    .setTitle("Full restore not completed")
+                                    .setMessage(error.getMessage()+
+                                        "\\nPrevious backup files were retained.")
+                                    .setPositiveButton("OK",null).show());
+                            }
+                        });
+                    }catch(Exception error){
+                        toast("Cannot read current workspace: "+error.getMessage());
+                    }
+                }));
     }
 
     private void previewThreeWayPeerUris(Uri latest,Uri baseline) {
