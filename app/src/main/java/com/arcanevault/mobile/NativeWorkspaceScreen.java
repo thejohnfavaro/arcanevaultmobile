@@ -274,7 +274,19 @@ final class NativeWorkspaceScreen {
                             if(!prefs.edit().putString("vault_physicalCollectionV1",old)
                                 .putString("vault_nativePhysicalBackupV1",current).commit())
                                 throw new IllegalStateException("Durable restoration did not complete");
-                            catalog.physicalOwnership(new JSONObject().put("cards",values));
+                            try {
+                                catalog.physicalOwnership(new JSONObject().put("cards",values));
+                            } catch(Exception failure) {
+                                // Never leave native inventory and physical SQLite
+                                // ownership mirror knowingly out of sync.
+                                boolean reversed=prefs.edit()
+                                    .putString("vault_physicalCollectionV1",current)
+                                    .putString("vault_nativePhysicalBackupV1",old).commit();
+                                if(!reversed)throw new IllegalStateException(
+                                    "Recovery index failed and local rollback did not persist; keep existing backups",failure);
+                                catalog.physicalOwnership(new JSONObject().put("cards",new JSONArray(current)));
+                                throw new IllegalStateException("Recovery reindex failed; original inventory restored",failure);
+                            }
                             ui.post(()->info("Physical snapshot restored. Reopen the catalog to refresh."));
                         }catch(Exception e){ui.post(()->info("Restore failed: "+e.getMessage()));}
                     });
