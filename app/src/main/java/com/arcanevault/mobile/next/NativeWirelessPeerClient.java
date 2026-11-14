@@ -31,8 +31,18 @@ public final class NativeWirelessPeerClient {
             if(ip[i]>255)throw new IllegalArgumentException("Invalid IP");
         }
         if(!(ip[0]==10||(ip[0]==172&&ip[1]>=16&&ip[1]<=31)||
-            (ip[0]==192&&ip[1]==168)))
-            throw new IllegalArgumentException("Link must use trusted private Wi-Fi");
+            (ip[0]==192&&ip[1]==168) ||
+            (ip[0]==127&&ip[1]==0&&ip[2]==0&&ip[3]==1)))
+            throw new IllegalArgumentException("Link must use private Wi-Fi or USB loopback");
+        return url;
+    }
+
+    /** ADB reverse maps the device's loopback port to the Windows-only
+     * localhost listener. Never accept a LAN URL for a USB launch. */
+    public static URL validateUsb(String link)throws Exception {
+        URL url=validate(link);
+        if(!"127.0.0.1".equals(url.getHost()))
+            throw new IllegalArgumentException("USB sync must use 127.0.0.1 loopback");
         return url;
     }
 
