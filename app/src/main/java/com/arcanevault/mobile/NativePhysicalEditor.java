@@ -88,6 +88,8 @@ final class NativePhysicalEditor {
                 String finish="nonfoil";
                 // Preserve other finish/language/condition/location records.
                 // This editor controls a single exact ID with the default finish only.
+                JSONObject template=null;
+                int matches=0;
                 for(int i=0;i<old.length();i++){
                     JSONObject row=old.optJSONObject(i);
                     if(row==null)continue;
@@ -100,13 +102,21 @@ final class NativePhysicalEditor {
                         row.optString("language","").isEmpty() &&
                         row.optString("condition","").isEmpty() &&
                         row.optString("location","").isEmpty();
-                    if(!match)updated.put(new JSONObject(row.toString()));
+                    if(match){
+                        matches++;
+                        if(template==null)template=new JSONObject(row.toString());
+                    } else updated.put(new JSONObject(row.toString()));
                 }
+                // Distinct purchase-price or other source rows may share a printing.
+                // Never collapse those into one record or erase their metadata.
+                if(matches>1)throw new IllegalStateException(
+                    "This printing has multiple separate ownership records. Edit them in Legacy tools.");
                 if(newQty>0){
-                    updated.put(new JSONObject().put("name",name).put("qty",newQty)
-                        .put("set",set).put("number",number).put("scryfallId",id)
-                        .put("finish",finish).put("language","").put("condition","")
-                        .put("location","").put("purchasePrice",""));
+                    JSONObject edited=template==null?new JSONObject():template;
+                    edited.put("name",name).put("qty",newQty)
+                        .put("set",set).put("number",number).put("scryfallId",id);
+                    if(template==null)edited.put("finish",finish);
+                    updated.put(edited);
                 }
                 if(!preferences.edit().putString(BACKUP,previous).commit())
                     throw new IllegalStateException("Unable to preserve recovery snapshot");
