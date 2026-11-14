@@ -17,4 +17,15 @@ assert.match(screen,/baseline and explicit confirmation/);
 const download=activity.indexOf('.receive(link)');
 const approval=activity.indexOf('chooseWirelessApplyBaseline(remote)');
 assert(download>=0&&approval>download,'Receiving snapshot must precede baseline selection and approval');
+const checkpoint=fs.readFileSync(
+    'app/src/main/java/com/arcanevault/mobile/NativePeerCheckpoint.java','utf8');
+assert.match(checkpoint,/saveIdentical\(Context context,JSONObject local,/);
+assert.match(checkpoint,/NativePeerSync\.preview\(local,received\)/);
+assert.match(checkpoint,/changes"\)\.length\(\)!=0/);
+assert.match(checkpoint,/AtomicFile/);
+assert.match(checkpoint,/\.history-/);
+assert.match(activity,/rememberMatchingWirelessBaseline\(remote\)/);
+assert.match(activity,/NativePeerCheckpoint\.exists\(this,incoming\.optString\("deviceId",""\)\)/);
+assert.match(activity,/NativePeerCheckpoint\.load\(this,received\.getString\("deviceId"\)\)/);
+assert.match(activity,/applyPeerInventorySnapshot\(PeerSnapshotLoader incoming,\s*PeerSnapshotLoader baseline\)/);
 console.log('PASS: QR wireless apply routes via baseline selection and existing guarded Android writeback');
