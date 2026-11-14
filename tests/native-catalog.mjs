@@ -16,4 +16,10 @@ assert.match(shell,/new NativeCatalogScreen\(activity, catalog, artwork, prefs\)
 assert.match(shell,/new String\[\]\{"Home", "Catalog", "Physical", "Arena", "Sets", "Decks", "EDH Lab", "Data & Sync", "Legacy tools"\}/);
 assert.match(activity,/NativeCompanionScreen\.create\(this, durable, catalog, artwork,/);
 assert.match(backend,/JSONObject search\(Map<String,String> p\)/);
+assert.match(native,/KEYWORD \/ RULES TEXT/,'Mechanic filter should be visible in advanced Card Catalog filters');
+assert.match(native,/options\.put\("oracle",selectedOracle\)/,'Pass typed mechanics to SQL query and cache key');
+assert.match(backend,/private static String oracleKeyword/,'Use bounded literal keyword text, not SQL wildcard input');
+assert.match(backend,/where\.append\(" AND c\.oracle LIKE \? ESCAPE/,'General catalog must filter Oracle keyword text');
+assert.match(backend,/from\.append\(" AND c\.oracle LIKE \? ESCAPE/,'Exact owned-printing search must filter Oracle keyword text');
+assert.match(native,/oracleFilter=""/,'Resetting filters must reset the keyword filter');
 console.log('PASS: native Android Card Catalog uses SQLite, bounded async search, cached art and native inspection');
