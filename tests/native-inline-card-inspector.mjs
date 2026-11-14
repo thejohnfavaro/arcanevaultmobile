@@ -17,6 +17,11 @@ for(const pattern of [
  /inspectorRequest/,
  /getWindowToken\(\)==null/,
  /loadThumbnail\(art,imageUrl\)/,
+ /private void prefetchPageArtwork\(/,
+ /pageCache\.get\(cacheKey\)/,
+ /pageCache\.put\(cacheKey,response\)/,
+ /pagePrefetchWorker\.execute/,
+ /invalidatePageCache\(\)/,
  /browseScroll\.post\(\(\)->browseScroll\.smoothScrollTo\(0,0\)\)/
 ])assert.match(source,pattern);
 const inspector=source.slice(source.indexOf('private void showDetails('),
