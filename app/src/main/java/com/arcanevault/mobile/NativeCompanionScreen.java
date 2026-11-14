@@ -38,6 +38,8 @@ final class NativeCompanionScreen {
     private final LinearLayout tabs;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private NativeCatalogScreen nativeCatalog;
+    private NativeWorkspaceScreen workspace;
+    private final NativeWorkspaceScreen.DeckLoader deckLoader;
     private String scope="home", query="";
     private int visibleCount=PAGE_SIZE;
     private List<CardRow> physical=Collections.emptyList(),arena=Collections.emptyList();
@@ -49,9 +51,11 @@ final class NativeCompanionScreen {
     }
 
     private NativeCompanionScreen(Activity activity,SharedPreferences prefs,
-            CatalogStore catalog,ArtworkCache artwork,Runnable openLegacy) {
+            CatalogStore catalog,ArtworkCache artwork,Runnable openLegacy,
+            NativeWorkspaceScreen.DeckLoader deckLoader) {
         this.activity=activity;
         this.prefs=prefs;this.catalog=catalog;this.artwork=artwork;this.openLegacy=openLegacy;
+        this.deckLoader=deckLoader;
         root=VaultNativeStyle.column(activity);
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
         root.setPadding(0,dp(14),0,0);
@@ -82,8 +86,8 @@ final class NativeCompanionScreen {
     }
 
     static View create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            ArtworkCache artwork,Runnable openLegacy) {
-        return new NativeCompanionScreen(activity,prefs,catalog,artwork,openLegacy).root;
+            ArtworkCache artwork,Runnable openLegacy,NativeWorkspaceScreen.DeckLoader deckLoader) {
+        return new NativeCompanionScreen(activity,prefs,catalog,artwork,openLegacy,deckLoader).root;
     }
     private int dp(float n){return VaultNativeStyle.dp(activity,n);}
     private LinearLayout column(){return VaultNativeStyle.column(activity);}
@@ -94,7 +98,7 @@ final class NativeCompanionScreen {
 
     private void drawTabs(){
         tabs.removeAllViews();
-        for(String tab:new String[]{"Home", "Catalog", "Physical", "Arena", "Legacy tools"}){
+        for(String tab:new String[]{"Home", "Catalog", "Physical", "Arena", "Sets", "Decks", "Data & Sync", "Legacy tools"}){
             boolean active=scope.equals(tab.toLowerCase(Locale.ROOT));
             Button action=button(tab,active);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44));
@@ -108,6 +112,7 @@ final class NativeCompanionScreen {
     }
     private void closeCatalog(){
         if(nativeCatalog!=null){nativeCatalog.close();nativeCatalog=null;}
+        if(workspace!=null){workspace.close();workspace=null;}
     }
     private void show(String next){
         closeCatalog();
@@ -115,6 +120,14 @@ final class NativeCompanionScreen {
         query="";visibleCount=PAGE_SIZE;
         drawTabs();
         stage.removeAllViews();
+        if(scope.equals("sets")||scope.equals("decks")||scope.equals("data & sync")){
+            workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,deckLoader,
+                scope.equals("data & sync")?"data":scope);
+            stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
+            subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
+                scope.equals("decks")?"Saved deck library":"Backups, sync and recovery");
+            return;
+        }
         if(scope.equals("catalog")){
             nativeCatalog=new NativeCatalogScreen(activity, catalog, artwork, prefs);
             stage.addView(nativeCatalog.view(),new FrameLayout.LayoutParams(-1,-1));

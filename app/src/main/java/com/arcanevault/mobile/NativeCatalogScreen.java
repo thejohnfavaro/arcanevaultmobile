@@ -526,10 +526,25 @@ final class NativeCatalogScreen {
         cardArt.setAdjustViewBounds(true);
         cardArt.setContentDescription("Official artwork for "+name+" "+printing.optString("set",""));
         layout.addView(cardArt,new LinearLayout.LayoutParams(-1,dp(330)));
+        final AlertDialog[] dialogHolder=new AlertDialog[1];
+        Button edit=VaultNativeStyle.button(activity,"Edit physical copies (nonfoil)",true);
+        layout.addView(edit,new LinearLayout.LayoutParams(-1,dp(48)));
+        edit.setOnClickListener(v->new NativePhysicalEditor(activity,inventory,catalog)
+            .edit(name,printing,()->{
+                schedule();
+                if(dialogHolder[0]!=null)dialogHolder[0].dismiss();
+            }));
+        if(imageUrl.startsWith("https://cards.scryfall.io/")){
+            Button preference=VaultNativeStyle.button(activity,"Set preferred artwork",false);
+            layout.addView(preference,new LinearLayout.LayoutParams(-1,dp(48)));
+            preference.setOnClickListener(v->((MainActivity)activity)
+                .savePreferredArtwork(name,printing.optString("id",""),imageUrl));
+        }
         ScrollView scroll=new ScrollView(activity);
         scroll.addView(layout);
         AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name)
             .setView(scroll).setPositiveButton("Close",null).show();
+        dialogHolder[0]=dialog;
         if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
         worker.execute(() -> {
             try {

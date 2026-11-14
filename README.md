@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.0.35 (Android Studio project)
+# Arcane Vault for Android — v2.1.0 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
@@ -16,6 +16,14 @@
 - A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
+
+## Android v2.1.0: native workspace review build
+
+- Native **Sets**, **Decks**, and **Data & Sync** screens join the existing Home/Catalog/Physical/Arena navigation.
+- From a specific card printing, **Edit physical copies (nonfoil)** confirms an exact edition and writes the authoritative physical collection with a durable recovery snapshot. Ambiguous duplicate rows are redirected to Legacy tools to prevent metadata loss. **Set preferred artwork** saves to the existing artwork library.
+- Sets shows confirmed physical completion and a searchable set drilldown. Decks previews existing saved commander decks with mainboard quantities and basic physical/Arena missing counts.
+- Data & Sync exports actual JSON attachments, restores native pre-edit snapshots, starts/inspects Scryfall sync and links to advanced QR/USB and import tools still in Legacy.
+- Play Protect report #36 remains under review; do not equate a signed release with malware clearance.
 
 ## Android v2.0.35: Owned Physical Printings
 

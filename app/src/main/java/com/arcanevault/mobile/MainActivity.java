@@ -87,6 +87,12 @@ public class MainActivity extends Activity {
         webSettings.setDomStorageEnabled(true);
         webSettings.setDatabaseEnabled(true);
         webSettings.setAllowFileAccess(false);
+        webSettings.setAllowFileAccessFromFileURLs(false);
+        webSettings.setAllowUniversalAccessFromFileURLs(false);
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
+        webSettings.setSupportMultipleWindows(false);
+        webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        if(android.os.Build.VERSION.SDK_INT>=26)webSettings.setSafeBrowsingEnabled(true);
         webSettings.setAllowContentAccess(true);
         webSettings.setMediaPlaybackRequiresUserGesture(true);
         browser.addJavascriptInterface(new AndroidBridge(), "ArcaneAndroid");
@@ -151,7 +157,35 @@ public class MainActivity extends Activity {
     /** Native-first shell. Preserve legacy WebView and origin recovery. */
     private void showNativeHome() {
         nativeHomeVisible = true;
-        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork, this::showLegacyTools));
+        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork,
+            this::showLegacyTools, callback -> {
+                // Read the WebView's authoritative saved-deck library. The native
+                // screen is a projection and never writes a duplicate database.
+                browser.evaluateJavascript("(function(){try{return localStorage.getItem('vault_libraryV3')||'[]'}catch(e){return '[]'}})()",
+                    encoded -> {
+                        try {
+                            Object value=new org.json.JSONTokener(encoded).nextValue();
+                            callback.accept(value instanceof String?(String)value:"[]");
+                        }catch(Exception error){callback.accept("[]");}
+                    });
+            }));
+    }
+
+    /** Preferred artwork uses the existing legacy library key; no duplicate map. */
+    void savePreferredArtwork(String name,String printingId,String imageUrl){
+        if(name==null||name.isEmpty()||name.length()>200||imageUrl==null||
+            !imageUrl.startsWith("https://cards.scryfall.io/"))return;
+        String key=JSONObject.quote(name.toLowerCase(java.util.Locale.ROOT));
+        String id=JSONObject.quote(printingId==null?"":printingId);
+        String image=JSONObject.quote(imageUrl);
+        String script="(function(){try{let p=JSON.parse(localStorage.getItem('vault_preferredArtworkV1')||'{}');"+
+            "p["+key+"]={image:"+image+",printingId:"+id+"};"+
+            "localStorage.setItem('vault_preferredArtworkV1',JSON.stringify(p));return 'saved'}"+
+            "catch(e){return 'error'}})()";
+        browser.evaluateJavascript(script,result->{
+            if("\"saved\"".equals(result))Toast.makeText(this,"Preferred artwork saved",Toast.LENGTH_SHORT).show();
+            else Toast.makeText(this,"Artwork preference could not be saved",Toast.LENGTH_LONG).show();
+        });
     }
 
     private void showLegacyTools() {
