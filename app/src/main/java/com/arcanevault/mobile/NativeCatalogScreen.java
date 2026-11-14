@@ -3,6 +3,9 @@ package com.arcanevault.mobile;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.widget.ImageView;
 import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
@@ -31,6 +34,7 @@ final class NativeCatalogScreen {
             TEXT = Color.rgb(240,244,251), MUTED = Color.rgb(171,186,205);
     private final Activity activity;
     private final CatalogStore catalog;
+    private final ArtworkCache artwork;
     private final LinearLayout layout;
     private final LinearLayout results;
     private final TextView status;
@@ -42,9 +46,10 @@ final class NativeCatalogScreen {
     private int page = 0;
     private volatile boolean disposed;
 
-    NativeCatalogScreen(Activity activity, CatalogStore catalog) {
+    NativeCatalogScreen(Activity activity, CatalogStore catalog, ArtworkCache artwork) {
         this.activity = activity;
         this.catalog = catalog;
+        this.artwork = artwork;
         layout = new LinearLayout(activity);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(14),dp(8),dp(14),dp(12));
@@ -68,11 +73,11 @@ final class NativeCatalogScreen {
         });
         LinearLayout filters = new LinearLayout(activity);
         filters.setOrientation(LinearLayout.HORIZONTAL);
-        for (String item : new String[]{"All cards", "Arena", "Physical"}) {
+        for (String item : new String[]{"All cards", "Arena", "Paper-only"}) {
             Button b = button(item);
             filters.addView(b,new LinearLayout.LayoutParams(0,dp(48),1));
             b.setOnClickListener(v -> {
-                source = item.equals("All cards") ? "all" : item.equals("Arena") ? "arena" : "physical";
+                source = item.equals("All cards") ? "all" : item.equals("Arena") ? "arena" : "paper";
                 page = 0; schedule();
             });
         }
@@ -124,7 +129,7 @@ final class NativeCatalogScreen {
             try {
                 Map<String,String> options=new HashMap<>();
                 options.put("q",q);options.put("scope",scope);
-                options.put("arena","arena".equals(src) ? "arena" : "");
+                options.put("arena","arena".equals(src) ? "arena" : "paper".equals(src) ? "paper" : "");
                 options.put("page",Integer.toString(selectedPage));
                 options.put("size","40");
                 JSONObject response=catalog.search(options);
@@ -149,7 +154,7 @@ final class NativeCatalogScreen {
         JSONArray rows=response.optJSONArray("cards");
         int count=rows==null?0:rows.length();
         status.setText(total+" matching cards • page "+(selectedPage+1)
-                +("physical".equals(src)?" • paper-capable catalog":"arena".equals(src)?" • Arena catalog":""));
+                +("paper".equals(src)?" • non-Arena catalog":"arena".equals(src)?" • Arena catalog":""));
         if(total==0){
             results.addView(text("No cards found. If your catalog is empty, sync Scryfall data in Legacy tools.",14,false));
             return;
@@ -171,9 +176,8 @@ final class NativeCatalogScreen {
             TextView sub=text(type+"  •  "+colors,12,false);
             sub.setTextColor(MUTED);
             entry.addView(sub);
-            entry.setOnClickListener(v -> new AlertDialog.Builder(activity)
-                .setTitle(name).setMessage(type+"\n\n"+oracle+"\n\nRarity: "+rarity)
-                .setPositiveButton("Close",null).show());
+            String imageUrl=meta==null?"":meta.optString("image","");
+            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
             lp.bottomMargin=dp(5);
             results.addView(entry,lp);
@@ -189,4 +193,36 @@ final class NativeCatalogScreen {
         next.setOnClickListener(v -> { page++; schedule(); });
         results.addView(pager);
     }
+    private void showDetails(String name,String type,String oracle,String rarity,String imageUrl) {
+        LinearLayout body=new LinearLayout(activity);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(16),dp(4),dp(16),dp(8));
+        ImageView art=new ImageView(activity);
+        art.setAdjustViewBounds(true);
+        art.setMaxHeight(dp(420));
+        art.setContentDescription("Official card artwork for "+name);
+        body.addView(art,new LinearLayout.LayoutParams(-1,dp(320)));
+        TextView description=text(type+"\n\n"+oracle+"\n\nRarity: "+rarity,14,false);
+        body.addView(description);
+        ScrollView scroll=new ScrollView(activity);
+        scroll.addView(body);
+        AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name).setView(scroll)
+            .setPositiveButton("Close",null).create();
+        dialog.show();
+        if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
+        worker.execute(() -> {
+            try {
+                byte[] image=artwork.get(imageUrl);
+                Bitmap bitmap=BitmapFactory.decodeByteArray(image,0,image.length);
+                if(bitmap==null)return;
+                ui.post(() -> {
+                    if(disposed || !dialog.isShowing()){ bitmap.recycle(); return; }
+                    art.setImageBitmap(bitmap);
+                });
+            } catch(Exception ignored) {
+                // Oracle text remains readable when artwork is offline.
+            }
+        });
+    }
+
 }
