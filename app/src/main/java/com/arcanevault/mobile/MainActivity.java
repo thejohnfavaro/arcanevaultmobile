@@ -496,15 +496,128 @@ public class MainActivity extends Activity {
         }
         selectWirelessBaselineFile();
     }
-    private void selectWirelessBaselineFile() {
+    /** Look only in the app-owned snapshot directory: the Android document
+     * picker cannot browse this directory on current Android versions. */
+    private java.io.File[] savedSyncBaselines() {
+        java.io.File folder=new java.io.File(getFilesDir(),"sync-snapshots");
+        java.io.File[] files=folder.listFiles((dir,name)->
+            name.matches("ArcaneVault-Android-[0-9]{8}-[0-9]{9}-[a-f0-9]{8}\\.json"));
+        if(files==null)return new java.io.File[0];
+        java.util.ArrayList<java.io.File> result=new java.util.ArrayList<>();
+        for(java.io.File file:files)
+            if(file.isFile()&&file.length()>20&&
+                file.length()<=com.arcanevault.mobile.next.NativePeerSync.MAX_BYTES)
+                result.add(file);
+        result.sort((a,b)->Long.compare(b.lastModified(),a.lastModified()));
+        return result.toArray(new java.io.File[0]);
+    }
+
+    private JSONObject readSavedSyncBaseline(java.io.File file)throws Exception {
+        java.io.File folder=new java.io.File(getFilesDir(),"sync-snapshots");
+        if(file==null||!folder.getCanonicalFile().equals(
+                file.getCanonicalFile().getParentFile()))
+            throw new IOException("Snapshot is not in Arcane Vault storage");
+        if(file.length()<=20||
+            file.length()>com.arcanevault.mobile.next.NativePeerSync.MAX_BYTES)
+            throw new IOException("Snapshot is missing or too large");
+        JSONObject result=new JSONObject(new String(
+            java.nio.file.Files.readAllBytes(file.toPath()),StandardCharsets.UTF_8));
+        if(!com.arcanevault.mobile.next.NativePeerSync.FORMAT.equals(
+                result.optString("format"))||result.optInt("schema")!=1||
+            result.getJSONObject("data").getInt("schema")!=2)
+            throw new IOException("Saved file is not an Arcane Vault peer snapshot");
+        result.getString("deviceId");
+        result.getJSONObject("data").getJSONArray("cards");
+        result.getJSONObject("data").getJSONArray("physicalCards");
+        result.getJSONObject("data").getJSONArray("deckLibrary");
+        result.getJSONObject("data").getJSONObject("preferredArtwork");
+        return result;
+    }
+
+    private void applyWithSavedSyncBaseline(java.io.File file) {
+        JSONObject incoming=pendingWirelessIncoming;
+        if(incoming==null)return;
+        try {
+            JSONObject baseline=readSavedSyncBaseline(file);
+            // The user confirms that this is the previously shared state;
+            // file presence and modification time alone cannot prove that.
+            pendingWirelessIncoming=null;
+            applyPeerInventorySnapshot(()->incoming,()->baseline);
+        }catch(Exception error){
+            toast("Saved baseline could not be used: "+error.getMessage());
+            showSavedSyncBaselineOptions();
+        }
+    }
+
+    private void showSavedSyncBaselineOptions() {
+        java.io.File[] files=savedSyncBaselines();
+        if(files.length==0) {
+            selectWirelessBaselineFileManually();
+            return;
+        }
+        String[] choices=new String[files.length+1];
+        java.text.SimpleDateFormat format=new java.text.SimpleDateFormat(
+            "MMM d, yyyy h:mm a",java.util.Locale.getDefault());
+        for(int i=0;i<files.length;i++)
+            choices[i]=format.format(new java.util.Date(files[i].lastModified()))+
+                " · "+files[i].getName();
+        choices[files.length]="Browse for a snapshot in another location…";
         new android.app.AlertDialog.Builder(this)
-            .setTitle("Wireless snapshot received")
-            .setMessage("Choose the previously shared, unchanged PC/Android "+
-                "baseline snapshot. Without a genuine common baseline we cannot "+
-                "safely infer which device edited which records. The transfer "+
-                "has NOT changed your collection or decks.")
+            .setTitle("Choose your shared sync baseline")
+            .setMessage("Arcane Vault found "+files.length+" locally saved snapshots. "+
+                "Choose the snapshot representing the last state both devices "+
+                "agreed on, not simply the newest backup.")
+            .setItems(choices,(dialog,which)->{
+                if(which==files.length)selectWirelessBaselineFileManually();
+                else confirmSavedSyncBaseline(files[which]);
+            })
             .setNegativeButton("Cancel",(d,w)->pendingWirelessIncoming=null)
-            .setPositiveButton("Select common baseline",(d,w)->{
+            .show();
+    }
+
+    private void confirmSavedSyncBaseline(java.io.File file) {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Use saved baseline?")
+            .setMessage(file.getName()+"\n\nConfirm that this snapshot was "+
+                "taken when Windows and Android had the same collection, decks "+
+                "and artwork. It will only be used for comparison; changes "+
+                "still require review and approval.")
+            .setNegativeButton("Choose another",(d,w)->showSavedSyncBaselineOptions())
+            .setNeutralButton("Cancel",(d,w)->pendingWirelessIncoming=null)
+            .setPositiveButton("Use baseline",(d,w)->applyWithSavedSyncBaseline(file))
+            .show();
+    }
+
+    private void selectWirelessBaselineFile() {
+        java.io.File[] files=savedSyncBaselines();
+        if(files.length==0) {
+            selectWirelessBaselineFileManually();
+            return;
+        }
+        // The first suggestion is most recent, never silently treated as a
+        // verified common checkpoint.
+        java.io.File suggested=files[0];
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Saved baseline found automatically")
+            .setMessage("Arcane Vault found "+files.length+
+                " saved snapshot(s) in its internal storage.\n\n"+
+                suggested.getName()+"\n\nUse this only if it is the last "+
+                "state both Windows and Android shared. A newer local-only "+
+                "snapshot is not necessarily a valid common baseline.")
+            .setNegativeButton("Other snapshot",(d,w)->showSavedSyncBaselineOptions())
+            .setNeutralButton("Cancel",(d,w)->pendingWirelessIncoming=null)
+            .setPositiveButton("Use this baseline",(d,w)->confirmSavedSyncBaseline(suggested))
+            .show();
+    }
+
+    private void selectWirelessBaselineFileManually() {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Select a shared baseline file")
+            .setMessage("No matching saved Arcane Vault snapshot was selected. "+
+                "Browse for an externally exported common baseline. "+
+                "Android's file picker cannot open app-private snapshot folders.")
+            .setNegativeButton("Cancel",(d,w)->pendingWirelessIncoming=null)
+            .setPositiveButton("Browse files",(d,w)->{
                 Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 picker.addCategory(Intent.CATEGORY_OPENABLE);
                 picker.setType("application/json");
