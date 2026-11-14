@@ -256,6 +256,7 @@ final class NativeWorkspaceScreen {
                 args.put("set",set);args.put("page",Integer.toString(pageNumber));
                 args.put("size","48");
                 args.put("source",source);
+                args.put("arena",source.equals("arena")?"arena":"");
                 JSONObject response=source.equals("physical")?
                     catalog.setPrintings(args):catalog.setCards(args);
                 JSONArray printings=response.optJSONArray(source.equals("physical")?"printings":"cards");
@@ -278,7 +279,9 @@ final class NativeWorkspaceScreen {
                     });
                     content.addView(ownedOnly);
                     TextView hint=VaultNativeStyle.label(activity,
-                        "Confirmed copies are based on printing identity, not card name.",
+                        source.equals("physical")?
+                            "Confirmed copies use exact printing identity, not card name.":
+                            "Arena set coverage uses owned card names, not physical printings.",
                         12,VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,hint,12,activity);
                     for(int i=0;i<entries.length();i++){
