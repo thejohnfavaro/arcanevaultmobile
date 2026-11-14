@@ -18,8 +18,12 @@ assert.match(activity,/NativeCompanionScreen\.create\(this, durable, catalog, ar
 assert.match(backend,/JSONObject search\(Map<String,String> p\)/);
 assert.match(native,/KEYWORD \/ RULES TEXT/,'Mechanic filter should be visible in advanced Card Catalog filters');
 assert.match(native,/options\.put\("oracle",selectedOracle\)/,'Pass typed mechanics to SQL query and cache key');
-assert.match(backend,/private static String oracleKeyword/,'Use bounded literal keyword text, not SQL wildcard input');
-assert.match(backend,/where\.append\(" AND c\.oracle LIKE \? ESCAPE/,'General catalog must filter Oracle keyword text');
-assert.match(backend,/from\.append\(" AND c\.oracle LIKE \? ESCAPE/,'Exact owned-printing search must filter Oracle keyword text');
+assert.match(backend,/private static String\[\] oracleTerms/,'Split bounded Oracle phrases for all/any selection');
+assert.match(backend,/addOracleTerms\(where,args,p\)/,'General catalog must support multi-mechanic terms');
+assert.match(backend,/addOracleTerms\(from,filter,p\)/,'Exact owned printings must support multi-mechanic terms');
+assert.match(backend,/terms\.length>8/,'Limit user-provided Oracle search phrase count');
+assert.match(backend,/mode\.equals\("any"\)\?" OR ":" AND "/,'Support AND and OR without SQL string injection');
+assert.match(native,/MECHANIC MATCH/,'Show all/any mechanic matching in advanced filters');
+assert.match(native,/options\.put\("oracleMatch",selectedOracleMatch\)/,'Send match mode to catalog query and cache');
 assert.match(native,/oracleFilter=""/,'Resetting filters must reset the keyword filter');
 console.log('PASS: native Android Card Catalog uses SQLite, bounded async search, cached art and native inspection');
