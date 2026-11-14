@@ -108,6 +108,53 @@ public final class NativePeerSyncTest {
         try {NativePeerSync.prepareMerge(local,absence,baseline);fail("absence deleted printing");}
         catch(IllegalArgumentException expected){}
     }
+    @Test public void windowsOneExtraCopyOnlyAddsOneToAndroid()throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",2);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",2);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",3);
+        String untouched=android.getJSONObject("data").getJSONArray("physicalCards")
+            .getJSONObject(0).toString();
+        JSONObject proposal=NativePeerSync.prepareMerge(android,windows,baseline);
+        JSONObject delta=NativePeerSync.inventoryDelta(android,proposal);
+        assertEquals(1,delta.getInt("changedEntries"));
+        assertEquals(1L,delta.getLong("addedCopies"));
+        assertEquals(0L,delta.getLong("removedCopies"));
+        JSONObject entry=delta.getJSONArray("changes").getJSONObject(0);
+        assertEquals("Lightning Bolt",entry.getString("name"));
+        assertEquals(2,entry.getInt("from"));
+        assertEquals(3,entry.getInt("to"));
+        assertEquals(1L,entry.getLong("delta"));
+        assertEquals(3,proposal.getJSONObject("candidate").getJSONArray("cards")
+            .getJSONObject(0).getInt("qty"));
+        assertEquals(untouched,proposal.getJSONObject("candidate")
+            .getJSONArray("physicalCards").getJSONObject(0).toString());
+    }
+    @Test public void repeatedIdenticalWindowsVersionDoesNotDuplicateCards()throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",2);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",3);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",3);
+        JSONObject proposal=NativePeerSync.prepareMerge(android,windows,baseline);
+        assertEquals(0,NativePeerSync.inventoryDelta(android,proposal)
+            .getInt("changedEntries"));
+        assertEquals(3,proposal.getJSONObject("candidate").getJSONArray("cards")
+            .getJSONObject(0).getInt("qty"));
+    }
+    @Test public void additionalPrintingDoesNotChangeOtherPrinting()throws Exception {
+        JSONObject base=peer("00000000-0000-4000-8000-000000000702",2);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",2);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",2);
+        windows.getJSONObject("data").getJSONArray("physicalCards").put(
+            new JSONObject().put("name","Sol Ring").put("set","2XM")
+                .put("number","277").put("finish","foil").put("qty",1)
+                .put("scryfallId","22222222-2222-4222-8222-222222222222"));
+        JSONObject proposal=NativePeerSync.prepareMerge(android,windows,base);
+        JSONObject delta=NativePeerSync.inventoryDelta(android,proposal);
+        assertEquals(1,delta.getInt("changedEntries"));
+        assertEquals(1L,delta.getLong("addedCopies"));
+        assertEquals("2XM",delta.getJSONArray("changes").getJSONObject(0).getString("set"));
+        assertEquals(2,proposal.getJSONObject("candidate").getJSONArray("physicalCards")
+            .getJSONObject(0).getInt("qty"));
+    }
     @Test public void malformedAndDuplicateDecksRejected()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject peer=peer("00000000-0000-4000-8000-000000000702",4);

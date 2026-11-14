@@ -17,5 +17,5 @@ assert.match(apply,/Peer changes to decks\/artwork require Windows apply/);
 assert.match(activity,/NativePeerInventoryApply\.recoverIfPending\(this,durable,catalog\)/);
 assert.match(activity,/NativePeerInventoryApply\.apply\(/);
 assert.match(activity,/applyThreeWayInventoryUris/);
-assert.match(workspace,/Review & apply peer inventory/);
+assert.match(workspace,/Sync Windows inventory differences/);
 console.log('PASS: Android conflict-free inventory peer apply with durable recovery and deck/artwork guard');
