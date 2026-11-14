@@ -73,6 +73,7 @@ final class NativeCatalogScreen {
     private String source = "both", owned = "all", query = "";
     private boolean onlyOwnedPhysicalPrintings = false;
     private String setCode="",typeFilter="",rarityFilter="",roleFilter="",sortMode="";
+    private String manaValueMin="",manaValueMax="";
     private String exactColorIdentity="";
     private boolean advancedOpen=false;
     private boolean artGrid=false;
@@ -300,6 +301,8 @@ final class NativeCatalogScreen {
         filterPicker("RARITY",RARITY_NAMES,RARITY_VALUES,value->rarityFilter=value);
         filterPicker("UTILIZATION TAG",ROLE_NAMES,ROLE_NAMES,value->
             roleFilter="All roles".equals(value)?"":value);
+        filterField("MANA VALUE / CMC MIN","Minimum mana value (0 or more)",value->manaValueMin=value);
+        filterField("MANA VALUE / CMC MAX","Maximum; same as min for exact",value->manaValueMax=value);
         filterPicker("SORT BY",SORT_NAMES,SORT_VALUES,value->sortMode=value);
         TextView colorLabel=text("COLOR IDENTITY · EXACT MATCH",11,true);
         colorLabel.setTextColor(VaultNativeStyle.SUBTEXT);
@@ -334,7 +337,7 @@ final class NativeCatalogScreen {
         advancedFilters.addView(reset,new LinearLayout.LayoutParams(-1,dp(42)));
         reset.setOnClickListener(v->{
             setCode="";typeFilter="";rarityFilter="";roleFilter="";
-            sortMode="";exactColorIdentity="";
+            sortMode="";exactColorIdentity="";manaValueMin="";manaValueMax="";
             advancedFilters.removeAllViews();identityButtons.clear();
             buildAdvancedFilters();page=0;schedule();
         });
@@ -375,7 +378,8 @@ final class NativeCatalogScreen {
         final String q=query, src=source, scope=owned;
         final String selectedSet=setCode, selectedType=typeFilter,
             selectedRarity=rarityFilter, selectedRole=roleFilter,
-            selectedSort=sortMode, selectedIdentity=exactColorIdentity;
+            selectedSort=sortMode, selectedIdentity=exactColorIdentity,
+            selectedMvMin=manaValueMin,selectedMvMax=manaValueMax;
         final boolean printingMode=onlyOwnedPhysicalPrintings && "physical".equals(src);
         final int selectedPage=page;
         status.setText("Searching your catalog…");
@@ -386,6 +390,7 @@ final class NativeCatalogScreen {
                 options.put("set",selectedSet);options.put("type",selectedType);
                 options.put("rarity",selectedRarity);options.put("role",selectedRole);
                 options.put("sort",selectedSort);options.put("colors",selectedIdentity);
+                options.put("mvMin",selectedMvMin);options.put("mvMax",selectedMvMax);
                 options.put("source",src);
                 // A physical collection is not the same as cards unavailable on Arena.
                 // All Cards searches the full catalog and ownership across both inventories.
