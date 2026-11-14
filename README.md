@@ -17,6 +17,13 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.0.29: native-first app foundation
+
+- The default Home, Physical, and Arena collection browsing now use Android-native views instead of HTML/WebView.
+- Native collection lists search existing stored inventories without rewriting the data and show additional records in bounded pages.
+- All features not yet migrated remain in **Legacy tools**; Android Back returns to native home. Existing WebView storage recovery remains intact.
+- This is phase one of a staged migration, not yet a fully native replacement of all features.
+
 ## Android v2.0.28: Set Progress help
 
 - Expand **Showing 0% or missing owned cards?** in Set Progress for source selection, catalog troubleshooting and safe physical printing-identity recovery without changing quantities.
