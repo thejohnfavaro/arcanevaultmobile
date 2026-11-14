@@ -6,6 +6,12 @@ const peer=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/next/Native
 assert.match(main,/exportPeerSync\(\)/);
 assert.match(main,/previewPeerSync\(\)/);
 assert.match(main,/PEER_PICK/);
+assert.match(main,/PEER_3WAY_PICK/);
+assert.match(main,/PEER_BASE_PICK/);
+assert.match(main,/previewThreeWayPeerUris/);
+assert.match(data,/Three-way compare \(known shared baseline\)/);
+assert.match(peer,/compareWithBaseline\(JSONObject local,JSONObject incoming,/);
+assert.match(peer,/safeToAutoApply",false/);
 assert.match(main,/browser\.evaluateJavascript/,'Decks/artwork remain in original WebView storage');
 assert.match(main,/peer_sync_device_id_v1/,'Peer ID survives app restarts');
 assert.match(data,/Export peer sync file/);
