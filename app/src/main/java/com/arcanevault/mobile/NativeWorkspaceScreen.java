@@ -464,6 +464,29 @@ final class NativeWorkspaceScreen {
             "Inventory write-back only on Android. A selected prior shared baseline "+
             "is required; conflicting edits and missing records are rejected. "+
             "Deck and artwork write-back remains Windows-only.",null);
+        if(prefs.contains(NativePeerInventoryApply.LAST_BACKUP))
+            button("Restore last peer-sync inventory backup",()->{
+                new AlertDialog.Builder(activity)
+                    .setTitle("Undo the last peer inventory sync?")
+                    .setMessage("Restores the previously saved Physical and Arena inventories. "+
+                        "A fresh backup of your CURRENT inventories will be kept so the undo "+
+                        "can itself be reversed. Decks and artwork are not changed.")
+                    .setNegativeButton("Cancel",null)
+                    .setPositiveButton("Restore backup",(dialog,which)->{
+                        executor.execute(()->{
+                            try{
+                                String saved=NativePeerInventoryApply.restoreLast(
+                                    activity,prefs,catalog);
+                                ui.post(()->info("Previous inventory restored. "+
+                                    "Reopen the Catalog to refresh. Current inventory "+
+                                    "saved at "+saved));
+                            }catch(Exception error){
+                                ui.post(()->info("Inventory restore rejected: "+
+                                    error.getMessage()));
+                            }
+                        });
+                    }).show();
+            });
         button("Review & apply peer inventory",
             ()->((MainActivity)activity).reviewAndApplyPeerInventory());
         button("Three-way compare (known shared baseline)",
