@@ -368,6 +368,15 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         if(!get(p,"type").isEmpty()){where.append(" AND c.type LIKE ?");args.add("%"+get(p,"type")+"%");}
         if(!get(p,"rarity").isEmpty()){where.append(" AND c.rarity=?");args.add(get(p,"rarity"));}
+        String mvMin=get(p,"mvMin"),mvMax=get(p,"mvMax");
+        double min=mvMin.isEmpty()?0:Double.parseDouble(mvMin);
+        double max=mvMax.isEmpty()?1000:Double.parseDouble(mvMax);
+        if(!Double.isFinite(min)||!Double.isFinite(max)||
+           min<0||max>1000||min>max)
+            throw new IllegalArgumentException("Mana value must be 0–1000 with minimum ≤ maximum");
+        if(!mvMin.isEmpty()){where.append(" AND c.mv>=?");args.add(Double.toString(min));}
+        if(!mvMax.isEmpty()){where.append(" AND c.mv<=?");args.add(Double.toString(max));}
+
         // Exact color identity choice(s): OR across selections, never fuzzy subsets.
         // SQL canonicalization handles different letter order in imported records.
         List<String> identities=new ArrayList<>();
@@ -460,6 +469,15 @@ final class CatalogStore extends SQLiteOpenHelper {
             from.append(" AND c.type LIKE ?");
             filter.add("%"+get(p,"type")+"%");
         }
+
+        String mvMin=get(p,"mvMin"),mvMax=get(p,"mvMax");
+        double min=mvMin.isEmpty()?0:Double.parseDouble(mvMin);
+        double max=mvMax.isEmpty()?1000:Double.parseDouble(mvMax);
+        if(!Double.isFinite(min)||!Double.isFinite(max)||
+            min<0||max>1000||min>max)
+            throw new IllegalArgumentException("Mana value must be 0–1000 with minimum ≤ maximum");
+        if(!mvMin.isEmpty()){from.append(" AND c.mv>=?");filter.add(Double.toString(min));}
+        if(!mvMax.isEmpty()){from.append(" AND c.mv<=?");filter.add(Double.toString(max));}
         String exactColors=get(p,"colors");
         if(!exactColors.isEmpty()){
             if(!exactColors.equals("C")&&!exactColors.matches("[WUBRG]{1,5}"))
