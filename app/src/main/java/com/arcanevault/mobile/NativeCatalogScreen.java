@@ -20,6 +20,9 @@ import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -51,6 +54,19 @@ final class NativeCatalogScreen {
     private final EditText search;
     private String source = "both", owned = "all", query = "";
     private boolean onlyOwnedPhysicalPrintings = false;
+    private String setCode="",typeFilter="",rarityFilter="",roleFilter="",sortMode="";
+    private String exactColorIdentity="";
+    private boolean advancedOpen=false;
+    private LinearLayout advancedFilters;
+    private Button advancedButton;
+    private final java.util.Map<String,Button> identityButtons=new java.util.LinkedHashMap<>();
+    private static final String[] RARITY_NAMES={"All rarities","Common","Uncommon","Rare","Mythic","Special","Bonus"};
+    private static final String[] RARITY_VALUES={"","common","uncommon","rare","mythic","special","bonus"};
+    private static final String[] SORT_NAMES={"Name A–Z","Most owned","Mana value (low first)","Rarity (highest first)"};
+    private static final String[] SORT_VALUES={"","qty","mv","rarity"};
+    private static final String[] ROLE_NAMES={"All roles","Ramp","Removal","Board Wipe","Discard","Counterspell",
+        "Card Draw","Card Selection","Lifegain","Tutor","Stax","Haste","Protection","Recursion",
+        "Sacrifice","Tokens","Graveyard Hate","Finisher","Equipment"};
     private Button printingFilter;
     private LinearLayout sourceFilters, ownershipFilters;
     private int page = 0;
@@ -140,6 +156,21 @@ final class NativeCatalogScreen {
             if(onlyOwnedPhysicalPrintings){source="physical";owned="owned";}
             page=0;updateCollectionFilters();schedule();
         });
+        advancedButton=VaultNativeStyle.button(activity,"Filters & Sort  ▾",false);
+        LinearLayout.LayoutParams advancedButtonParams=new LinearLayout.LayoutParams(-1,dp(42));
+        advancedButtonParams.bottomMargin=dp(6);
+        layout.addView(advancedButton,advancedButtonParams);
+        advancedFilters=VaultNativeStyle.column(activity);
+        advancedFilters.setPadding(dp(10),dp(5),dp(10),dp(7));
+        VaultNativeStyle.surface(activity,advancedFilters,false);
+        layout.addView(advancedFilters);
+        buildAdvancedFilters();
+        advancedFilters.setVisibility(View.GONE);
+        advancedButton.setOnClickListener(v->{
+            advancedOpen=!advancedOpen;
+            advancedFilters.setVisibility(advancedOpen?View.VISIBLE:View.GONE);
+            advancedButton.setText(advancedOpen?"Filters & Sort  ▴":"Filters & Sort  ▾");
+        });
         updateCollectionFilters();
         ScrollView scroll = new ScrollView(activity);
         results = new LinearLayout(activity);
@@ -164,6 +195,106 @@ final class NativeCatalogScreen {
     }
     private Button button(String value) {
         return VaultNativeStyle.button(activity,value,false);
+    }
+
+    private EditText filterField(String heading,String hint,
+            java.util.function.Consumer<String> onChange) {
+        TextView label=text(heading,11,true);
+        label.setTextColor(VaultNativeStyle.SUBTEXT);
+        advancedFilters.addView(label);
+        EditText input=new EditText(activity);
+        input.setSingleLine(true);
+        VaultNativeStyle.search(activity,input);
+        input.setHint(hint);
+        advancedFilters.addView(input,new LinearLayout.LayoutParams(-1,dp(42)));
+        input.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int a,int c,int d){}
+            public void onTextChanged(CharSequence s,int a,int b,int c){
+                onChange.accept(s.toString().trim());
+                page=0;schedule();
+            }
+            public void afterTextChanged(Editable e){}
+        });
+        return input;
+    }
+
+    private void filterPicker(String label,String[] titles,String[] options,
+            java.util.function.Consumer<String> onChange) {
+        TextView header=text(label,11,true);
+        header.setTextColor(VaultNativeStyle.SUBTEXT);
+        advancedFilters.addView(header);
+        Spinner picker=new Spinner(activity);
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(activity,
+            android.R.layout.simple_spinner_item,titles);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        picker.setAdapter(adapter);
+        picker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(AdapterView<?> p){}
+            public void onItemSelected(AdapterView<?> p,View v,int index,long id){
+                onChange.accept(options[index]);
+                page=0;schedule();
+            }
+        });
+        advancedFilters.addView(picker,new LinearLayout.LayoutParams(-1,dp(44)));
+    }
+
+    private void updateIdentityButtons(){
+        for(java.util.Map.Entry<String,Button> entry:identityButtons.entrySet()){
+            boolean selected=entry.getKey().equals("C")?
+                "C".equals(exactColorIdentity):
+                exactColorIdentity.contains(entry.getKey());
+            Button button=entry.getValue();
+            button.setTextColor(selected?VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
+            button.setBackground(VaultNativeStyle.rounded(activity,
+                selected?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
+                selected?Color.TRANSPARENT:VaultNativeStyle.BORDER,10));
+        }
+    }
+
+    private void buildAdvancedFilters(){
+        filterField("SET CODE","Exact set code (e.g. MH3)",value->setCode=value);
+        filterField("TYPE CONTAINS","Creature, Wizard, Enchantment…",value->typeFilter=value);
+        filterPicker("RARITY",RARITY_NAMES,RARITY_VALUES,value->rarityFilter=value);
+        filterPicker("UTILIZATION TAG",ROLE_NAMES,ROLE_NAMES,value->
+            roleFilter="All roles".equals(value)?"":value);
+        filterPicker("SORT BY",SORT_NAMES,SORT_VALUES,value->sortMode=value);
+        TextView colorLabel=text("COLOR IDENTITY · EXACT MATCH",11,true);
+        colorLabel.setTextColor(VaultNativeStyle.SUBTEXT);
+        advancedFilters.addView(colorLabel);
+        LinearLayout colorRow=VaultNativeStyle.row(activity);
+        for(String color:new String[]{"W","U","B","R","G","C"}){
+            Button button=VaultNativeStyle.button(activity,color,false);
+            identityButtons.put(color,button);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(40),1);
+            lp.rightMargin=dp(4);
+            colorRow.addView(button,lp);
+            button.setContentDescription(("C".equals(color)?"Colorless":color)+
+                " exact color identity toggle");
+            button.setOnClickListener(v->{
+                if("C".equals(color))
+                    exactColorIdentity="C".equals(exactColorIdentity)?"":"C";
+                else{
+                    String previous="C".equals(exactColorIdentity)?"":exactColorIdentity;
+                    StringBuilder selected=new StringBuilder();
+                    for(char value:"WUBRG".toCharArray())
+                        if((String.valueOf(value).equals(color)) !=
+                            (previous.indexOf(value)>=0))
+                            selected.append(value);
+                    exactColorIdentity=selected.toString();
+                }
+                updateIdentityButtons();page=0;schedule();
+            });
+        }
+        advancedFilters.addView(colorRow);
+        updateIdentityButtons();
+        Button reset=VaultNativeStyle.button(activity,"Reset advanced filters",false);
+        advancedFilters.addView(reset,new LinearLayout.LayoutParams(-1,dp(42)));
+        reset.setOnClickListener(v->{
+            setCode="";typeFilter="";rarityFilter="";roleFilter="";
+            sortMode="";exactColorIdentity="";
+            advancedFilters.removeAllViews();identityButtons.clear();
+            buildAdvancedFilters();page=0;schedule();
+        });
     }
 
     private void updateCollectionFilters() {
@@ -198,6 +329,9 @@ final class NativeCatalogScreen {
     private void schedule() {
         final int id=request.incrementAndGet();
         final String q=query, src=source, scope=owned;
+        final String selectedSet=setCode, selectedType=typeFilter,
+            selectedRarity=rarityFilter, selectedRole=roleFilter,
+            selectedSort=sortMode, selectedIdentity=exactColorIdentity;
         final boolean printingMode=onlyOwnedPhysicalPrintings && "physical".equals(src);
         final int selectedPage=page;
         status.setText("Searching your catalog…");
@@ -205,6 +339,9 @@ final class NativeCatalogScreen {
             try {
                 Map<String,String> options=new HashMap<>();
                 options.put("q",q);options.put("scope",scope);
+                options.put("set",selectedSet);options.put("type",selectedType);
+                options.put("rarity",selectedRarity);options.put("role",selectedRole);
+                options.put("sort",selectedSort);options.put("colors",selectedIdentity);
                 options.put("source",src);
                 // A physical collection is not the same as cards unavailable on Arena.
                 // All Cards searches the full catalog and ownership across both inventories.
