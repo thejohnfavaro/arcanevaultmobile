@@ -402,6 +402,72 @@ final class CatalogStore extends SQLiteOpenHelper {
         return new JSONObject().put("total",found).put("page",page).put("size",size)
             .put("source",source.isEmpty()?"arena":source).put("cards",rows);
     }
+    /**
+     * Only confirmed physical editions. Name-only ownership is deliberately
+     * excluded. An unknown/contradictory ID is never converted into ownership.
+     * Set+collector fallback requires exactly one matching catalog printing.
+     * This is a read-only projection of physical_printings, not another ledger.
+     */
+    JSONObject ownedPhysicalPrintings(Map<String,String> p)throws Exception{
+        String term=get(p,"q");
+        if(term.length()>160)term=term.substring(0,160);
+        int page=clamp(get(p,"page"),0,100000,0);
+        int size=clamp(get(p,"size"),1,100,40);
+        String confirmed=
+            "WITH matches AS ("+
+            " SELECT v.print_id id,p.qty qty FROM physical_printings p "+
+            " JOIN variants v ON p.print_id!='' AND v.print_id=p.print_id COLLATE NOCASE "+
+            " WHERE p.qty>0 "+
+            " AND (p.setcode='' OR p.setcode=v.setcode COLLATE NOCASE OR p.setcode=v.setname COLLATE NOCASE)"+
+            " AND (p.collector='' OR p.collector=v.collector COLLATE NOCASE)"+
+            " UNION ALL "+
+            " SELECT v.print_id id,p.qty qty FROM physical_printings p "+
+            " JOIN variants v ON p.print_id='' AND p.setcode!='' AND p.collector!='' "+
+            " AND (p.setcode=v.setcode COLLATE NOCASE OR p.setcode=v.setname COLLATE NOCASE) "+
+            " AND p.collector=v.collector COLLATE NOCASE "+
+            " WHERE p.qty>0 AND NOT EXISTS (SELECT 1 FROM variants other "+
+            " WHERE other.print_id!=v.print_id AND "+
+            " (other.setcode=p.setcode COLLATE NOCASE OR other.setname=p.setcode COLLATE NOCASE) "+
+            " AND other.collector=p.collector COLLATE NOCASE)"+
+            " ), confirmed AS (SELECT id,SUM(qty) qty FROM matches GROUP BY id) ";
+        String from=" FROM confirmed o JOIN variants v ON v.print_id=o.id "+
+            " LEFT JOIN cards c ON c.name=v.name WHERE o.qty>0 "+
+            " AND (?='' OR v.name LIKE ? OR v.setcode LIKE ? OR v.setname LIKE ? OR v.collector LIKE ?)";
+        String pattern="%"+term+"%";
+        String[] filter=new String[]{term,pattern,pattern,pattern,pattern};
+        SQLiteDatabase db=getReadableDatabase();
+        int found;
+        try(Cursor c=db.rawQuery(confirmed+"SELECT COUNT(*)"+from,filter)){
+            found=c.moveToFirst()?c.getInt(0):0;
+        }
+        ArrayList<String> args=new ArrayList<>(Arrays.asList(filter));
+        args.add(Integer.toString(size));args.add(Integer.toString(page*size));
+        JSONArray rows=new JSONArray();
+        String query=confirmed+"SELECT v.name,v.print_id,v.setcode,v.setname,v.collector,v.rarity,"+
+            "v.image,v.release,o.qty,COALESCE(c.type,''),COALESCE(c.oracle,''),"+
+            "COALESCE(c.arena,0)"+from+
+            " ORDER BY v.name COLLATE NOCASE,v.release DESC,v.collector LIMIT ? OFFSET ?";
+        try(Cursor c=db.rawQuery(query,args.toArray(new String[0]))){
+            while(c.moveToNext()){
+                JSONObject meta=new JSONObject()
+                    .put("type",c.getString(9)).put("oracle",c.getString(10))
+                    .put("rarity",c.getString(5)).put("image",c.getString(6))
+                    .put("set_",c.getString(2)).put("arena",c.getInt(11)>0);
+                JSONObject printing=new JSONObject()
+                    .put("id",c.getString(1)).put("set",c.getString(2))
+                    .put("setName",c.getString(3)).put("collectorNumber",c.getString(4))
+                    .put("rarity",c.getString(5)).put("image",c.getString(6))
+                    .put("released",c.getString(7))
+                    .put("confirmedPhysicalCopies",c.getInt(8));
+                rows.put(new JSONObject().put("name",c.getString(0))
+                    .put("qty",c.getInt(8)).put("physicalQty",c.getInt(8))
+                    .put("arenaQty",0).put("meta",meta).put("printing",printing));
+            }
+        }
+        return new JSONObject().put("total",found).put("page",page)
+            .put("size",size).put("source","ownedPhysicalPrintings").put("cards",rows);
+    }
+
     JSONObject variants(Map<String,String> p)throws Exception{
         String name=get(p,"name"),scope=get(p,"scope");if(name.isEmpty()||name.length()>300)throw new IllegalArgumentException("Invalid name");
         JSONArray rows=new JSONArray();
