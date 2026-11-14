@@ -147,12 +147,12 @@ public final class NativePeerSync {
         for(String group:new String[]{"cards","physicalCards","deckLibrary"}){
             Map<String,JSONObject> records=index(group,data.getJSONArray(group));
             for(Map.Entry<String,JSONObject> record:records.entrySet())
-                result.put(group+"\\u001f"+record.getKey(),canonical(record.getValue()));
+                result.put(group+String.valueOf((char)31)+record.getKey(),canonical(record.getValue()));
         }
         JSONObject artwork=data.getJSONObject("preferredArtwork");
         for(java.util.Iterator<String> it=artwork.keys();it.hasNext();){
             String key=it.next();
-            result.put("preferredArtwork\\u001f"+key,canonical(artwork.get(key)));
+            result.put("preferredArtwork"+String.valueOf((char)31)+key,canonical(artwork.get(key)));
         }
         return result;
     }
@@ -181,7 +181,7 @@ public final class NativePeerSync {
             } else {
                 decision="Conflict";conflicts++;
             }
-            int separator=combined.indexOf("\\u001f");
+            int separator=combined.indexOf(String.valueOf((char)31));
             changes.put(new JSONObject()
                 .put("group",combined.substring(0,separator))
                 .put("key",combined.substring(separator+1))
