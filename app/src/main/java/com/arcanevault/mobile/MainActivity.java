@@ -327,7 +327,7 @@ public class MainActivity extends Activity {
                             throw new IOException("Windows did not return a first-sync review");
                         String authority=reply.getString("authority");
                         if(!"matched".equals(authority)&&!"windows".equals(authority)&&
-                            !"android".equals(authority))
+                            !"android".equals(authority)&&!"merge".equals(authority))
                             throw new IOException("Invalid first-sync source choice");
                         JSONObject windows=reply.getJSONObject("windows");
                         JSONObject preview=com.arcanevault.mobile.next.NativePeerSync
@@ -337,6 +337,12 @@ public class MainActivity extends Activity {
                             throw new IOException("Windows claimed identical data, but records differ");
                         if("matched".equals(authority)){
                             runOnUiThread(()->finishUsbFirstSync(link,windows));
+                            return;
+                        }
+                        if("merge".equals(authority)){
+                            // Baseline-less union contains only nonconflicting
+                            // additions. No source decision is needed.
+                            runOnUiThread(()->applyWindowsFirstSync(link,local,windows));
                             return;
                         }
                         StringBuilder summary=new StringBuilder(
