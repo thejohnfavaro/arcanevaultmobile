@@ -267,7 +267,8 @@ public final class NativePeerSync {
         for(java.util.Iterator<String> it=peer.keys();it.hasNext();){
             String field=it.next();
             if(field.equals("cards")||field.equals("physicalCards")||
-                field.equals("deckLibrary")||field.equals("preferredArtwork"))continue;
+                field.equals("deckLibrary")||field.equals("preferredArtwork")||
+                field.equals("schema")||field.equals("source")||field.equals("exported"))continue;
             if(base.has(field)&&!equivalent(base.opt(field),peer.opt(field)) &&
                 own.has(field)&&!equivalent(own.opt(field),peer.opt(field)))
                 throw new IllegalArgumentException("Unreconciled workspace field: "+field);
