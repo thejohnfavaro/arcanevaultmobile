@@ -94,7 +94,7 @@ final class NativeCompanionScreen {
         refresh();
     }
 
-    static View create(Activity activity, SharedPreferences prefs, CatalogStore catalog, Runnable openLegacy) {
+    static View create(Activity activity, SharedPreferences prefs, CatalogStore catalog, ArtworkCache artwork, Runnable openLegacy) {
         return new NativeCompanionScreen(activity, prefs, catalog, artwork, openLegacy).root;
     }
 
