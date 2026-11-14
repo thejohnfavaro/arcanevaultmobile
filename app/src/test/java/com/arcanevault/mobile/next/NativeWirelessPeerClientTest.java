@@ -27,4 +27,21 @@ public final class NativeWirelessPeerClientTest {
             catch(IllegalArgumentException expected){} 
         }
     }
+    @Test public void usbReverseUsesLoopbackOnly()throws Exception {
+        String token="b".repeat(48);
+        String usb="http://127.0.0.1:38712/arcane-peer/"+token;
+        assertEquals("127.0.0.1",NativeWirelessPeerClient.validateUsb(usb).getHost());
+        try {NativeWirelessPeerClient.validate(usb);fail("LAN accepted USB link");}
+        catch(IllegalArgumentException expected){}
+        try {
+            NativeWirelessPeerClient.validateUsb(
+                "http://192.168.1.3:38712/arcane-peer/"+token);
+            fail("USB accepted LAN address");
+        }catch(IllegalArgumentException expected){}
+        try {
+            NativeWirelessPeerClient.validateUsb(
+                "http://127.0.0.2:38712/arcane-peer/"+token);
+            fail("USB accepted alternate loopback");
+        }catch(IllegalArgumentException expected){}
+    }
 }

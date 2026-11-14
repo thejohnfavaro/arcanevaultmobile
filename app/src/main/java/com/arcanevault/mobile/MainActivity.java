@@ -192,6 +192,7 @@ public class MainActivity extends Activity {
             workers.execute(server);
             appUrl = "http://127.0.0.1:" + server.getPort() + "/";
             startLegacyRecovery();
+            handleUsbPeerLaunch(getIntent());
         } catch(IOException e) {toast("Unable to start local app service: " + e.getMessage());}
     }
 
@@ -269,6 +270,44 @@ public class MainActivity extends Activity {
             throw new IllegalStateException("Could not save device identity");
         return id;
     }
+    /** The Windows ADB bridge targets this Activity explicitly and delivers
+     * the one-time localhost token. The user must approve the direction here
+     * before any bytes move; no automatic import is triggered by the intent. */
+    private void handleUsbPeerLaunch(Intent request) {
+        if(request==null)return;
+        String raw=request.getStringExtra("arcane_usb_url");
+        String direction=request.getStringExtra("arcane_usb_mode");
+        if(raw==null)return;
+        request.removeExtra("arcane_usb_url");
+        request.removeExtra("arcane_usb_mode");
+        try {
+            com.arcanevault.mobile.next.NativeWirelessPeerClient.validateUsb(raw);
+            if(!"send".equals(direction)&&!"receive".equals(direction))
+                throw new IllegalArgumentException("Unsupported USB sync direction");
+        }catch(Exception bad){
+            toast("USB peer link refused: "+bad.getMessage());
+            return;
+        }
+        boolean send="send".equals(direction);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(send?"USB: send phone snapshot":"USB: receive Windows snapshot")
+            .setMessage("Windows opened a one-time cable-only connection using "+
+                "ADB reverse. No home Wi-Fi is needed. Approve the transfer? "+
+                (send?"Windows will review your snapshot and ask before applying changes.":
+                "After receiving, select a shared baseline and review changes "+
+                "before writing anything to Android."))
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton(send?"Send over USB":"Receive & review over USB",
+                (dialog,which)->wirelessPeerReview(send,raw,!send))
+            .show();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleUsbPeerLaunch(intent);
+    }
+
     /** One-use LAN peer link entry: never sync by guessing an unverified URL. */
     /** Reuse the established in-app Google Code Scanner without camera permissions. */
     void scanWirelessPeerQr() {
@@ -311,7 +350,14 @@ public class MainActivity extends Activity {
     void wirelessPeerReview(boolean send,String scannedLink) {
         wirelessPeerReview(send,scannedLink,false);
     }
+    private boolean linkIsUsb(String link) {
+        try {
+            return link!=null&&"127.0.0.1".equals(
+                new java.net.URL(link).getHost());
+        }catch(Exception ignored){return false;}
+    }
     private void wirelessPeerReview(boolean send,String scannedLink,boolean prepareApply) {
+        final boolean usb=linkIsUsb(scannedLink);
         android.widget.EditText address=new android.widget.EditText(this);
         address.setSingleLine(true);
         address.setTextSize(13);
@@ -321,16 +367,18 @@ public class MainActivity extends Activity {
             android.text.InputType.TYPE_TEXT_VARIATION_URI);
         new android.app.AlertDialog.Builder(this)
             .setTitle(send?"Send Android snapshot to Windows":"Receive Windows snapshot")
-            .setMessage("Start the matching Wi-Fi offer in Windows Data & Sync, then paste its one-time link. "+
-                "Use a trusted home Wi-Fi network: the current LAN transfer is HTTP and unencrypted. "+
+            .setMessage((linkIsUsb(scannedLink)?"Windows has created a USB peer offer. The cable transports data over ADB reverse. ":"Start the matching Wi-Fi offer in Windows Data & Sync, then paste its one-time link. Use trusted home Wi-Fi. ")+
+                "The transfer is local HTTP and not encrypted. "+
                 (prepareApply?"After downloading you will select a common baseline and approve "+
-                "any inventory write. It is not automatic sync.":"Only a read-only comparison will be performed."))
+                "any changes to collections, decks or artwork. It is not automatic sync.":"Only a read-only comparison will be performed."))
             .setView(address)
             .setNegativeButton("Cancel",null)
             .setPositiveButton(send?"Send for review":prepareApply?"Download & review":"Compare",(dialog,which)->{
                 String link=address.getText().toString().trim();
-                try{com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(link);}
-                catch(Exception error){toast("Invalid wireless link: "+error.getMessage());return;}
+                try{
+                    if(usb)com.arcanevault.mobile.next.NativeWirelessPeerClient.validateUsb(link);
+                    else com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(link);
+                }catch(Exception error){toast("Invalid peer link: "+error.getMessage());return;}
                 withPeerData((decks,art)->{
                     try{
                         JSONObject local=com.arcanevault.mobile.next.NativePeerSync
@@ -338,14 +386,19 @@ public class MainActivity extends Activity {
                         workers.execute(()->{
                             try{
                                 if(send) {
-                                    com.arcanevault.mobile.next.NativeWirelessPeerClient.send(link,local);
+                                    if(usb)com.arcanevault.mobile.next.NativeWirelessPeerClient
+                                        .sendUsb(link,local);
+                                    else com.arcanevault.mobile.next.NativeWirelessPeerClient.send(link,local);
                                     runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                                         .setTitle("Snapshot sent for Windows review")
                                         .setMessage("Windows received the Android snapshot. "+
                                             "No collection or deck was changed on either device.")
                                         .setPositiveButton("OK",null).show());
                                 } else {
-                                    JSONObject remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
+                                    JSONObject remote;
+                                    if(usb)remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
+                                        .receiveUsb(link);
+                                    else remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
                                         .receive(link);
                                     if(prepareApply) {
                                         // No write occurs during Wi-Fi transfer.
@@ -448,8 +501,8 @@ public class MainActivity extends Activity {
             .setTitle("Wireless snapshot received")
             .setMessage("Choose the previously shared, unchanged PC/Android "+
                 "baseline snapshot. Without a genuine common baseline we cannot "+
-                "safely infer which device edited which cards. The Wi-Fi "+
-                "transfer has NOT changed your collection.")
+                "safely infer which device edited which records. The transfer "+
+                "has NOT changed your collection or decks.")
             .setNegativeButton("Cancel",(d,w)->pendingWirelessIncoming=null)
             .setPositiveButton("Select common baseline",(d,w)->{
                 Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);

@@ -491,6 +491,13 @@ final class NativeWorkspaceScreen {
             "Transfer snapshots wirelessly with a one-time link from Windows. "+
             "Five-minute one-use links. Review-only by default; applying a "+
             "merge requires a prior shared baseline and explicit confirmation.",null);
+        row("USB cable peer sync (ADB)",
+            "Connect one Android phone to Windows using a USB data cable. Enable "+
+            "USB debugging and approve the computer. In Windows Data & Sync, choose "+
+            "Share Sync to Phone (USB) or Receive & Review Phone Sync (USB). "+
+            "Windows opens this app with a one-time localhost link; approve the "+
+            "transfer here, then review differences against your shared "+
+            "baseline. Wi-Fi and QR codes are not required.",null);
         button("Scan Windows Wi-Fi QR code",
             ()->((MainActivity)activity).scanWirelessPeerQr());
         button("Scan QR & review Windows changes",

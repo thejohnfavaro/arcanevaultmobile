@@ -14,6 +14,9 @@ public final class NativeWirelessPeerClient {
     private static final int MAX=NativePeerSync.MAX_BYTES;
 
     public static URL validate(String supplied)throws Exception {
+        return validateTransport(supplied,false);
+    }
+    private static URL validateTransport(String supplied,boolean usb)throws Exception {
         String text=supplied==null?"":supplied.trim();
         if(text.length()>160)throw new IllegalArgumentException("Wireless URL is too long");
         URL url=new URL(text);
@@ -30,10 +33,20 @@ public final class NativeWirelessPeerClient {
             ip[i]=Integer.parseInt(octets[i]);
             if(ip[i]>255)throw new IllegalArgumentException("Invalid IP");
         }
-        if(!(ip[0]==10||(ip[0]==172&&ip[1]>=16&&ip[1]<=31)||
-            (ip[0]==192&&ip[1]==168)))
-            throw new IllegalArgumentException("Link must use trusted private Wi-Fi");
+        boolean loopback=ip[0]==127&&ip[1]==0&&ip[2]==0&&ip[3]==1;
+        boolean privateLan=ip[0]==10 ||
+            (ip[0]==172&&ip[1]>=16&&ip[1]<=31) ||
+            (ip[0]==192&&ip[1]==168);
+        if(usb?!loopback:!privateLan)
+            throw new IllegalArgumentException(usb?
+                "USB requires 127.0.0.1 loopback":"Link must use trusted private Wi-Fi");
         return url;
+    }
+
+    /** ADB reverse maps the device's loopback port to the Windows-only
+     * localhost listener. Never accept a LAN URL for a USB launch. */
+    public static URL validateUsb(String link)throws Exception {
+        return validateTransport(link,true);
     }
 
     private static HttpURLConnection connection(URL url,String method)throws Exception{
@@ -48,7 +61,13 @@ public final class NativeWirelessPeerClient {
     }
 
     public static JSONObject receive(String link)throws Exception {
-        HttpURLConnection c=connection(validate(link),"GET");
+        return receiveFrom(validate(link));
+    }
+    public static JSONObject receiveUsb(String link)throws Exception {
+        return receiveFrom(validateUsb(link));
+    }
+    private static JSONObject receiveFrom(URL url)throws Exception {
+        HttpURLConnection c=connection(url,"GET");
         try{
             if(c.getResponseCode()!=200)
                 throw new IllegalStateException("Windows transfer expired, used or rejected (HTTP "+c.getResponseCode()+")");
@@ -59,10 +78,16 @@ public final class NativeWirelessPeerClient {
         }finally{c.disconnect();}
     }
     public static void send(String link,JSONObject peer)throws Exception {
+        sendTo(validate(link),peer);
+    }
+    public static void sendUsb(String link,JSONObject peer)throws Exception {
+        sendTo(validateUsb(link),peer);
+    }
+    private static void sendTo(URL url,JSONObject peer)throws Exception {
         byte[] bytes=peer.toString().getBytes(StandardCharsets.UTF_8);
         if(bytes.length<20||bytes.length>MAX)
             throw new IllegalArgumentException("Peer snapshot must be within 30 MiB");
-        HttpURLConnection c=connection(validate(link),"POST");
+        HttpURLConnection c=connection(url,"POST");
         try{
             c.setDoOutput(true);
             c.setFixedLengthStreamingMode(bytes.length);
