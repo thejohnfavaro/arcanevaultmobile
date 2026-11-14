@@ -151,7 +151,18 @@ public class MainActivity extends Activity {
     /** Native-first shell. Preserve legacy WebView and origin recovery. */
     private void showNativeHome() {
         nativeHomeVisible = true;
-        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork, this::showLegacyTools));
+        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork,
+            this::showLegacyTools, callback -> {
+                // Read the WebView's authoritative saved-deck library. The native
+                // screen is a projection and never writes a duplicate database.
+                browser.evaluateJavascript("(function(){try{return localStorage.getItem('vault_libraryV3')||'[]'}catch(e){return '[]'}})()",
+                    encoded -> {
+                        try {
+                            Object value=new org.json.JSONTokener(encoded).nextValue();
+                            callback.accept(value instanceof String?(String)value:"[]");
+                        }catch(Exception error){callback.accept("[]");}
+                    });
+            }));
     }
 
     private void showLegacyTools() {
