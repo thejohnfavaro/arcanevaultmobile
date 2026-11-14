@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
         durable = getSharedPreferences(COLLECTION_PREFS, MODE_PRIVATE);
         browser = new WebView(this);
         browser.setBackgroundColor(Color.rgb(13,16,23));
+        NativeSystemInsets.apply(this,browser);
         setContentView(browser);
         WebSettings webSettings = browser.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -158,7 +159,7 @@ public class MainActivity extends Activity {
     /** Native-first shell. Preserve legacy WebView and origin recovery. */
     private void showNativeHome() {
         nativeHomeVisible = true;
-        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork,
+        View nativeRoot=NativeCompanionScreen.create(this, durable, catalog, artwork,
             this::showLegacyTools, callback -> {
                 // Read the WebView's authoritative saved-deck library. The native
                 // screen is a projection and never writes a duplicate database.
@@ -169,7 +170,9 @@ public class MainActivity extends Activity {
                             callback.accept(value instanceof String?(String)value:"[]");
                         }catch(Exception error){callback.accept("[]");}
                     });
-            }));
+            });
+        NativeSystemInsets.apply(this,nativeRoot);
+        setContentView(nativeRoot);
     }
 
     /** Reads deck/art data from the authoritative legacy origin, fail-closed. */
