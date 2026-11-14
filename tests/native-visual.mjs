@@ -19,6 +19,6 @@ assert.match(catalog,/artworkWorker\.execute/,'Artwork decoding must not block S
 assert.match(catalog,/options\.inSampleSize=4/,'Thumbnails should be sampled to save memory');
 assert.match(catalog,/VaultNativeStyle\.search/,'Native search fields must use the dark theme');
 assert.match(catalog,/ORACLE TEXT/,'Card inspector must have readable rules text');
-assert.match(catalog,/Browse printings & physical copies/,'Printing inspection is preserved');
+assert.match(catalog,/View printings & edit physical ownership/,'Printing inspection is preserved');
 assert.match(catalog,/NativePrintingOwnership\.inspect/,'Verified physical identity safety stays in place');
 console.log('PASS: dark native shell, full-height catalog, real cached thumbnails, legible inspector, printing safety');
