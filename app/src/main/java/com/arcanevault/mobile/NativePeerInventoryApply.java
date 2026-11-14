@@ -72,6 +72,24 @@ final class NativePeerInventoryApply {
         return writeInventories(context,prefs,catalog,newArena,newPhysical);
     }
 
+    /** Inventory journal remains scoped to the two native inventory stores.
+     * WebView deck/artwork writes are separately verified and backed up by
+     * the caller; never confuse these stores with an atomic transaction. */
+    static String applyInventoryPart(Context context,SharedPreferences prefs,
+            CatalogStore catalog,JSONObject local,JSONObject proposal)throws Exception {
+        JSONObject original=local.getJSONObject("data");
+        JSONObject candidate=proposal.getJSONObject("candidate");
+        JSONObject beforeInventories=new JSONObject(original.toString());
+        JSONObject inventoryCandidate=new JSONObject(candidate.toString());
+        inventoryCandidate.put("deckLibrary",
+            new org.json.JSONArray(original.getJSONArray("deckLibrary").toString()));
+        inventoryCandidate.put("preferredArtwork",
+            new JSONObject(original.getJSONObject("preferredArtwork").toString()));
+        JSONObject inventoryPlan=new JSONObject()
+            .put("candidate",inventoryCandidate);
+        return apply(context,prefs,catalog,local,inventoryPlan);
+    }
+
     static String restoreLast(Context context,SharedPreferences prefs,
             CatalogStore catalog)throws Exception {
         if(prefs.getString(PENDING,null)!=null)

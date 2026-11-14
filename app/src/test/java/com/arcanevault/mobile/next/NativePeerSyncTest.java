@@ -167,4 +167,64 @@ public final class NativePeerSyncTest {
         try{NativePeerSync.preview(local,duplicated);fail("should reject duplicate deck IDs");}
         catch(IllegalArgumentException expected){}
     }
+    @Test public void incomingDeckEditPreservesLocalInventoryAndPrinting()throws Exception {
+        JSONObject base=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",4);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject edited=windows.getJSONObject("data").getJSONArray("deckLibrary").getJSONObject(0);
+        edited.put("entries",new JSONArray().put(new JSONObject()
+            .put("name","Sol Ring").put("quantity",1)
+            .put("printingId","11111111-1111-4111-8111-111111111111")));
+        String before=android.getJSONObject("data").getJSONArray("physicalCards").toString();
+        JSONObject plan=NativePeerSync.prepareMerge(android,windows,base);
+        assertEquals(1,plan.getInt("incomingChanges"));
+        JSONObject target=plan.getJSONObject("candidate");
+        assertEquals(before,target.getJSONArray("physicalCards").toString());
+        assertEquals("11111111-1111-4111-8111-111111111111",
+            target.getJSONArray("deckLibrary").getJSONObject(0)
+                .getJSONArray("entries").getJSONObject(0).getString("printingId"));
+        assertEquals(0,NativePeerSync.inventoryDelta(android,plan).getInt("changedEntries"));
+    }
+
+    @Test public void divergentEditsToSameDeckCannotSilentlyOverwrite()throws Exception {
+        JSONObject base=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",4);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",4);
+        android.getJSONObject("data").getJSONArray("deckLibrary").getJSONObject(0)
+            .put("name","Android deck edit");
+        windows.getJSONObject("data").getJSONArray("deckLibrary").getJSONObject(0)
+            .put("name","Windows deck edit");
+        JSONObject differences=NativePeerSync.compareWithBaseline(android,windows,base);
+        assertEquals(1,differences.getInt("conflicts"));
+        try {
+            NativePeerSync.prepareMerge(android,windows,base);
+            fail("simultaneous deck edits were accepted");
+        } catch(IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("deckLibrary"));
+        }
+    }
+
+    @Test public void deckRoundTripWithUpdatedCommonBaselineDoesNotReplayEdits()throws Exception {
+        JSONObject base=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",4);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",4);
+        windows.getJSONObject("data").getJSONArray("deckLibrary").getJSONObject(0)
+            .put("name","Windows renamed deck");
+        JSONObject first=NativePeerSync.prepareMerge(android,windows,base);
+        JSONObject androidAfter=peer("00000000-0000-4000-8000-000000000701",4);
+        androidAfter.put("data",new JSONObject(first.getJSONObject("candidate").toString()));
+        JSONObject second=NativePeerSync.prepareMerge(androidAfter,windows,base);
+        assertEquals(0,second.getInt("incomingChanges"));
+        JSONObject shared=peer("00000000-0000-4000-8000-000000000702",4);
+        shared.put("data",new JSONObject(first.getJSONObject("candidate").toString()));
+        JSONObject androidNew=peer("00000000-0000-4000-8000-000000000701",4);
+        androidNew.put("data",new JSONObject(first.getJSONObject("candidate").toString()));
+        androidNew.getJSONObject("data").getJSONArray("deckLibrary").getJSONObject(0)
+            .put("commander","Android changed commander");
+        JSONObject back=NativePeerSync.prepareMerge(windows,androidNew,shared);
+        assertEquals("Android changed commander",
+            back.getJSONObject("candidate").getJSONArray("deckLibrary")
+                .getJSONObject(0).getString("commander"));
+    }
+
 }

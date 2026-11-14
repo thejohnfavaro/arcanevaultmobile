@@ -648,98 +648,294 @@ public class MainActivity extends Activity {
         if(baseline==null)return;
         applyPeerInventorySnapshot(incoming,()->loadPeerFile(baseline));
     }
+    /** Persist the entire pre-write workspace, including authoritative WebView
+     * decks and artwork. Never overwrite the previous recovery files. */
+    private String saveFullPeerRecovery(JSONObject snapshot)throws Exception {
+        byte[] source=snapshot.toString().getBytes(StandardCharsets.UTF_8);
+        if(source.length<20 ||
+                source.length>com.arcanevault.mobile.next.NativePeerSync.MAX_BYTES)
+            throw new IOException("Full sync backup invalid or too large");
+        java.io.File folder=new java.io.File(getFilesDir(),"peer-full-recovery");
+        if(!folder.isDirectory()&&!folder.mkdirs())
+            throw new IOException("Cannot create full sync recovery directory");
+        java.io.File dest=new java.io.File(folder,
+            "pre-peer-"+java.util.UUID.randomUUID().toString()+".json");
+        android.util.AtomicFile atomic=new android.util.AtomicFile(dest);
+        java.io.FileOutputStream output=null;
+        try {
+            output=atomic.startWrite();
+            output.write(source);
+            output.getFD().sync();
+            atomic.finishWrite(output);
+            output=null;
+        } finally {
+            if(output!=null)atomic.failWrite(output);
+        }
+        byte[] saved=java.nio.file.Files.readAllBytes(dest.toPath());
+        if(!java.security.MessageDigest.isEqual(
+                java.security.MessageDigest.getInstance("SHA-256").digest(source),
+                java.security.MessageDigest.getInstance("SHA-256").digest(saved)))
+            throw new IOException("Full sync backup verification failed");
+        JSONObject check=new JSONObject(new String(saved,StandardCharsets.UTF_8));
+        if(!NativePeerInventoryApply.canonicalEqual(
+                snapshot.getJSONObject("data"),check.getJSONObject("data")))
+            throw new IOException("Full sync backup contents changed");
+        return dest.getAbsolutePath();
+    }
+
+    /** Update the authoritative WebView localStorage without creating a
+     * second deck database. Callback reports read-after-write verification.
+     * The full native snapshot remains available for manual recovery. */
+    private void writePeerWebData(JSONObject expected,JSONObject target,
+            java.util.function.Consumer<String> done) {
+        if(browser==null || !peerDataPageReady || appUrl==null ||
+                !appUrl.equals(browser.getUrl())) {
+            done.accept("Saved deck origin is not loaded");
+            return;
+        }
+        String js="(function(){try{"+
+            "const keys=['vault_libraryV3','vault_preferredArtworkV1'];"+
+            "const old=keys.map(k=>localStorage.getItem(k));"+
+            "const before=["+
+                JSONObject.quote(expected.optJSONArray("deckLibrary").toString())+","+
+                JSONObject.quote(expected.optJSONObject("preferredArtwork").toString())+
+            "];"+
+            "const next=["+
+                JSONObject.quote(target.optJSONArray("deckLibrary").toString())+","+
+                JSONObject.quote(target.optJSONObject("preferredArtwork").toString())+
+            "];"+
+            "const norm=(s)=>{const stable=(v)=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v);return JSON.stringify(stable(JSON.parse(s)));};"+
+            "if(keys.some((k,i)=>norm(old[i]|| (i===0?'[]':'{}'))!==norm(before[i])))"+
+                "return JSON.stringify({ok:false,error:'Decks or artwork changed since review'});"+
+            "try{keys.forEach((k,i)=>localStorage.setItem(k,next[i]));"+
+                "if(keys.some((k,i)=>localStorage.getItem(k)!==next[i]))"+
+                    "throw new Error('WebView readback mismatch');"+
+                "return JSON.stringify({ok:true});"+
+            "}catch(e){keys.forEach((k,i)=>{try{"+
+                "if(old[i]===null)localStorage.removeItem(k);"+
+                "else localStorage.setItem(k,old[i]);}catch(ignored){}});"+
+                "return JSON.stringify({ok:false,error:String(e)});}"+
+            "}catch(e){return JSON.stringify({ok:false,error:String(e)});}})()";
+        browser.evaluateJavascript(js,result->{
+            try {
+                Object decoded=new org.json.JSONTokener(result).nextValue();
+                JSONObject status=new JSONObject((String)decoded);
+                done.accept(status.optBoolean("ok")?null:
+                    status.optString("error","WebView write not verified"));
+            } catch(Exception ex) {
+                done.accept("WebView write verification failed: "+ex.getMessage());
+            }
+        });
+    }
+
     private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,
             PeerSnapshotLoader baseline) {
         withPeerData((decks,art)->{
-            try{
+            try {
                 JSONObject local=com.arcanevault.mobile.next.NativePeerSync
                     .export(durable,peerId(),decks,art);
                 workers.execute(()->{
-                    try{
+                    try {
                         JSONObject remote=incoming.load();
                         JSONObject original=baseline.load();
                         JSONObject proposal=com.arcanevault.mobile.next.NativePeerSync
                             .prepareMerge(local,remote,original);
-                        JSONObject candidate=proposal.getJSONObject("candidate");
                         JSONObject before=local.getJSONObject("data");
-                        if(!NativePeerInventoryApply.canonicalEqual(
-                                before.getJSONArray("deckLibrary"),
-                                candidate.getJSONArray("deckLibrary")) ||
-                            !NativePeerInventoryApply.canonicalEqual(
-                                before.getJSONObject("preferredArtwork"),
-                                candidate.getJSONObject("preferredArtwork")))
-                            throw new IllegalStateException("Deck/artwork changes need Windows "+
-                                "write-back for now. Android only applies native inventory.");
+                        JSONObject target=proposal.getJSONObject("candidate");
+                        boolean decksChanged=!NativePeerInventoryApply.canonicalEqual(
+                            before.getJSONArray("deckLibrary"),target.getJSONArray("deckLibrary"));
+                        boolean artworkChanged=!NativePeerInventoryApply.canonicalEqual(
+                            before.getJSONObject("preferredArtwork"),
+                            target.getJSONObject("preferredArtwork"));
                         JSONObject delta=com.arcanevault.mobile.next.NativePeerSync
                             .inventoryDelta(local,proposal);
-                        int count=delta.getInt("changedEntries");
-                        if(count==0){
-                            runOnUiThread(()->toast("Android inventory already includes these changes."));
+                        int inventoryCount=delta.getInt("changedEntries");
+                        if(inventoryCount==0&&!decksChanged&&!artworkChanged) {
+                            runOnUiThread(()->toast("All peer records already match."));
                             return;
                         }
-                        org.json.JSONArray entries=delta.getJSONArray("changes");
+                        org.json.JSONArray changes=delta.getJSONArray("changes");
                         StringBuilder preview=new StringBuilder()
-                            .append(count).append(" inventory entries changed")
-                            .append("\nCopies to add: +").append(delta.getLong("addedCopies"))
-                            .append("\nCopies to remove: -").append(delta.getLong("removedCopies"))
-                            .append("\nAndroid-only edits preserved: ")
-                            .append(proposal.optInt("localChanges",0))
-                            .append("\n\n");
-                        for(int i=0;i<Math.min(12,entries.length());i++){
-                            JSONObject entry=entries.getJSONObject(i);
-                            long change=entry.getLong("delta");
-                            preview.append(change>0?"+":"").append(change)
-                                .append("  ").append(entry.optString("name","Unknown"));
-                            String set=entry.optString("set","");
-                            if(!set.isEmpty())preview.append(" (").append(set)
-                                .append(" #").append(entry.optString("number","")).append(")");
-                            if(entry.optBoolean("metadataChanged") && change==0)
-                                preview.append(" · details updated");
-                            preview.append("\n");
+                            .append("Inventory entries: ").append(inventoryCount)
+                            .append("\\nCopies to add: +").append(delta.getLong("addedCopies"))
+                            .append("\\nCopies to remove: -").append(delta.getLong("removedCopies"))
+                            .append("\\nSaved decks: ").append(decksChanged?"Update":"Unchanged")
+                            .append("\\nPreferred artwork: ").append(artworkChanged?"Update":"Unchanged")
+                            .append("\\nLocal-only edits preserved: ")
+                            .append(proposal.optInt("localChanges",0)).append("\\n\\n");
+                        for(int i=0;i<Math.min(10,changes.length());i++){
+                            JSONObject entry=changes.getJSONObject(i);
+                            long quantity=entry.getLong("delta");
+                            preview.append(quantity>0?"+":"").append(quantity)
+                                .append("  ").append(entry.optString("name","Unknown")).append("\\n");
                         }
-                        if(entries.length()>12)
-                            preview.append("… and ").append(entries.length()-12).append(" more entries\n");
-                        preview.append("\nOnly these reviewed inventory differences will be applied. "+
-                            "Unchanged cards remain untouched. Conflicts and ambiguous deletions "+
-                            "are refused. A full recovery file is saved before the write. "+
-                            "Windows will not be changed.");
+                        preview.append("\\nThis is a reviewed, opt-in merge. A full verified "+
+                            "Android snapshot is saved BEFORE ANY write. Inventory uses "+
+                            "its existing crash-recovery journal. Deck/artwork updates "+
+                            "use WebView storage with readback verification. If the app "+
+                            "stops between writes, restore the saved pre-sync snapshot. "+
+                            "Windows is not changed.");
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                            .setTitle("Apply Windows inventory differences?")
+                            .setTitle("Apply reviewed peer changes?")
                             .setMessage(preview.toString())
                             .setNegativeButton("Cancel",null)
-                            .setPositiveButton("Apply to Android",(dialog,which)->{
-                                workers.execute(()->{
-                                    try{
-                                        String recovery=NativePeerInventoryApply.apply(
-                                            this,durable,catalog,local,proposal);
-                                        runOnUiThread(()->{
-                                            refreshAfterPeerInventory();
-                                            new android.app.AlertDialog.Builder(this)
-                                            .setTitle("Android inventory updated")
-                                            .setMessage("Applied "+count+" reviewed inventory changes. "+
-                                                "Previous inventories saved for recovery. "+
-                                                "Reopen the native Catalog and Sets to refresh.\n\n"+
-                                                "Backup: "+recovery)
-                                            .setPositiveButton("OK",null).show();
+                            .setPositiveButton("Save backup & apply",(dialog,which)->{
+                                // Re-read the live WebView state at approval time.
+                                withPeerData((freshDecks,freshArt)->{
+                                    try {
+                                        JSONObject live=com.arcanevault.mobile.next.NativePeerSync
+                                            .export(durable,peerId(),freshDecks,freshArt);
+                                        if(!NativePeerInventoryApply.canonicalEqual(
+                                                live.getJSONObject("data"),
+                                                local.getJSONObject("data")))
+                                            throw new IllegalStateException(
+                                                "Android data changed since review; compare again");
+                                        workers.execute(()->{
+                                            String recovery=null;
+                                            try {
+                                                String saved=saveFullPeerRecovery(live);
+                                                recovery=saved;
+                                                boolean inventoryNeeded=inventoryCount>0;
+                                                if(inventoryNeeded)
+                                                    NativePeerInventoryApply.applyInventoryPart(
+                                                        this,durable,catalog,live,proposal);
+                                                String finalBackup=saved;
+                                                runOnUiThread(()->{
+                                                    java.util.function.Consumer<String> report=error->{
+                                                        if(error==null){
+                                                            refreshAfterPeerInventory();
+                                                            new android.app.AlertDialog.Builder(this)
+                                                                .setTitle("Android peer changes applied")
+                                                                .setMessage("Reviewed inventory/deck/artwork changes "+
+                                                                    "have been written and verified.\\n\\n"+
+                                                                    "Pre-sync full backup: "+finalBackup+
+                                                                    "\\n\\nConfirm a new matching baseline "+
+                                                                    "on both devices before future merges.")
+                                                                .setPositiveButton("OK",null).show();
+                                                        } else {
+                                                            new android.app.AlertDialog.Builder(this)
+                                                                .setTitle("Peer apply needs recovery")
+                                                                .setMessage("Inventory may already have changed. "+
+                                                                    "Deck/artwork write was not verified: "+error+
+                                                                    "\\n\\nFull pre-sync backup: "+finalBackup+
+                                                                    "\\nDo not sync again until restored or inspected.")
+                                                                .setPositiveButton("OK",null).show();
+                                                        }
+                                                    };
+                                                    if(decksChanged||artworkChanged)
+                                                        writePeerWebData(before,target,report);
+                                                    else report.accept(null);
+                                                });
+                                            } catch(Exception failure) {
+                                                String path=recovery;
+                                                runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                                    .setTitle("Peer changes not fully applied")
+                                                    .setMessage(failure.getMessage()+
+                                                        "\\n\\nCheck native recovery before retrying."+
+                                                        (path==null?"":"\\nBackup: "+path))
+                                                    .setPositiveButton("OK",null).show());
+                                            }
                                         });
-                                    }catch(Exception error){
-                                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                                            .setTitle("Peer changes not applied")
-                                            .setMessage(error.getMessage())
-                                            .setPositiveButton("OK",null).show());
+                                    } catch(Exception failure) {
+                                        toast("Sync review expired: "+failure.getMessage());
                                     }
                                 });
                             }).show());
-                    }catch(Exception error){
+                    } catch(Exception error) {
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                             .setTitle("Peer merge rejected")
                             .setMessage(error.getMessage()+
-                                "\n\nNo inventory, deck or artwork data was changed.")
+                                "\\n\\nNo inventory, deck or artwork data was changed.")
                             .setPositiveButton("OK",null).show());
                     }
                 });
-            }catch(Exception error){toast("Cannot read Android sync snapshot: "+error.getMessage());}
+            } catch(Exception error) {
+                toast("Cannot read Android sync snapshot: "+error.getMessage());
+            }
         });
+    }
+
+    /** Manual reversal of the latest full peer write. A new snapshot of the
+     * present state is saved first, so restoration is itself reversible. */
+    void restoreLatestFullPeerSnapshot() {
+        java.io.File folder=new java.io.File(getFilesDir(),"peer-full-recovery");
+        java.io.File[] files=folder.listFiles((dir,name)->
+            name.matches("pre-peer-[a-f0-9-]{36}\\.json"));
+        if(files==null||files.length==0){
+            toast("No full pre-sync recovery snapshot is available.");
+            return;
+        }
+        java.util.Arrays.sort(files,(a,b)->Long.compare(b.lastModified(),a.lastModified()));
+        java.io.File selected=files[0];
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Restore previous full workspace?")
+            .setMessage("Restore the physical and Arena inventories, saved decks, "+
+                "and preferred artwork from the latest pre-sync snapshot? "+
+                "A new backup of your CURRENT state is created first. "+
+                "Any changes made since that snapshot will be replaced.\\n\\n"+
+                selected.getName())
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Restore full snapshot",(dialog,which)->
+                withPeerData((decks,art)->{
+                    try{
+                        JSONObject current=com.arcanevault.mobile.next.NativePeerSync
+                            .export(durable,peerId(),decks,art);
+                        workers.execute(()->{
+                            try{
+                                JSONObject backup=new JSONObject(new String(
+                                    java.nio.file.Files.readAllBytes(selected.toPath()),
+                                    StandardCharsets.UTF_8));
+                                JSONObject destination=backup.getJSONObject("data");
+                                JSONObject source=current.getJSONObject("data");
+                                // Validate known snapshot shape, including groups.
+                                destination.getJSONArray("cards");
+                                destination.getJSONArray("physicalCards");
+                                destination.getJSONArray("deckLibrary");
+                                destination.getJSONObject("preferredArtwork");
+                                String safety=saveFullPeerRecovery(current);
+                                boolean inventoryChanged=
+                                    !NativePeerInventoryApply.canonicalEqual(
+                                        source.getJSONArray("cards"),destination.getJSONArray("cards")) ||
+                                    !NativePeerInventoryApply.canonicalEqual(
+                                        source.getJSONArray("physicalCards"),
+                                        destination.getJSONArray("physicalCards"));
+                                if(inventoryChanged){
+                                    JSONObject candidate=new JSONObject()
+                                        .put("candidate",destination);
+                                    NativePeerInventoryApply.applyInventoryPart(
+                                        this,durable,catalog,current,candidate);
+                                }
+                                runOnUiThread(()->writePeerWebData(
+                                    source,destination,error->{
+                                        if(error==null){
+                                            refreshAfterPeerInventory();
+                                            new android.app.AlertDialog.Builder(this)
+                                                .setTitle("Full workspace restored")
+                                                .setMessage("Inventories, decks and artwork "+
+                                                    "restored from the saved snapshot.\\n\\n"+
+                                                    "Backup of pre-restore state: "+safety)
+                                                .setPositiveButton("OK",null).show();
+                                        }else{
+                                            new android.app.AlertDialog.Builder(this)
+                                                .setTitle("Recovery requires attention")
+                                                .setMessage("Inventory may have been restored, "+
+                                                    "but deck/artwork verification failed: "+
+                                                    error+"\\n\\nPrevious state: "+safety)
+                                                .setPositiveButton("OK",null).show();
+                                        }
+                                    }));
+                            }catch(Exception error){
+                                runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                    .setTitle("Full restore not completed")
+                                    .setMessage(error.getMessage()+
+                                        "\\nPrevious backup files were retained.")
+                                    .setPositiveButton("OK",null).show());
+                            }
+                        });
+                    }catch(Exception error){
+                        toast("Cannot read current workspace: "+error.getMessage());
+                    }
+                }));
     }
 
     private void previewThreeWayPeerUris(Uri latest,Uri baseline) {
