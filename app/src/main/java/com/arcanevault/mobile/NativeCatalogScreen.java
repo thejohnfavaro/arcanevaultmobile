@@ -827,7 +827,7 @@ final class NativeCatalogScreen {
         inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(44)));
         back.setOnClickListener(v->previous.run());
         String imageUrl=printing.optString("image","");
-        addInspectorArtwork(name,imageUrl);
+        addInspectorArtwork(name,imageUrl,printing.optString("imageBack",""));
         inspectorContent.addView(text(printing.optString("setName","")+
             " · "+printing.optString("rarity","")+
             "\\nConfirmed physical copies: "+printing.optInt("confirmedPhysicalCopies",0)+
