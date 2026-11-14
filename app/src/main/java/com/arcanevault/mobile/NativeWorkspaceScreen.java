@@ -171,22 +171,8 @@ final class NativeWorkspaceScreen {
         row("Safe recovery snapshot",prefs.contains("vault_nativePhysicalBackupV1")?
             "A prior physical collection snapshot is available. Restore only if needed.":
             "No native edit recovery snapshot yet.",null);
-        button("Export physical inventory backup",()->{
-            String raw=prefs.getString("vault_physicalCollectionV1","[]");
-            android.content.Intent send=new android.content.Intent(android.content.Intent.ACTION_SEND);
-            send.setType("application/json");
-            send.putExtra(android.content.Intent.EXTRA_SUBJECT,"Arcane Vault physical inventory backup");
-            send.putExtra(android.content.Intent.EXTRA_TEXT,raw);
-            activity.startActivity(android.content.Intent.createChooser(send,"Save physical collection backup"));
-        });
-        button("Export Arena inventory backup",()->{
-            String raw=prefs.getString("vault_cards","[]");
-            android.content.Intent send=new android.content.Intent(android.content.Intent.ACTION_SEND);
-            send.setType("application/json");
-            send.putExtra(android.content.Intent.EXTRA_SUBJECT,"Arcane Vault Arena inventory backup");
-            send.putExtra(android.content.Intent.EXTRA_TEXT,raw);
-            activity.startActivity(android.content.Intent.createChooser(send,"Save Arena collection backup"));
-        });
+        button("Export physical inventory backup",()->shareInventory("physical"));
+        button("Export Arena inventory backup",()->shareInventory("arena"));
         button("Restore pre-edit physical snapshot",()->{
             String old=prefs.getString("vault_nativePhysicalBackupV1",null);
             if(old==null){info("No native editing snapshot exists.");return;}
@@ -230,6 +216,37 @@ final class NativeWorkspaceScreen {
         button("Open advanced imports, QR and USB sync",legacy);
         row("Updater and security","Signed updates are opt-in. Do not dismiss Play Protect warnings without reviewing their details.",null);
         button("Check for app updates",()->new NativeAppUpdater(activity).check());
+    }
+    private void shareInventory(String kind){
+        executor.execute(()->{
+            try{
+                String filename="physical".equals(kind)?"physical.json":"arena.json";
+                String key="physical".equals(kind)?"vault_physicalCollectionV1":"vault_cards";
+                String raw=prefs.getString(key,"[]");
+                if(raw==null)raw="[]";
+                if(raw.length()>20_000_000)throw new IllegalStateException("Backup exceeds 20 MB safety limit");
+                new JSONArray(raw); // Never publish an invalid JSON backup.
+                java.io.File dir=new java.io.File(activity.getCacheDir(),"native-backups");
+                if(!dir.exists()&&!dir.mkdirs())throw new IllegalStateException("Cannot stage backup");
+                java.io.File output=new java.io.File(dir,filename);
+                try(java.io.FileOutputStream stream=new java.io.FileOutputStream(output)){
+                    stream.write(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    stream.getFD().sync();
+                }
+                android.net.Uri uri=android.net.Uri.parse("content://"+
+                    activity.getPackageName()+".backups/"+filename);
+                ui.post(()->{
+                    if(closed||activity.isFinishing())return;
+                    android.content.Intent share=new android.content.Intent(
+                        android.content.Intent.ACTION_SEND);
+                    share.setType("application/json");
+                    share.putExtra(android.content.Intent.EXTRA_STREAM,uri);
+                    share.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    activity.startActivity(android.content.Intent.createChooser(share,
+                        "Save Arcane Vault "+kind+" backup"));
+                });
+            }catch(Exception e){ui.post(()->info("Could not prepare backup: "+e.getMessage()));}
+        });
     }
     private void info(String message){
         new AlertDialog.Builder(activity).setTitle("Arcane Vault")
