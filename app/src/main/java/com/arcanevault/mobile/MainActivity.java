@@ -282,24 +282,211 @@ public class MainActivity extends Activity {
         request.removeExtra("arcane_usb_mode");
         try {
             com.arcanevault.mobile.next.NativeWirelessPeerClient.validateUsb(raw);
-            if(!"send".equals(direction)&&!"receive".equals(direction))
+            if(!"send".equals(direction)&&!"receive".equals(direction)&&
+                !"baseline".equals(direction))
                 throw new IllegalArgumentException("Unsupported USB sync direction");
         }catch(Exception bad){
             toast("USB peer link refused: "+bad.getMessage());
             return;
         }
         boolean send="send".equals(direction);
+        boolean setup="baseline".equals(direction);
         new android.app.AlertDialog.Builder(this)
-            .setTitle(send?"USB: send phone snapshot":"USB: receive Windows snapshot")
+            .setTitle(setup?"USB: initialize shared sync":
+                send?"USB: send phone snapshot":"USB: receive Windows snapshot")
             .setMessage("Windows opened a one-time cable-only connection using "+
                 "ADB reverse. No home Wi-Fi is needed. Approve the transfer? "+
-                (send?"Windows will review your snapshot and ask before applying changes.":
+                (setup?"Both devices will be compared. If differences exist, you will "+
+                "approve which copy to retain before any changes. When they match, "+
+                "a shared baseline will be saved automatically.":
+                send?"Windows will review your snapshot and ask before applying changes.":
                 "After receiving, select a shared baseline and review changes "+
                 "before writing anything to Android."))
             .setNegativeButton("Cancel",null)
-            .setPositiveButton(send?"Send over USB":"Receive & review over USB",
-                (dialog,which)->wirelessPeerReview(send,raw,!send))
+            .setPositiveButton(setup?"Compare & set up":
+                send?"Send over USB":"Receive & review over USB",
+                (dialog,which)->{
+                    if(setup)startUsbFirstSync(raw);
+                    else wirelessPeerReview(send,raw,!send);
+                })
             .show();
+    }
+
+    /** First USB connection compares full records before asking which
+     * copy to retain. Matching states proceed straight to the handshake. */
+    private void startUsbFirstSync(String link) {
+        withPeerData((decks,art)->{
+            try {
+                JSONObject local=com.arcanevault.mobile.next.NativePeerSync.export(
+                    durable,peerId(),decks,art);
+                workers.execute(()->{
+                    try {
+                        JSONObject reply=com.arcanevault.mobile.next.NativeWirelessPeerClient
+                            .exchangeUsb(link,local);
+                        if(!"review".equals(reply.optString("status")))
+                            throw new IOException("Windows did not return a first-sync review");
+                        String authority=reply.getString("authority");
+                        if(!"matched".equals(authority)&&!"windows".equals(authority)&&
+                            !"android".equals(authority)&&!"merge".equals(authority))
+                            throw new IOException("Invalid first-sync source choice");
+                        JSONObject windows=reply.getJSONObject("windows");
+                        JSONObject preview=com.arcanevault.mobile.next.NativePeerSync
+                            .preview(local,windows);
+                        org.json.JSONArray changes=preview.getJSONArray("changes");
+                        if("matched".equals(authority)&&changes.length()!=0)
+                            throw new IOException("Windows claimed identical data, but records differ");
+                        if("matched".equals(authority)){
+                            runOnUiThread(()->finishUsbFirstSync(link,windows));
+                            return;
+                        }
+                        if("merge".equals(authority)){
+                            // Baseline-less union contains only nonconflicting
+                            // additions. No source decision is needed.
+                            runOnUiThread(()->applyWindowsFirstSync(link,local,windows));
+                            return;
+                        }
+                        StringBuilder summary=new StringBuilder(
+                            "First sync found "+changes.length()+" differing records.\\n\\n");
+                        for(int i=0;i<Math.min(9,changes.length());i++){
+                            JSONObject change=changes.getJSONObject(i);
+                            summary.append(change.optString("group")).append(" · ")
+                                .append(change.optString("key")).append("\\n");
+                        }
+                        if(changes.length()>9)summary.append("...and ")
+                            .append(changes.length()-9).append(" more\\n");
+                        summary.append("\\nSource chosen on Windows: ")
+                            .append("windows".equals(authority)?"WINDOWS":"ANDROID")
+                            .append(".\\n\\n")
+                            .append("windows".equals(authority)?
+                                "Replace the Android collection, decks and artwork with "+
+                                "the Windows data? A complete Android recovery snapshot "+
+                                "will be saved before writing.":
+                                "Replace the Windows collection, decks and artwork with "+
+                                "this Android data? Windows will create a native "+
+                                "rollback backup before applying.")
+                            .append("\\n\\nAfter verifying equality, both devices will "+
+                                "remember their common baseline automatically.");
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("First USB sync · review differences")
+                            .setMessage(summary.toString())
+                            .setNegativeButton("Cancel",null)
+                            .setPositiveButton("Sync & create baseline",(dialog,which)->{
+                                if("windows".equals(authority))
+                                    applyWindowsFirstSync(link,local,windows);
+                                else finishUsbFirstSync(link,windows,true);
+                            }).show());
+                    }catch(Exception error){
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("First USB sync could not continue")
+                            .setMessage(error.getMessage()+"\\nNo baseline was created.")
+                            .setPositiveButton("OK",null).show());
+                    }
+                });
+            }catch(Exception error){toast("USB first-sync export failed: "+error.getMessage());}
+        });
+    }
+
+    /** For an explicitly approved Windows-authoritative first pairing,
+     * preserve every Android data group before writing either store. */
+    private void applyWindowsFirstSync(String link,JSONObject before,JSONObject windows) {
+        withPeerData((decks,art)->{
+            try {
+                JSONObject live=com.arcanevault.mobile.next.NativePeerSync.export(
+                    durable,peerId(),decks,art);
+                if(!NativePeerInventoryApply.canonicalEqual(
+                    before.getJSONObject("data"),live.getJSONObject("data")))
+                    throw new IllegalStateException(
+                        "Android records changed during review. Restart pairing.");
+                JSONObject old=live.getJSONObject("data");
+                JSONObject next=windows.getJSONObject("data");
+                workers.execute(()->{
+                    String recovery=null;
+                    try {
+                        recovery=saveFullPeerRecovery(live);
+                        boolean inventoriesChanged=
+                            !NativePeerInventoryApply.canonicalEqual(
+                                old.getJSONArray("cards"),next.getJSONArray("cards")) ||
+                            !NativePeerInventoryApply.canonicalEqual(
+                                old.getJSONArray("physicalCards"),
+                                next.getJSONArray("physicalCards"));
+                        if(inventoriesChanged){
+                            JSONObject candidate=new JSONObject().put("candidate",next);
+                            NativePeerInventoryApply.applyInventoryPart(
+                                this,durable,catalog,live,candidate);
+                        }
+                        String fullBackup=recovery;
+                        runOnUiThread(()->writePeerWebData(old,next,error->{
+                            if(error!=null){
+                                new android.app.AlertDialog.Builder(this)
+                                    .setTitle("USB first-sync recovery needed")
+                                    .setMessage("Deck/artwork verification failed: "+error+
+                                        "\\n\\nAndroid backup: "+fullBackup+
+                                        "\\nDo not sync again before recovery.")
+                                    .setPositiveButton("OK",null).show();
+                                return;
+                            }
+                            refreshAfterPeerInventory();
+                            finishUsbFirstSync(link,windows);
+                        }));
+                    }catch(Exception error){
+                        String location=recovery;
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("USB first-sync apply failed")
+                            .setMessage(error.getMessage()+
+                                "\\n\\n"+(location==null?"No writes started.":
+                                    "Full Android recovery snapshot: "+location))
+                            .setPositiveButton("OK",null).show());
+                    }
+                });
+            }catch(Exception error){
+                toast("USB first-sync review is stale: "+error.getMessage());
+            }
+        });
+    }
+
+    /** Second USB exchange confirms both sides really match. Windows first
+     * saves its verified checkpoint; Android then saves the peer snapshot. */
+    private void finishUsbFirstSync(String link,JSONObject windows) {
+        finishUsbFirstSync(link,windows,false);
+    }
+    private void finishUsbFirstSync(String link,JSONObject windows,
+            boolean windowsWillUpdate) {
+        withPeerData((decks,art)->{
+            try {
+                JSONObject current=com.arcanevault.mobile.next.NativePeerSync.export(
+                    durable,peerId(),decks,art);
+                workers.execute(()->{
+                    try {
+                        JSONObject differences=com.arcanevault.mobile.next.NativePeerSync
+                            .preview(current,windows);
+                        if(!windowsWillUpdate && differences.getJSONArray("changes").length()!=0)
+                            throw new IOException("Local data did not match the selected sync source");
+                        JSONObject response=com.arcanevault.mobile.next.NativeWirelessPeerClient
+                            .exchangeUsb(link,current);
+                        if(!"paired".equals(response.optString("status")))
+                            throw new IOException("Windows did not confirm a matching baseline");
+                        JSONObject verified=response.getJSONObject("windows");
+                        String path=NativePeerCheckpoint.saveIdentical(
+                            this,current,verified);
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("USB sync paired successfully")
+                            .setMessage("Windows and Android now contain the same recognized "+
+                                "records. A matching shared baseline was saved on both "+
+                                "devices.\\n\\nAndroid checkpoint: "+path+
+                                "\\n\\nFuture USB syncs can use differential merging.")
+                            .setPositiveButton("OK",null).show());
+                    }catch(Exception error){
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("USB sync not yet paired")
+                            .setMessage("Shared baseline confirmation failed: "+
+                                error.getMessage()+
+                                "\\n\\nAny applied data remains saved; check the "+
+                                "recovery snapshots before repeating pairing.")
+                            .setPositiveButton("OK",null).show());
+                    }
+                });
+            }catch(Exception error){toast("USB confirmation failed: "+error.getMessage());}
+        });
     }
 
     @Override protected void onNewIntent(Intent intent) {

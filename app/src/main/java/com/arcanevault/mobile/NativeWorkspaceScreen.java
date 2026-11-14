@@ -495,9 +495,12 @@ final class NativeWorkspaceScreen {
             "Connect one Android phone to Windows using a USB data cable. Enable "+
             "USB debugging and approve the computer. In Windows Data & Sync, choose "+
             "Share Sync to Phone (USB) or Receive & Review Phone Sync (USB). "+
-            "Windows opens this app with a one-time localhost link; approve the "+
-            "transfer here, then review differences against your shared "+
-            "baseline. Wi-Fi and QR codes are not required.",null);
+            "Windows opens this app with a one-time localhost link. On the first "+
+            "connection, choose First USB Sync / Create Shared Baseline on "+
+            "Windows: Arcane Vault compares both devices, asks which data to "+
+            "retain if they differ, then verifies and saves matching baselines "+
+            "automatically. Future USB transfers use the normal reviewed delta "+
+            "sync. Wi-Fi and QR codes are not required.",null);
         button("Scan Windows Wi-Fi QR code",
             ()->((MainActivity)activity).scanWirelessPeerQr());
         button("Scan QR & review Windows changes",

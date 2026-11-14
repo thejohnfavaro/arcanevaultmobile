@@ -83,6 +83,32 @@ public final class NativeWirelessPeerClient {
     public static void sendUsb(String link,JSONObject peer)throws Exception {
         sendTo(validateUsb(link),peer);
     }
+    /** First-pair two-phase USB exchange. POST a complete verified peer snapshot
+     * and receive a bounded JSON review or matching-baseline acknowledgement. */
+    public static JSONObject exchangeUsb(String link,JSONObject snapshot)throws Exception {
+        byte[] bytes=snapshot.toString().getBytes(StandardCharsets.UTF_8);
+        if(bytes.length<20||bytes.length>MAX)
+            throw new IllegalArgumentException("USB first-sync snapshot exceeds 30 MiB");
+        HttpURLConnection c=connection(validateUsb(link),"POST");
+        try {
+            c.setReadTimeout(120000); // Includes Windows first-pair approval.
+            c.setDoOutput(true);
+            c.setFixedLengthStreamingMode(bytes.length);
+            c.setRequestProperty("Content-Type","application/json");
+            try(OutputStream out=c.getOutputStream()){out.write(bytes);}
+            if(c.getResponseCode()!=200)
+                throw new IllegalStateException("USB first pairing rejected (HTTP "+
+                    c.getResponseCode()+")");
+            if(c.getContentLengthLong()>MAX)
+                throw new IllegalStateException("USB baseline reply exceeds 30 MiB");
+            JSONObject reply=new JSONObject(new String(readBounded(c.getInputStream(),MAX),
+                StandardCharsets.UTF_8));
+            if("error".equals(reply.optString("status")))
+                throw new IllegalStateException(reply.optString("message","Windows baseline failed"));
+            return reply;
+        }finally{c.disconnect();}
+    }
+
     private static void sendTo(URL url,JSONObject peer)throws Exception {
         byte[] bytes=peer.toString().getBytes(StandardCharsets.UTF_8);
         if(bytes.length<20||bytes.length>MAX)
