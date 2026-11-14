@@ -55,6 +55,17 @@ final class NativeCatalogScreen {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService artworkWorker = Executors.newFixedThreadPool(2);
+    private final ExecutorService pagePrefetchWorker=Executors.newSingleThreadExecutor();
+    // Read-only page results, keyed by the full filter snapshot. Only retain
+    // three pages to avoid holding thousands of JSON objects in memory.
+    private final java.util.LinkedHashMap<String,JSONObject> pageCache=
+        new java.util.LinkedHashMap<String,JSONObject>(4,0.75f,true) {
+            @Override protected boolean removeEldestEntry(
+                    java.util.Map.Entry<String,JSONObject> eldest) {
+                return size()>3;
+            }
+        };
+    private final java.util.HashSet<String> queuedPageArt=new java.util.HashSet<>();
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
     private String source = "both", owned = "all", query = "";
@@ -214,6 +225,8 @@ final class NativeCatalogScreen {
         inspectorRequest++;
         worker.shutdownNow();
         artworkWorker.shutdownNow();
+        pagePrefetchWorker.shutdownNow();
+        pageCache.clear();queuedPageArt.clear();
     }
     private int dp(float n) { return (int)(activity.getResources().getDisplayMetrics().density*n+.5f); }
     private TextView text(String value,int size,boolean bold) {
@@ -377,8 +390,17 @@ final class NativeCatalogScreen {
                 options.put("arena","");
                 options.put("page",Integer.toString(selectedPage));
                 options.put("size","40");
-                JSONObject response=printingMode?catalog.ownedPhysicalPrintings(options):catalog.search(options);
+                // All 40 record rows are fetched in one query and retained for
+                // back/forward navigation. Never reuse a stale filter result.
+                String cacheKey=new java.util.TreeMap<>(options).toString()+
+                    "|confirmed="+printingMode;
+                JSONObject response=pageCache.get(cacheKey);
+                if(response==null) {
+                    response=printingMode?catalog.ownedPhysicalPrintings(options):catalog.search(options);
+                    pageCache.put(cacheKey,response);
+                }
                 if(disposed || id!=request.get())return;
+                prefetchPageArtwork(cacheKey,response,printingMode);
                 ui.post(() -> {
                     if(disposed || id!=request.get() || activity.isFinishing())return;
                     render(response,selectedPage,src,printingMode);
@@ -391,6 +413,38 @@ final class NativeCatalogScreen {
                 });
             }
         });
+    }
+
+    /** Warm the existing on-disk, 200 MiB Scryfall artwork cache for the
+     * entire 40-row page. Work is sequential and bounded off the UI thread;
+     * foreground thumbnail requests continue to use their own executor. */
+    private void prefetchPageArtwork(String cacheKey,JSONObject response,
+            boolean printingMode) {
+        if(!queuedPageArt.add(cacheKey))return;
+        JSONArray rows=response.optJSONArray("cards");
+        if(rows==null)return;
+        final java.util.ArrayList<String> urls=new java.util.ArrayList<>();
+        for(int i=0;i<rows.length()&&i<40;i++){
+            JSONObject item=rows.optJSONObject(i);
+            if(item==null)continue;
+            JSONObject imageData=printingMode?item.optJSONObject("printing"):
+                item.optJSONObject("meta");
+            String url=imageData==null?"":imageData.optString("image","");
+            if(url.startsWith("https://cards.scryfall.io/")&&!urls.contains(url))
+                urls.add(url);
+        }
+        pagePrefetchWorker.execute(()->{
+            for(String url:urls) {
+                if(disposed||Thread.currentThread().isInterrupted())return;
+                try { artwork.get(url); }
+                catch(Exception ignored) { /* Offline browsing keeps all text. */ }
+            }
+        });
+    }
+
+    private void invalidatePageCache(){
+        pageCache.clear();
+        queuedPageArt.clear();
     }
 
     private void render(JSONObject response,int selectedPage,String src,boolean printingMode) {
@@ -750,7 +804,8 @@ final class NativeCatalogScreen {
         inspectorContent.addView(edit,new LinearLayout.LayoutParams(-1,dp(48)));
         edit.setOnClickListener(v->new NativePhysicalEditor(activity,inventory,catalog)
             .edit(name,printing,()->{
-                // Return to refreshed official printing + ownership projection.
+                // The local inventory changed; no stale owned counts may remain.
+                invalidatePageCache();
                 schedule();
                 previous.run();
             }));
