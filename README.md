@@ -17,6 +17,12 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.1.1: Windows / Android peer exchange
+
+- Native **Data & Sync** now exports a peer snapshot containing physical printings, Arena quantities, saved decks and preferred artwork; it reads deck/art data from the existing WebView origin.
+- **Preview Windows / Android peer file** compares record identities and shows conflicting, missing or new records without changing any data. On Windows use the matching Arcane Vault Next **Data & Sync** peer export/preview controls.
+- This is the safe interchange and comparison milestone. **Changes are not yet automatically merged or applied**; a verified shared baseline and explicit conflict decisions are required first.
+
 ## Android v2.1.0: native workspace review build
 
 - Native **Sets**, **Decks**, and **Data & Sync** screens join the existing Home/Catalog/Physical/Arena navigation.
