@@ -58,14 +58,16 @@ final class NativeCatalogScreen {
     private final ExecutorService pagePrefetchWorker=Executors.newSingleThreadExecutor();
     // Read-only page results, keyed by the full filter snapshot. Only retain
     // three pages to avoid holding thousands of JSON objects in memory.
-    private final java.util.LinkedHashMap<String,JSONObject> pageCache=
+    private final java.util.Map<String,JSONObject> pageCache=
+        java.util.Collections.synchronizedMap(
         new java.util.LinkedHashMap<String,JSONObject>(4,0.75f,true) {
             @Override protected boolean removeEldestEntry(
                     java.util.Map.Entry<String,JSONObject> eldest) {
                 return size()>3;
             }
-        };
-    private final java.util.HashSet<String> queuedPageArt=new java.util.HashSet<>();
+        });
+    private final java.util.Set<String> queuedPageArt=
+        java.util.Collections.synchronizedSet(new java.util.HashSet<>());
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
     private String source = "both", owned = "all", query = "";
@@ -401,9 +403,10 @@ final class NativeCatalogScreen {
                 }
                 if(disposed || id!=request.get())return;
                 prefetchPageArtwork(cacheKey,response,printingMode);
+                final JSONObject pageResponse=response;
                 ui.post(() -> {
                     if(disposed || id!=request.get() || activity.isFinishing())return;
-                    render(response,selectedPage,src,printingMode);
+                    render(pageResponse,selectedPage,src,printingMode);
                 });
             }catch(Exception error){
                 ui.post(() -> {
