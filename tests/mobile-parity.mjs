@@ -75,8 +75,12 @@ assert.ok(html.includes("save('setHideZeroV1'"),'Set Progress filter must persis
 
 
 assert.equal(html.trimEnd().endsWith('</body></html>'),true,'No stray content may follow closing HTML');
-assert.match(gradle,/versionName '2\.1\.5'/);
-assert.match(gradle,/versionCode 61/);
+const versionName=gradle.match(/versionName '([0-9]+\.[0-9]+\.[0-9]+)'/);
+const versionCode=gradle.match(/versionCode ([1-9][0-9]*)/);
+assert.ok(versionName,'Android must have a valid semantic versionName');
+assert.ok(versionCode,'Android must have a positive integer versionCode');
+assert.ok(fs.existsSync(path.join(root,'releases',`android-v${versionName[1]}.md`)),
+  'Android release notes must match the current version');
 for (const id of ['avInventoryResetPanel','avClearScope','avClearPhrase','avClearAcknowledged',
  'avClearExecute','avClearUndo','avClearStatus'])
  assert.ok(html.includes('id="'+id+'"'),'Missing guarded inventory-reset UI: '+id);
