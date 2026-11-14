@@ -60,6 +60,26 @@ public final class NativePeerSyncTest {
         assertEquals(0,comparison.getJSONArray("changes").length());
     }
 
+    @Test public void threeWayDistinguishesIndependentChangesAndConflicts()throws Exception {
+        JSONObject base=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject local=peer("00000000-0000-4000-8000-000000000701",5);
+        JSONObject remote=peer("00000000-0000-4000-8000-000000000702",4);
+        remote.getJSONObject("data").getJSONArray("physicalCards")
+            .put(new JSONObject().put("name","Counterspell").put("qty",2)
+                .put("set","2XM").put("number","47")
+                .put("scryfallId","22222222-2222-4222-8222-222222222222"));
+        JSONObject clean=NativePeerSync.compareWithBaseline(local,remote,base);
+        assertEquals(1,clean.getInt("localOnly"));
+        assertEquals(1,clean.getInt("incomingOnly"));
+        assertEquals(0,clean.getInt("conflicts"));
+        assertFalse(clean.getBoolean("safeToAutoApply"));
+        remote.getJSONObject("data").getJSONArray("cards")
+            .getJSONObject(0).put("qty",6);
+        JSONObject divergent=NativePeerSync.compareWithBaseline(local,remote,base);
+        assertEquals(1,divergent.getInt("conflicts"));
+        assertFalse(divergent.getBoolean("safeToAutoApply"));
+    }
+
     @Test public void malformedAndDuplicateDecksRejected()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject peer=peer("00000000-0000-4000-8000-000000000702",4);
