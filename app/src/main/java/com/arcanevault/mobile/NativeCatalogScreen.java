@@ -21,6 +21,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.GridLayout;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
 import android.widget.EditText;
@@ -57,6 +58,8 @@ final class NativeCatalogScreen {
     private String setCode="",typeFilter="",rarityFilter="",roleFilter="",sortMode="";
     private String exactColorIdentity="";
     private boolean advancedOpen=false;
+    private boolean artGrid=false;
+    private Button viewModeButton;
     private LinearLayout advancedFilters;
     private Button advancedButton;
     private final java.util.Map<String,Button> identityButtons=new java.util.LinkedHashMap<>();
@@ -157,6 +160,15 @@ final class NativeCatalogScreen {
             if(onlyOwnedPhysicalPrintings){source="physical";owned="owned";}
             page=0;updateCollectionFilters();schedule();
         });
+        LinearLayout toolRow=VaultNativeStyle.row(activity);
+        viewModeButton=VaultNativeStyle.button(activity,"Card Art",false);
+        toolRow.addView(viewModeButton,new LinearLayout.LayoutParams(0,dp(42),1));
+        viewModeButton.setOnClickListener(v->{
+            artGrid=!artGrid;
+            viewModeButton.setText(artGrid?"Detailed List":"Card Art");
+            schedule();
+        });
+        layout.addView(toolRow);
         advancedButton=VaultNativeStyle.button(activity,"Filters & Sort  ▾",false);
         LinearLayout.LayoutParams advancedButtonParams=new LinearLayout.LayoutParams(-1,dp(42));
         advancedButtonParams.bottomMargin=dp(6);
@@ -384,10 +396,21 @@ final class NativeCatalogScreen {
                 "No cards found. If your catalog is empty, sync Scryfall data in Legacy tools.",14,false));
             return;
         }
+        GridLayout gallery=null;
+        if(artGrid&&!printingMode){
+            gallery=new GridLayout(activity);
+            gallery.setColumnCount(2);
+            gallery.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+            results.addView(gallery,new LinearLayout.LayoutParams(-1,-2));
+        }
         for(int i=0;i<count;i++){
             JSONObject row=rows.optJSONObject(i);
             if(row==null)continue;
             if(printingMode){renderOwnedPrintingRow(row);continue;}
+            if(gallery!=null){
+                renderArtworkTile(gallery,row,i);
+                continue;
+            }
             String name=row.optString("name","Unknown card");
             JSONObject meta=row.optJSONObject("meta");
             String type=meta==null?"":meta.optString("type","");
@@ -445,6 +468,50 @@ final class NativeCatalogScreen {
         next.setOnClickListener(v -> { page++; schedule(); });
         results.addView(pager);
     }
+    /** A compact, 2-column card-art browser with the same inspect action as
+     * detailed rows. Images come only from the existing guarded cache. */
+    private void renderArtworkTile(GridLayout gallery,JSONObject row,int index) {
+        JSONObject meta=row.optJSONObject("meta");
+        String name=row.optString("name","Unknown card");
+        String imageUrl=meta==null?"":meta.optString("image","");
+        String type=meta==null?"":meta.optString("type","");
+        String oracle=meta==null?"":meta.optString("oracle","");
+        String rarity=meta==null?"":meta.optString("rarity","");
+        int arenaQty=row.optInt("arenaQty",0),physicalQty=row.optInt("physicalQty",0);
+        int screenWidth=activity.getResources().getDisplayMetrics().widthPixels;
+        int cardWidth=Math.max(dp(120),(screenWidth-dp(72))/2);
+        LinearLayout tile=VaultNativeStyle.column(activity);
+        tile.setPadding(dp(8),dp(8),dp(8),dp(9));
+        VaultNativeStyle.surface(activity,tile,false);
+        ImageView image=new ImageView(activity);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        image.setContentDescription("Official card artwork for "+name);
+        tile.addView(image,new LinearLayout.LayoutParams(-1,
+            Math.round((cardWidth-dp(16))*1.4f)));
+        loadThumbnail(image,imageUrl);
+        TextView label=text(name,13,true);
+        label.setMaxLines(2);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tile.addView(label);
+        TextView ownedInfo=text(
+            (physicalQty>0?"Physical ×"+physicalQty+" ":"")+
+            (arenaQty>0?"Arena ×"+arenaQty:""),11,false);
+        ownedInfo.setTextColor(VaultNativeStyle.SUBTEXT);
+        ownedInfo.setMaxLines(1);
+        tile.addView(ownedInfo);
+        tile.setContentDescription(name+", "+(physicalQty+arenaQty)+
+            " owned copies. Tap to inspect");
+        tile.setOnClickListener(v->
+            showDetails(name,type,oracle,rarity,imageUrl,arenaQty,physicalQty));
+        GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
+        cell.width=cardWidth;
+        cell.height=-2;
+        cell.rowSpec=GridLayout.spec(index/2);
+        cell.columnSpec=GridLayout.spec(index%2);
+        cell.setMargins(dp(3),dp(3),dp(3),dp(3));
+        gallery.addView(tile,cell);
+    }
+
     private void renderOwnedPrintingRow(JSONObject row) {
         JSONObject printing=row.optJSONObject("printing");
         if(printing==null)return;
