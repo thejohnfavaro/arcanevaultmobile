@@ -142,6 +142,57 @@ public final class NativePeerSync {
         return canonical(a).equals(canonical(b));
     }
 
+    private static Map<String,String> flatten(JSONObject data)throws Exception {
+        Map<String,String> result=new HashMap<>();
+        for(String group:new String[]{"cards","physicalCards","deckLibrary"}){
+            Map<String,JSONObject> records=index(group,data.getJSONArray(group));
+            for(Map.Entry<String,JSONObject> record:records.entrySet())
+                result.put(group+"\\u001f"+record.getKey(),canonical(record.getValue()));
+        }
+        JSONObject artwork=data.getJSONObject("preferredArtwork");
+        for(java.util.Iterator<String> it=artwork.keys();it.hasNext();){
+            String key=it.next();
+            result.put("preferredArtwork\\u001f"+key,canonical(artwork.get(key)));
+        }
+        return result;
+    }
+
+    /** Advanced three-way classification. A supplied baseline is not proof
+     *  of authenticated pairing, so this method never enables automatic apply. */
+    public static JSONObject compareWithBaseline(JSONObject local,JSONObject incoming,
+            JSONObject baseline)throws Exception {
+        Map<String,String> own=flatten(require(local));
+        Map<String,String> remote=flatten(require(incoming));
+        Map<String,String> base=flatten(require(baseline));
+        Set<String> all=new TreeSet<>();
+        all.addAll(own.keySet());all.addAll(remote.keySet());all.addAll(base.keySet());
+        JSONArray changes=new JSONArray();
+        int incomingOnly=0,localOnly=0,conflicts=0;
+        for(String combined:all){
+            String localValue=own.get(combined);
+            String remoteValue=remote.get(combined);
+            String original=base.get(combined);
+            if(java.util.Objects.equals(localValue,remoteValue))continue;
+            String decision;
+            if(java.util.Objects.equals(localValue,original)){
+                decision="Incoming only";incomingOnly++;
+            } else if(java.util.Objects.equals(remoteValue,original)){
+                decision="Local only";localOnly++;
+            } else {
+                decision="Conflict";conflicts++;
+            }
+            int separator=combined.indexOf("\\u001f");
+            changes.put(new JSONObject()
+                .put("group",combined.substring(0,separator))
+                .put("key",combined.substring(separator+1))
+                .put("decision",decision)
+                .put("incomingDeletion",remoteValue==null));
+        }
+        return new JSONObject().put("incomingOnly",incomingOnly)
+            .put("localOnly",localOnly).put("conflicts",conflicts)
+            .put("records",changes).put("safeToAutoApply",false);
+    }
+
     /** Overview only; never writes either local storage or SQLite. */
     public static JSONObject preview(JSONObject local,JSONObject incoming)throws Exception {
         JSONObject data=require(incoming);
