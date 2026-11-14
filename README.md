@@ -17,6 +17,13 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.1.4: reviewed peer inventory write-back
+
+- Native Data & Sync offers **Review & apply peer inventory**: provide the latest peer snapshot and the previously common baseline, inspect conflict-free changes, then explicitly confirm.
+- Physical printings and Arena quantities are merged into the durable Android collection with a crash-recovery journal and SQLite reindex; concurrent edits or missing-record deletions are refused.
+- Android **does not yet apply saved deck or artwork changes** because these remain authoritative in WebView storage. Windows 0.9.96 can apply those with a verified workspace rollback after approval.
+- Peer sync still uses a user-selected baseline and has no automatic cross-device commit; use trusted LAN only.
+
 ## Android v2.1.3: Set Progress filtering and scan-to-sync
 
 - Set Progress now supports Physical/Arena scope, hide empty sets, newest/oldest release date, name and completion sorting, and an owned-only checklist. The filters persist across visits.
