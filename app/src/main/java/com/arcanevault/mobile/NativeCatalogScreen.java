@@ -71,6 +71,7 @@ final class NativeCatalogScreen {
     private LinearLayout sourceFilters, ownershipFilters;
     private int page = 0;
     private volatile boolean disposed;
+    private boolean filtersReady=false;
 
     NativeCatalogScreen(Activity activity, CatalogStore catalog, ArtworkCache artwork, SharedPreferences inventory) {
         this.activity = activity;
@@ -179,6 +180,7 @@ final class NativeCatalogScreen {
         browseContent.addView(results);
         scroll.addView(browseContent);
         layout.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        filtersReady=true;
         schedule();
     }
 
@@ -329,6 +331,7 @@ final class NativeCatalogScreen {
     }
 
     private void schedule() {
+        if(!filtersReady)return;
         final int id=request.incrementAndGet();
         final String q=query, src=source, scope=owned;
         final String selectedSet=setCode, selectedType=typeFilter,
