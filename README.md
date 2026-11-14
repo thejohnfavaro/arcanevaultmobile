@@ -17,6 +17,12 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.1.2: Wi-Fi peer review and phone system-bar safe areas
+
+- Windows can create a five-minute, one-time Wi-Fi link. Android Data & Sync can **Receive Windows sync over Wi-Fi** for a dry-run comparison, or **Send phone sync over Wi-Fi** for review on Windows. No files, cables or cloud service required.
+- Trusted local network only: HTTP transfer with random bearer URLs, size limits and no redirect following; no automatic merge or remote writes.
+- Android 15+ native and Legacy screens respect the bottom navigation/gesture bar, status bar and display cutouts so actions do not sit underneath system UI.
+
 ## Android v2.1.1: Windows / Android peer exchange
 
 - Native **Data & Sync** now exports a peer snapshot containing physical printings, Arena quantities, saved decks and preferred artwork; it reads deck/art data from the existing WebView origin.
