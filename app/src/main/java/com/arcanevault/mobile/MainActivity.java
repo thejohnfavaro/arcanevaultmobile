@@ -45,7 +45,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
-    private static final int FILE_PICK = 21, FILE_SAVE = 22;
+    private static final int FILE_PICK = 21, FILE_SAVE = 22, PEER_PICK = 23;
     private static final int APP_PORT = 18765;
     private static final String COLLECTION_PREFS = "arcane_vault_collections_v1";
     private static final String RECOVERY_PATH = "/__arcane_recover__";
@@ -169,6 +169,107 @@ public class MainActivity extends Activity {
                         }catch(Exception error){callback.accept("[]");}
                     });
             }));
+    }
+
+    /** Reads deck/art data from the authoritative legacy origin, fail-closed. */
+    private interface PeerDataCallback { void use(String decks,String art); }
+    private void withPeerData(PeerDataCallback callback) {
+        String url=browser.getUrl();
+        if(url==null || appUrl==null || !url.startsWith(appUrl)){
+            toast("Open Legacy tools once to load saved decks before peer sync");
+            return;
+        }
+        browser.evaluateJavascript(
+            "(function(){try{let d=localStorage.getItem('vault_libraryV3');"+
+            "let a=localStorage.getItem('vault_preferredArtworkV1');"+
+            "return JSON.stringify({decks:JSON.parse(d||'[]'),art:JSON.parse(a||'{}')})"+
+            "}catch(e){return 'SYNC_ERROR'}})()", result -> {
+                try {
+                    Object decoded=new org.json.JSONTokener(result).nextValue();
+                    if(!(decoded instanceof String) || "SYNC_ERROR".equals(decoded))
+                        throw new IllegalStateException("Stored deck data is not readable");
+                    JSONObject envelope=new JSONObject((String)decoded);
+                    callback.use(envelope.getJSONArray("decks").toString(),
+                        envelope.getJSONObject("art").toString());
+                } catch(Exception error) {
+                    toast("Peer sync cannot read decks/artwork: "+error.getMessage());
+                }
+            });
+    }
+    private String peerId() {
+        String id=durable.getString("peer_sync_device_id_v1",null);
+        if(id!=null)return id;
+        id=java.util.UUID.randomUUID().toString();
+        if(!durable.edit().putString("peer_sync_device_id_v1",id).commit())
+            throw new IllegalStateException("Could not save device identity");
+        return id;
+    }
+    void exportPeerSync() {
+        withPeerData((decks,art)->{
+            try{
+                JSONObject envelope=com.arcanevault.mobile.next.NativePeerSync
+                    .export(durable,peerId(),decks,art);
+                byte[] bytes=envelope.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                if(bytes.length>com.arcanevault.mobile.next.NativePeerSync.MAX_BYTES)
+                    throw new IllegalArgumentException("Peer snapshot too large");
+                pendingExport=bytes;
+                Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                save.addCategory(Intent.CATEGORY_OPENABLE);
+                save.setType("application/json");
+                save.putExtra(Intent.EXTRA_TITLE,"ArcaneVault-PeerSync-"+
+                    java.time.LocalDate.now()+".json");
+                startActivityForResult(save,FILE_SAVE);
+            }catch(Exception error){pendingExport=null;toast("Peer export failed: "+error.getMessage());}
+        });
+    }
+    void previewPeerSync() {
+        Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        pick.addCategory(Intent.CATEGORY_OPENABLE);
+        pick.setType("application/json");
+        startActivityForResult(pick,PEER_PICK);
+    }
+    private void previewPeerUri(Uri uri) {
+        if(uri==null)return;
+        withPeerData((decks,art)->{
+            try {
+                JSONObject local=com.arcanevault.mobile.next.NativePeerSync
+                    .export(durable,peerId(),decks,art);
+                workers.execute(()->{
+                    try(java.io.InputStream input=getContentResolver().openInputStream(uri)){
+                        if(input==null)throw new IOException("Peer file unavailable");
+                        java.io.ByteArrayOutputStream buffer=new java.io.ByteArrayOutputStream();
+                        byte[] chunk=new byte[8192];int n;
+                        while((n=input.read(chunk))!=-1){
+                            if(buffer.size()+n>com.arcanevault.mobile.next.NativePeerSync.MAX_BYTES)
+                                throw new IOException("Peer file exceeds 30 MiB limit");
+                            buffer.write(chunk,0,n);
+                        }
+                        JSONObject remote=new JSONObject(buffer.toString("UTF-8"));
+                        JSONObject result=com.arcanevault.mobile.next.NativePeerSync
+                            .preview(local,remote);
+                        org.json.JSONArray changes=result.getJSONArray("changes");
+                        StringBuilder message=new StringBuilder()
+                            .append(changes.length()).append(" record differences · ")
+                            .append(result.getInt("conflicts")).append(" existing/deleted record conflicts")
+                            .append("\\n").append(result.getInt("equal")).append(" matching records")
+                            .append("\\n\\nThis is a dry-run preview. No collection or deck has been changed. ")
+                            .append("Without a shared sync baseline, we do not auto-apply conflicts.");
+                        for(int i=0;i<Math.min(changes.length(),10);i++){
+                            JSONObject row=changes.getJSONObject(i);
+                            message.append("\\n").append(row.getString("action"))
+                                .append(" · ").append(row.getString("group")).append(": ")
+                                .append(row.getString("key"));
+                        }
+                        if(changes.length()>10)message.append("\\n… and ")
+                            .append(changes.length()-10).append(" more");
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("Windows / Android peer comparison")
+                            .setMessage(message.toString()).setPositiveButton("Close",null).show());
+                    }catch(Exception error){runOnUiThread(()->toast(
+                        "Could not preview peer file: "+error.getMessage()));}
+                });
+            }catch(Exception error){toast("Peer preview unavailable: "+error.getMessage());}
+        });
     }
 
     /** Preferred artwork uses the existing legacy library key; no duplicate map. */
@@ -519,6 +620,8 @@ public class MainActivity extends Activity {
             Uri chosen = result==RESULT_OK && data!=null?data.getData():null;
             if(pickerCallback!=null)pickerCallback.onReceiveValue(chosen==null?null:new Uri[]{chosen});
             pickerCallback=null;
+        } else if(request==PEER_PICK){
+            if(result==RESULT_OK && data!=null)previewPeerUri(data.getData());
         } else if(request==FILE_SAVE){
             if(result==RESULT_OK && data!=null && data.getData()!=null && pendingExport!=null){
                 try(OutputStream stream=getContentResolver().openOutputStream(data.getData())){
