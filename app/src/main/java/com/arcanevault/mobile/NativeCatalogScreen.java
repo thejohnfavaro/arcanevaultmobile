@@ -8,6 +8,9 @@ import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.widget.ImageView;
+import android.widget.HorizontalScrollView;
+import android.view.Gravity;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
@@ -43,6 +46,7 @@ final class NativeCatalogScreen {
     private final TextView status;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService artworkWorker = Executors.newFixedThreadPool(2);
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
     private String source = "all", owned = "all", query = "";
@@ -56,8 +60,9 @@ final class NativeCatalogScreen {
         this.artwork = artwork;
         layout = new LinearLayout(activity);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(14),dp(8),dp(14),dp(12));
-        TextView title = text("Card Catalog",24,true);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(10));
+        layout.setBackgroundColor(VaultNativeStyle.BACKGROUND);
+        TextView title = text("Card Catalog",26,true);
         layout.addView(title);
         status = text("Searching on-device Scryfall catalog…",12,false);
         status.setTextColor(MUTED);
@@ -66,8 +71,11 @@ final class NativeCatalogScreen {
         search.setSingleLine(true);
         search.setTextColor(TEXT);
         search.setHintTextColor(MUTED);
-        search.setHint("Search card name, type or Oracle text");
-        layout.addView(search);
+        search.setHint("Search cards, types, abilities…");
+        VaultNativeStyle.search(activity,search);
+        LinearLayout.LayoutParams searchParams=new LinearLayout.LayoutParams(-1,dp(48));
+        searchParams.topMargin=dp(12);searchParams.bottomMargin=dp(12);
+        layout.addView(search,searchParams);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
             public void onTextChanged(CharSequence s,int start,int before,int count) {
@@ -79,24 +87,34 @@ final class NativeCatalogScreen {
         filters.setOrientation(LinearLayout.HORIZONTAL);
         for (String item : new String[]{"All cards", "Arena", "Not on Arena"}) {
             Button b = button(item);
-            filters.addView(b,new LinearLayout.LayoutParams(0,dp(48),1));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
+            lp.rightMargin=dp(7);filters.addView(b,lp);
             b.setOnClickListener(v -> {
                 source = item.equals("All cards") ? "all" : item.equals("Arena") ? "arena" : "paper";
                 page = 0; schedule();
             });
         }
-        layout.addView(filters);
+        HorizontalScrollView sourceScroll=new HorizontalScrollView(activity);
+        sourceScroll.setHorizontalScrollBarEnabled(false);
+        sourceScroll.addView(filters);
+        layout.addView(sourceScroll);
         LinearLayout ownership = new LinearLayout(activity);
         ownership.setOrientation(LinearLayout.HORIZONTAL);
         for (String item : new String[]{"Any Arena qty", "Arena owned", "Arena missing"}) {
             Button b = button(item);
-            ownership.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
+            lp.rightMargin=dp(7);ownership.addView(b,lp);
             b.setOnClickListener(v -> {
                 owned = item.equals("Arena owned") ? "owned" : item.equals("Arena missing") ? "unowned" : "all";
                 page = 0; schedule();
             });
         }
-        layout.addView(ownership);
+        HorizontalScrollView ownedScroll=new HorizontalScrollView(activity);
+        ownedScroll.setHorizontalScrollBarEnabled(false);
+        ownedScroll.addView(ownership);
+        LinearLayout.LayoutParams ownedParams=new LinearLayout.LayoutParams(-1,-2);
+        ownedParams.topMargin=dp(6);ownedParams.bottomMargin=dp(14);
+        layout.addView(ownedScroll,ownedParams);
         ScrollView scroll = new ScrollView(activity);
         results = new LinearLayout(activity);
         results.setOrientation(LinearLayout.VERTICAL);
@@ -110,25 +128,23 @@ final class NativeCatalogScreen {
         disposed = true;
         request.incrementAndGet();
         worker.shutdownNow();
+        artworkWorker.shutdownNow();
     }
     private int dp(float n) { return (int)(activity.getResources().getDisplayMetrics().density*n+.5f); }
     private TextView text(String value,int size,boolean bold) {
-        TextView t=new TextView(activity);
-        t.setText(value); t.setTextSize(size); t.setTextColor(TEXT);
-        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        t.setPadding(dp(8),dp(10),dp(8),dp(10));
+        TextView t=VaultNativeStyle.label(activity,value,size,VaultNativeStyle.TEXT,bold);
+        t.setPadding(dp(4),dp(8),dp(4),dp(8));
         return t;
     }
     private Button button(String value) {
-        Button b=new Button(activity);b.setAllCaps(false);b.setText(value);b.setTextSize(11);
-        b.setPadding(0,0,0,0); return b;
+        return VaultNativeStyle.button(activity,value,false);
     }
 
     private void schedule() {
         final int id=request.incrementAndGet();
         final String q=query, src=source, scope=owned;
         final int selectedPage=page;
-        status.setText("Searching…");
+        status.setText("Searching your catalog…");
         worker.execute(() -> {
             try {
                 Map<String,String> options=new HashMap<>();
@@ -157,7 +173,7 @@ final class NativeCatalogScreen {
         int total=response.optInt("total",0);
         JSONArray rows=response.optJSONArray("cards");
         int count=rows==null?0:rows.length();
-        status.setText(total+" matching cards • page "+(selectedPage+1)
+        status.setText(total+" cards found • page "+(selectedPage+1)
                 +("paper".equals(src)?" • non-Arena catalog":"arena".equals(src)?" • Arena catalog":""));
         if(total==0){
             results.addView(text("No cards found. If your catalog is empty, sync Scryfall data in Legacy tools.",14,false));
@@ -172,19 +188,43 @@ final class NativeCatalogScreen {
             String rarity=meta==null?"":meta.optString("rarity","");
             String oracle=meta==null?"":meta.optString("oracle","");
             String colors=meta==null?"":meta.optJSONArray("colors")==null?"":meta.optJSONArray("colors").toString();
-            LinearLayout entry=new LinearLayout(activity);
-            entry.setOrientation(LinearLayout.VERTICAL);
-            entry.setPadding(dp(12),dp(8),dp(12),dp(8));
-            entry.setBackgroundColor(PANEL);
-            entry.addView(text(name+"  ·  "+rarity,16,true));
-            TextView sub=text(type+"  •  "+colors,12,false);
-            sub.setTextColor(MUTED);
-            entry.addView(sub);
+            LinearLayout entry=VaultNativeStyle.row(activity);
+            entry.setPadding(dp(10),dp(10),dp(12),dp(10));
+            VaultNativeStyle.surface(activity,entry,false);
             String imageUrl=meta==null?"":meta.optString("image","");
+            ImageView thumb=new ImageView(activity);
+            thumb.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            thumb.setContentDescription("Card artwork for "+name);
+            thumb.setBackground(VaultNativeStyle.rounded(activity,VaultNativeStyle.ELEVATED,
+                VaultNativeStyle.BORDER,8));
+            LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
+            imageParams.rightMargin=dp(14);entry.addView(thumb,imageParams);
+            TextView placeholder=text("✦",23,true);
+            placeholder.setTextColor(VaultNativeStyle.GOLD);
+            thumb.setImageDrawable(null);
+            loadThumbnail(thumb,imageUrl);
+            LinearLayout detail=VaultNativeStyle.column(activity);
+            TextView nameView=text(name,16,true);
+            nameView.setMaxLines(2);
+            nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            detail.addView(nameView);
+            TextView typeView=text(type,12,false);
+            typeView.setMaxLines(1);
+            typeView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            typeView.setTextColor(VaultNativeStyle.SUBTEXT);
+            detail.addView(typeView);
             int arenaQty=row.optInt("qty",0);
+            String rarityLabel=rarity.isEmpty()?"Card":rarity.substring(0,1).toUpperCase(java.util.Locale.ROOT)+rarity.substring(1);
+            TextView metadata=text(rarityLabel+
+                (arenaQty>0?"   •   Arena ×"+arenaQty:""),12,true);
+            metadata.setTextColor(arenaQty>0?VaultNativeStyle.PRIMARY:VaultNativeStyle.GOLD);
+            detail.addView(metadata);
+            entry.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
+            entry.setContentDescription(name+", "+type+", "+rarityLabel+
+                (arenaQty>0?", Arena copies "+arenaQty:"")+". Tap to inspect");
             entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,arenaQty));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
-            lp.bottomMargin=dp(5);
+            lp.bottomMargin=dp(9);
             results.addView(entry,lp);
         }
         LinearLayout pager=new LinearLayout(activity);
@@ -198,6 +238,28 @@ final class NativeCatalogScreen {
         next.setOnClickListener(v -> { page++; schedule(); });
         results.addView(pager);
     }
+    /** Artwork is loaded off-thread, using the existing guarded Scryfall cache. */
+    private void loadThumbnail(ImageView target,String imageUrl) {
+        if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
+        artworkWorker.execute(() -> {
+            try {
+                byte[] encoded=artwork.get(imageUrl);
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inSampleSize=4;
+                Bitmap bitmap=BitmapFactory.decodeByteArray(encoded,0,encoded.length,options);
+                if(bitmap==null)return;
+                ui.post(() -> {
+                    if(disposed || activity.isFinishing() || target.getWindowToken()==null) {
+                        bitmap.recycle();return;
+                    }
+                    target.setImageBitmap(bitmap);
+                });
+            } catch(Exception ignored) {
+                // Offline users retain searchable card names and metadata.
+            }
+        });
+    }
+
     private void showDetails(String name,String type,String oracle,String rarity,String imageUrl,int arenaQty) {
         LinearLayout body=new LinearLayout(activity);
         body.setOrientation(LinearLayout.VERTICAL);
