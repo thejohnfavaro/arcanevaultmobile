@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
     private boolean nativeHomeVisible = false;
     private byte[] pendingExport;
     private Uri pendingPeerComparison;
+    private boolean pendingPeerApply;
     private HttpServerLite server;
     private ExecutorService workers;
     private CatalogStore catalog;
@@ -141,6 +142,20 @@ public class MainActivity extends Activity {
         });
         workers = Executors.newCachedThreadPool();
         catalog = new CatalogStore(getApplicationContext());
+        // Recover interrupted peer inventory commits before opening native UI.
+        // Do not continue if restoring the backed-up SQLite mirrors fails.
+        try {
+            NativePeerInventoryApply.recoverIfPending(this,durable,catalog);
+        } catch(Exception recoveryError) {
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Arcane Vault recovery required")
+                .setMessage("An interrupted peer update could not be recovered. "+
+                    "The previous collection backup remains on this device. "+
+                    "Do not reinstall or clear app storage.\n\n"+
+                    recoveryError.getMessage())
+                .setCancelable(false).setPositiveButton("Close app",(d,w)->finish()).show();
+            return;
+        }
         artwork = new ArtworkCache(getApplicationContext());
         try {
             try { server = new HttpServerLite(APP_PORT); }
@@ -323,7 +338,15 @@ public class MainActivity extends Activity {
         pick.setType("application/json");
         startActivityForResult(pick,PEER_PICK);
     }
+    void reviewAndApplyPeerInventory() {
+        pendingPeerApply=true;
+        selectLatestPeerForThreeWay();
+    }
     void previewThreeWayPeerSync() {
+        pendingPeerApply=false;
+        selectLatestPeerForThreeWay();
+    }
+    private void selectLatestPeerForThreeWay() {
         Intent latest=new Intent(Intent.ACTION_OPEN_DOCUMENT);
         latest.addCategory(Intent.CATEGORY_OPENABLE);
         latest.setType("application/json");
