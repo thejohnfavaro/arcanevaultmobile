@@ -58,7 +58,7 @@ final class NativeWorkspaceScreen {
             EditText search=new EditText(activity);
             VaultNativeStyle.search(activity,search);
             search.setHint("Search physical set progress");
-            root.addView(search,3,new LinearLayout.LayoutParams(-1,dp(48)));
+            root.addView(search,2,new LinearLayout.LayoutParams(-1,dp(48)));
             search.addTextChangedListener(new TextWatcher(){
                 public void beforeTextChanged(CharSequence s,int start,int count,int after){}
                 public void onTextChanged(CharSequence s,int start,int before,int count){
@@ -194,11 +194,7 @@ final class NativeWorkspaceScreen {
                     String commander=d.optString("commander","");
                     int count=qty;
                     row(name,commander+" · "+qty+" total cards · "+d.optString("folder","Unfiled"),
-                        ()->new AlertDialog.Builder(activity).setTitle(name)
-                            .setMessage("Commander: "+commander+"\n"+
-                                count+" cards · "+(entries==null?0:entries.length())+" unique mainboard entries"+
-                                "\n\nFull editing and import remain in Legacy tools.")
-                            .setPositiveButton("Close",null).show());
+                        ()->showDeck(d));
                 }
                 button("Open deck editing tools",legacy);
             }catch(Exception e){
@@ -207,6 +203,53 @@ final class NativeWorkspaceScreen {
             }
         }));
     }
+    private void showDeck(JSONObject deck){
+        executor.execute(()->{
+            try{
+                Map<String,Integer> owned=new HashMap<>();
+                for(String key:new String[]{"vault_physicalCollectionV1","vault_cards"}){
+                    JSONArray cards=new JSONArray(prefs.getString(key,"[]"));
+                    if(cards.length()>150000)throw new IllegalStateException("Inventory safety limit exceeded");
+                    for(int i=0;i<cards.length();i++){
+                        JSONObject card=cards.optJSONObject(i);if(card==null)continue;
+                        String name=card.optString("name","").toLowerCase(java.util.Locale.ROOT);
+                        owned.put(name,owned.getOrDefault(name,0)+Math.max(0,card.optInt("qty",0)));
+                    }
+                }
+                JSONArray entries=deck.optJSONArray("entries");
+                StringBuilder list=new StringBuilder("Commander: "+
+                    deck.optString("commander","")+
+                    "\nCombined physical/Arena ownership · read-only\n\n");
+                int missing=0;
+                if(entries!=null)for(int i=0;i<entries.length();i++){
+                    JSONObject e=entries.optJSONObject(i);
+                    if(e==null)continue;
+                    String name=e.optString("name","");
+                    int qty=Math.max(0,e.optInt("qty",0));
+                    int have=owned.getOrDefault(name.toLowerCase(java.util.Locale.ROOT),0);
+                    int need=Math.max(0,qty-have);
+                    missing+=need;
+                    list.append(qty).append(" × ").append(name);
+                    if(need>0)list.append("  · missing ").append(need);
+                    list.append("\n");
+                }
+                int missingCount=missing;
+                ui.post(()->{
+                    if(closed||activity.isFinishing())return;
+                    TextView text=VaultNativeStyle.label(activity,list.toString(),14,
+                        VaultNativeStyle.TEXT,false);
+                    text.setPadding(dp(18),dp(12),dp(18),dp(12));
+                    ScrollView scroll=new ScrollView(activity);scroll.addView(text);
+                    new AlertDialog.Builder(activity)
+                        .setTitle(deck.optString("name","Untitled deck")+
+                            (missingCount>0?" · "+missingCount+" missing":" · owned"))
+                        .setView(scroll).setPositiveButton("Close",null)
+                        .setNeutralButton("Edit in Legacy", (d,w)->legacy.run()).show();
+                });
+            }catch(Exception e){ui.post(()->info("Deck details unavailable: "+e.getMessage()));}
+        });
+    }
+
     private void dataSync(){
         content.removeAllViews();
         status.setText("Local-first tools · existing collection preserved");
