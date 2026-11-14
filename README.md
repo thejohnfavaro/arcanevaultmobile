@@ -17,6 +17,12 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.0.32: native printing inspection
+
+- In the native Catalog, open a card and tap **Browse printings & physical copies** to inspect official sets, collector numbers, printings and cached card artwork.
+- Confirmed physical copy quantities come from the authoritative native inventory and require matching Scryfall printing identity or unambiguous set + collector number. Name-only and conflicting rows appear as unresolved, not fabricated set ownership.
+- This milestone is read-only; editing owned printings, preferred artwork and full collection reconciliation remain in Legacy tools until their native safeguards are implemented.
+
 ## Android v2.0.31: native Card Catalog
 
 - **Catalog** in native navigation searches the existing SQLite Scryfall catalog without starting an HTML card browser.
