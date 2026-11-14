@@ -575,6 +575,42 @@ public class MainActivity extends Activity {
     }
     private void readPeerBaseline(Uri latest) {
         if(latest==null)return;
+        // When a Windows peer has already been confirmed identical, reuse its
+        // durable checkpoint without making users hunt for the JSON file.
+        // This is only a source for the same reviewed three-way merge; it does
+        // not authorize unattended writes or skip the approval dialog.
+        if(pendingPeerApply){
+            workers.execute(()->{
+                try{
+                    JSONObject remote=loadPeerFile(latest);
+                    String peerDevice=remote.getString("deviceId");
+                    if(NativePeerCheckpoint.exists(this,peerDevice)){
+                        JSONObject previous=NativePeerCheckpoint.load(this,peerDevice);
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("Use remembered Windows baseline?")
+                            .setMessage("Arcane Vault found the previously confirmed "+
+                                "matching snapshot for this Windows device. Compare "+
+                                "the two versions and review only the differences? "+
+                                "No changes will be applied without approval.")
+                            .setNegativeButton("Choose file",(d,w)->selectManualPeerBaseline(latest))
+                            .setNeutralButton("Cancel",(d,w)->pendingPeerComparison=null)
+                            .setPositiveButton("Compare changes",(d,w)->{
+                                pendingPeerComparison=null;
+                                applyPeerInventorySnapshot(()->remote,()->previous);
+                            }).show());
+                        return;
+                    }
+                    runOnUiThread(()->selectManualPeerBaseline(latest));
+                }catch(Exception error){
+                    runOnUiThread(()->toast("Could not inspect Windows snapshot: "+
+                        error.getMessage()));
+                }
+            });
+            return;
+        }
+        selectManualPeerBaseline(latest);
+    }
+    private void selectManualPeerBaseline(Uri latest) {
         pendingPeerComparison=latest;
         new android.app.AlertDialog.Builder(this)
             .setTitle("Select your shared baseline")
