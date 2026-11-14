@@ -50,6 +50,8 @@ final class NativeCatalogScreen {
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
     private String source = "both", owned = "all", query = "";
+    private boolean onlyOwnedPhysicalPrintings = false;
+    private Button printingFilter;
     private LinearLayout sourceFilters, ownershipFilters;
     private int page = 0;
     private volatile boolean disposed;
@@ -98,6 +100,7 @@ final class NativeCatalogScreen {
             lp.rightMargin=dp(7);filters.addView(button,lp);
             button.setOnClickListener(v -> {
                 source=selection;page=0;
+                if(!"physical".equals(source))onlyOwnedPhysicalPrintings=false;
                 updateCollectionFilters();schedule();
             });
         }
@@ -118,6 +121,7 @@ final class NativeCatalogScreen {
             lp.rightMargin=dp(7);ownership.addView(button,lp);
             button.setOnClickListener(v -> {
                 owned=selection;page=0;
+                onlyOwnedPhysicalPrintings=false;
                 updateCollectionFilters();schedule();
             });
         }
@@ -127,6 +131,16 @@ final class NativeCatalogScreen {
         LinearLayout.LayoutParams ownedParams=new LinearLayout.LayoutParams(-1,-2);
         ownedParams.bottomMargin=dp(14);
         layout.addView(ownedScroll,ownedParams);
+        printingFilter=VaultNativeStyle.button(activity,"Owned physical printings",false);
+        LinearLayout.LayoutParams printingParams=new LinearLayout.LayoutParams(-1,dp(44));
+        printingParams.bottomMargin=dp(12);
+        layout.addView(printingFilter,printingParams);
+        printingFilter.setOnClickListener(v -> {
+            onlyOwnedPhysicalPrintings=!onlyOwnedPhysicalPrintings;
+            if(onlyOwnedPhysicalPrintings){source="physical";owned="owned";}
+            page=0;updateCollectionFilters();schedule();
+        });
+        updateCollectionFilters();
         ScrollView scroll = new ScrollView(activity);
         results = new LinearLayout(activity);
         results.setOrientation(LinearLayout.VERTICAL);
@@ -153,6 +167,14 @@ final class NativeCatalogScreen {
     }
 
     private void updateCollectionFilters() {
+        printingFilter.setVisibility("physical".equals(source)?View.VISIBLE:View.GONE);
+        printingFilter.setText(onlyOwnedPhysicalPrintings?
+            "✓ Owned physical printings (exact editions)" : "Show owned physical printings");
+        printingFilter.setTextColor(onlyOwnedPhysicalPrintings?
+            VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
+        printingFilter.setBackground(VaultNativeStyle.rounded(activity,
+            onlyOwnedPhysicalPrintings?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
+            onlyOwnedPhysicalPrintings?Color.TRANSPARENT:VaultNativeStyle.BORDER,11));
         String[] sources={"both","arena","physical"};
         for(int i=0;i<sourceFilters.getChildCount();i++) {
             Button item=(Button)sourceFilters.getChildAt(i);
@@ -176,6 +198,7 @@ final class NativeCatalogScreen {
     private void schedule() {
         final int id=request.incrementAndGet();
         final String q=query, src=source, scope=owned;
+        final boolean printingMode=onlyOwnedPhysicalPrintings && "physical".equals(src);
         final int selectedPage=page;
         status.setText("Searching your catalog…");
         worker.execute(() -> {
@@ -188,11 +211,11 @@ final class NativeCatalogScreen {
                 options.put("arena","");
                 options.put("page",Integer.toString(selectedPage));
                 options.put("size","40");
-                JSONObject response=catalog.search(options);
+                JSONObject response=printingMode?catalog.ownedPhysicalPrintings(options):catalog.search(options);
                 if(disposed || id!=request.get())return;
                 ui.post(() -> {
                     if(disposed || id!=request.get() || activity.isFinishing())return;
-                    render(response,selectedPage,src);
+                    render(response,selectedPage,src,printingMode);
                 });
             }catch(Exception error){
                 ui.post(() -> {
@@ -204,20 +227,25 @@ final class NativeCatalogScreen {
         });
     }
 
-    private void render(JSONObject response,int selectedPage,String src) {
+    private void render(JSONObject response,int selectedPage,String src,boolean printingMode) {
         results.removeAllViews();
         int total=response.optInt("total",0);
         JSONArray rows=response.optJSONArray("cards");
         int count=rows==null?0:rows.length();
-        status.setText(total+" cards found • page "+(selectedPage+1)
+        status.setText(total+(printingMode?" confirmed owned printings":" cards found")+
+                " • page "+(selectedPage+1)
                 +("physical".equals(src)?" • Physical Collection":"arena".equals(src)?" • Arena Collection":" • Both Collections"));
         if(total==0){
-            results.addView(text("No cards found. If your catalog is empty, sync Scryfall data in Legacy tools.",14,false));
+            results.addView(text(printingMode?
+                "No confirmed printings found. Name-only physical cards stay in Physical → Owned, "+
+                "but are not assigned to a set. Sync printing metadata or restore verified IDs in Legacy tools.":
+                "No cards found. If your catalog is empty, sync Scryfall data in Legacy tools.",14,false));
             return;
         }
         for(int i=0;i<count;i++){
             JSONObject row=rows.optJSONObject(i);
             if(row==null)continue;
+            if(printingMode){renderOwnedPrintingRow(row);continue;}
             String name=row.optString("name","Unknown card");
             JSONObject meta=row.optJSONObject("meta");
             String type=meta==null?"":meta.optString("type","");
@@ -275,6 +303,42 @@ final class NativeCatalogScreen {
         next.setOnClickListener(v -> { page++; schedule(); });
         results.addView(pager);
     }
+    private void renderOwnedPrintingRow(JSONObject row) {
+        JSONObject printing=row.optJSONObject("printing");
+        if(printing==null)return;
+        String name=row.optString("name","Unknown card");
+        String set=printing.optString("set","").toUpperCase(java.util.Locale.ROOT);
+        String collector=printing.optString("collectorNumber","");
+        String imageUrl=printing.optString("image","");
+        int confirmed=printing.optInt("confirmedPhysicalCopies",0);
+        LinearLayout card=VaultNativeStyle.row(activity);
+        card.setPadding(dp(10),dp(10),dp(12),dp(10));
+        VaultNativeStyle.surface(activity,card,false);
+        ImageView art=new ImageView(activity);
+        art.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        art.setContentDescription("Owned printing artwork for "+name+" "+set+" "+collector);
+        art.setBackground(VaultNativeStyle.rounded(activity,VaultNativeStyle.ELEVATED,
+            VaultNativeStyle.BORDER,8));
+        LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
+        imageParams.rightMargin=dp(14);
+        card.addView(art,imageParams);
+        loadThumbnail(art,imageUrl);
+        LinearLayout labels=VaultNativeStyle.column(activity);
+        TextView title=text(name,16,true);title.setMaxLines(2);labels.addView(title);
+        TextView setInfo=text(set+" #"+collector+" • "+printing.optString("setName",""),12,false);
+        setInfo.setMaxLines(2);setInfo.setTextColor(VaultNativeStyle.SUBTEXT);
+        labels.addView(setInfo);
+        TextView copies=text("Physical ×"+confirmed+" • "+printing.optString("rarity",""),12,true);
+        copies.setTextColor(VaultNativeStyle.PRIMARY);labels.addView(copies);
+        card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+        card.setContentDescription(name+", "+set+" collector "+collector+
+            ", confirmed physical copies "+confirmed+". Tap to inspect edition");
+        card.setOnClickListener(v -> showPrintingDetail(name,printing,imageUrl));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+        lp.bottomMargin=dp(9);
+        results.addView(card,lp);
+    }
+
     /** Artwork is loaded off-thread, using the existing guarded Scryfall cache. */
     private void loadThumbnail(ImageView target,String imageUrl) {
         if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;

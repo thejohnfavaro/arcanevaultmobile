@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.0.34 (Android Studio project)
+# Arcane Vault for Android — v2.0.35 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
@@ -16,6 +16,12 @@
 - A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
+
+## Android v2.0.35: Owned Physical Printings
+
+- Within **Physical**, use **Show owned physical printings** to browse confirmed editions with individual set/collector and Scryfall artwork, not every printing of an owned card name.
+- The mode uses only unambiguous printing identities from the local physical inventory mirror and indexed Scryfall printings; missing/contradictory IDs and name-only entries are not guessed. These remain visible in the regular Physical/Owned name list.
+- Read-only feature. Legacy tools remain available for changing ownership or importing corrected printing identities.
 
 ## Android v2.0.34: Physical Collection in native Catalog
 
