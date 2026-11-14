@@ -476,8 +476,10 @@ final class NativeCatalogScreen {
         pager.addView(next,new LinearLayout.LayoutParams(0,dp(48),1));
         back.setEnabled(selectedPage>0);
         next.setEnabled((selectedPage+1)*40<total);
-        back.setOnClickListener(v -> { page=Math.max(0,page-1); schedule(); });
-        next.setOnClickListener(v -> { page++; schedule(); });
+        back.setOnClickListener(v -> { page=Math.max(0,page-1); schedule();
+            browseScroll.post(()->browseScroll.smoothScrollTo(0,0)); });
+        next.setOnClickListener(v -> { page++; schedule();
+            browseScroll.post(()->browseScroll.smoothScrollTo(0,0)); });
         results.addView(pager);
     }
     /** A compact, 2-column card-art browser with the same inspect action as
