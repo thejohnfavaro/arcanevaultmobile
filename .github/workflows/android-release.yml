@@ -67,6 +67,7 @@ jobs:
           node tests/native-owned-printings.mjs
           node tests/native-workspace.mjs
           node tests/native-peer-sync.mjs
+          node tests/native-window-insets.mjs
       - name: Test printing-aware ownership contract
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Validate signing credentials
