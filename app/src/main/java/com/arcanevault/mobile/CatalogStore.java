@@ -345,6 +345,13 @@ final class CatalogStore extends SQLiteOpenHelper {
         return "physical".equals(get(p,"source"))?"physical_ownership":"ownership";
     }
     private static String get(Map<String,String> p,String name){return p.getOrDefault(name,"").trim();}
+    /** Search literal rules text; never interpret typed % or _ as SQL wildcards. */
+    private static String oracleKeyword(Map<String,String> p) {
+        String keyword=get(p,"oracle");
+        if(keyword.length()>120)throw new IllegalArgumentException(
+            "Keyword search is limited to 120 characters");
+        return keyword.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");
+    }
     JSONObject search(Map<String,String> p)throws Exception{
         String scope=get(p,"scope"),color=get(p,"colors"),role=get(p,"role"),sort=get(p,"sort"),arena=get(p,"arena");
         // Legacy web callers omit source: keep Arena semantics for compatibility.
@@ -367,6 +374,10 @@ final class CatalogStore extends SQLiteOpenHelper {
             args.add(requestedSet);
         }
         if(!get(p,"type").isEmpty()){where.append(" AND c.type LIKE ?");args.add("%"+get(p,"type")+"%");}
+        if(!get(p,"oracle").isEmpty()){
+            where.append(" AND c.oracle LIKE ? ESCAPE '\\'");
+            args.add("%"+oracleKeyword(p)+"%");
+        }
         if(!get(p,"rarity").isEmpty()){where.append(" AND c.rarity=?");args.add(get(p,"rarity"));}
         String mvMin=get(p,"mvMin"),mvMax=get(p,"mvMax");
         double min=mvMin.isEmpty()?0:Double.parseDouble(mvMin);
@@ -531,6 +542,10 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(!get(p,"type").isEmpty()){
             from.append(" AND c.type LIKE ?");
             filter.add("%"+get(p,"type")+"%");
+        }
+        if(!get(p,"oracle").isEmpty()){
+            from.append(" AND c.oracle LIKE ? ESCAPE '\\'");
+            filter.add("%"+oracleKeyword(p)+"%");
         }
 
         String mvMin=get(p,"mvMin"),mvMax=get(p,"mvMax");
