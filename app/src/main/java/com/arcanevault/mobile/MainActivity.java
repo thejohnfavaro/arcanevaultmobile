@@ -327,10 +327,20 @@ public class MainActivity extends Activity {
                                     }
                                     if(changes.length()>12)message.append("\n… and ")
                                         .append(changes.length()-12).append(" more");
-                                    runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                                        .setTitle("Windows peer snapshot")
-                                        .setMessage(message.toString())
-                                        .setPositiveButton("Close",null).show());
+                                    boolean same=changes.length()==0 &&
+                                        !local.optString("deviceId").equalsIgnoreCase(
+                                            remote.optString("deviceId"));
+                                    runOnUiThread(()->{
+                                        android.app.AlertDialog.Builder dialog=
+                                            new android.app.AlertDialog.Builder(this)
+                                            .setTitle("Windows peer snapshot")
+                                            .setMessage(message.toString())
+                                            .setPositiveButton("Close",null);
+                                        if(same)dialog.setNeutralButton(
+                                            "Remember shared baseline",
+                                            (d,w)->rememberMatchingWirelessBaseline(remote));
+                                        dialog.show();
+                                    });
                                 }
                             }catch(Exception error){runOnUiThread(()->toast(
                                 "Wi-Fi peer review failed: "+error.getMessage()));}
@@ -487,6 +497,10 @@ public class MainActivity extends Activity {
     }
     private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,Uri baseline) {
         if(baseline==null)return;
+        applyPeerInventorySnapshot(incoming,()->loadPeerFile(baseline));
+    }
+    private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,
+            PeerSnapshotLoader baseline) {
         withPeerData((decks,art)->{
             try{
                 JSONObject local=com.arcanevault.mobile.next.NativePeerSync
@@ -494,7 +508,7 @@ public class MainActivity extends Activity {
                 workers.execute(()->{
                     try{
                         JSONObject remote=incoming.load();
-                        JSONObject original=loadPeerFile(baseline);
+                        JSONObject original=baseline.load();
                         JSONObject proposal=com.arcanevault.mobile.next.NativePeerSync
                             .prepareMerge(local,remote,original);
                         JSONObject candidate=proposal.getJSONObject("candidate");
