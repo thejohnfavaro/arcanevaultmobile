@@ -465,7 +465,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             args.add("C".equals(colors)?"":canonical.toString());
         }
         SQLiteDatabase db=getReadableDatabase();int count=0;
-        try(Cursor c=db.rawQuery("SELECT COUNT(*)"+from,args.toArray(new String[0])){
+        try(Cursor c=db.rawQuery("SELECT COUNT(*)"+from,args.toArray(new String[0]))){
             if(c.moveToFirst())count=c.getInt(0);
         }
         java.util.ArrayList<String> paged=new java.util.ArrayList<>(args);
