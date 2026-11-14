@@ -26,6 +26,26 @@ public final class NativePeerSyncTest {
             .put("deviceId",device)
             .put("revision","a".repeat(64)).put("data",data);
     }
+    @Test public void anonymousPhysicalRowsCannotBeMatchedAcrossDevices()throws Exception {
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",4);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",4);
+        windows.getJSONObject("data").getJSONArray("physicalCards").put(
+            new JSONObject().put("qty",1).put("set","").put("number",""));
+        try {
+            NativePeerSync.preview(android,windows);
+            fail("anonymous physical row should not be treated as a printing");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("card name or printing ID"));
+        }
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",4);
+        try {
+            NativePeerSync.prepareMerge(android,windows,baseline);
+            fail("anonymous physical row should never merge into local inventory");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("card name or printing ID"));
+        }
+    }
+
     @Test public void identicalPeerIsNoop()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject other=peer("00000000-0000-4000-8000-000000000702",4);
