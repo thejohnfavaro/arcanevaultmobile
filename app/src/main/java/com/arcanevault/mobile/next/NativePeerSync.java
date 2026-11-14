@@ -89,7 +89,8 @@ public final class NativePeerSync {
             for(String column:new String[]{"scryfallId","name","set","number","finish",
                     "language","condition","location","purchasePrice"}){
                 if(key.length()>0)key.append("|");
-                key.append(norm(row.optString(column,"")));
+                String part=norm(row.optString(column,""));
+                key.append(part.length()).append(':').append(part);
             }
             result=key.toString();
         }
