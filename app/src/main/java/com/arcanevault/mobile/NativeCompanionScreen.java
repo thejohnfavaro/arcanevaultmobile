@@ -36,6 +36,8 @@ final class NativeCompanionScreen {
     private final Activity activity;
     private final SharedPreferences prefs;
     private final Runnable openLegacy;
+    private final CatalogStore catalog;
+    private NativeCatalogScreen nativeCatalog;
     private final LinearLayout root;
     private final LinearLayout content;
     private final TextView heading;
@@ -52,9 +54,10 @@ final class NativeCompanionScreen {
         CardRow(String name, int qty) { this.name = name; this.qty = qty; }
     }
 
-    private NativeCompanionScreen(Activity activity, SharedPreferences prefs, Runnable openLegacy) {
+    private NativeCompanionScreen(Activity activity, SharedPreferences prefs, CatalogStore catalog, Runnable openLegacy) {
         this.activity = activity;
         this.prefs = prefs;
+        this.catalog = catalog;
         this.openLegacy = openLegacy;
         root = column();
         root.setBackgroundColor(BG);
@@ -66,11 +69,12 @@ final class NativeCompanionScreen {
         root.addView(message);
         LinearLayout nav = new LinearLayout(activity);
         nav.setOrientation(LinearLayout.HORIZONTAL);
-        for (String tab : new String[]{"Home", "Physical", "Arena", "Legacy tools"}) {
+        for (String tab : new String[]{"Home", "Catalog", "Physical", "Arena", "Legacy tools"}) {
             Button action = button(tab);
             nav.addView(action, new LinearLayout.LayoutParams(0, dp(48), 1));
             action.setOnClickListener(v -> {
                 if (tab.equals("Legacy tools")) { openLegacy.run(); return; }
+                if (nativeCatalog != null) { nativeCatalog.close(); nativeCatalog = null; }
                 scope = tab.toLowerCase(java.util.Locale.ROOT);
                 query = "";
                 visibleCount = PAGE_SIZE;
@@ -88,8 +92,8 @@ final class NativeCompanionScreen {
         refresh();
     }
 
-    static View create(Activity activity, SharedPreferences prefs, Runnable openLegacy) {
-        return new NativeCompanionScreen(activity, prefs, openLegacy).root;
+    static View create(Activity activity, SharedPreferences prefs, CatalogStore catalog, Runnable openLegacy) {
+        return new NativeCompanionScreen(activity, prefs, catalog, openLegacy).root;
     }
 
     private int dp(float value) { return (int)(value * activity.getResources().getDisplayMetrics().density + .5f); }
@@ -178,6 +182,11 @@ final class NativeCompanionScreen {
 
     private void render() {
         content.removeAllViews();
+        if (scope.equals("catalog")) {
+            nativeCatalog = new NativeCatalogScreen(activity, catalog);
+            content.addView(nativeCatalog.view(), new LinearLayout.LayoutParams(-1, dp(540)));
+            return;
+        }
         if (scope.equals("home")) {
             panel("Your collection", "Native Android companion • no WebView required for this screen");
             panel("Physical cards", String.format(java.util.Locale.US,
