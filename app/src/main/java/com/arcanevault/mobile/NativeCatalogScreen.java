@@ -143,7 +143,7 @@ final class NativeCatalogScreen {
                 updateCollectionFilters();schedule();
             });
         }
-        HorizontalScrollView sourceScroll=new HorizontalScrollView(activity);
+        HorizontalScrollView sourceScroll=VaultNativeStyle.horizontalScroll(activity);
         sourceScroll.setHorizontalScrollBarEnabled(false);
         sourceScroll.addView(filters);
         layout.addView(sourceScroll);
@@ -164,7 +164,7 @@ final class NativeCatalogScreen {
                 updateCollectionFilters();schedule();
             });
         }
-        HorizontalScrollView ownedScroll=new HorizontalScrollView(activity);
+        HorizontalScrollView ownedScroll=VaultNativeStyle.horizontalScroll(activity);
         ownedScroll.setHorizontalScrollBarEnabled(false);
         ownedScroll.addView(ownership);
         LinearLayout.LayoutParams ownedParams=new LinearLayout.LayoutParams(-1,-2);
@@ -203,7 +203,7 @@ final class NativeCatalogScreen {
             advancedButton.setText(advancedOpen?"Filters & Sort  ▴":"Filters & Sort  ▾");
         });
         updateCollectionFilters();
-        browseScroll = new ScrollView(activity);
+        browseScroll = VaultNativeStyle.scroll(activity);
         results = new LinearLayout(activity);
         results.setOrientation(LinearLayout.VERTICAL);
         LinearLayout browseContent=VaultNativeStyle.column(activity);
@@ -213,7 +213,7 @@ final class NativeCatalogScreen {
         layout.addView(browseScroll,new LinearLayout.LayoutParams(-1,0,1));
         inspectorContent=VaultNativeStyle.column(activity);
         inspectorContent.setPadding(dp(8),dp(5),dp(8),dp(20));
-        inspectorScroll=new ScrollView(activity);
+        inspectorScroll=VaultNativeStyle.scroll(activity);
         inspectorScroll.setFillViewport(false);
         inspectorScroll.addView(inspectorContent);
         inspectorScroll.setVisibility(View.GONE);
@@ -946,7 +946,7 @@ final class NativeCatalogScreen {
             }
         };
         more.run();
-        ScrollView scroll=new ScrollView(activity);
+        ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.addView(body);
         new AlertDialog.Builder(activity).setTitle("Choose a printing")
             .setView(scroll).setPositiveButton("Done",null).show();
@@ -980,7 +980,7 @@ final class NativeCatalogScreen {
             preference.setOnClickListener(v->((MainActivity)activity)
                 .savePreferredArtwork(name,printing.optString("id",""),imageUrl));
         }
-        ScrollView scroll=new ScrollView(activity);
+        ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.addView(layout);
         AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name)
             .setView(scroll).setPositiveButton("Close",null).show();
