@@ -356,6 +356,16 @@ final class CatalogStore extends SQLiteOpenHelper {
         if("arena".equals(arena))where.append(" AND c.arena=1");else if("paper".equals(arena))where.append(" AND c.arena=0");
         if("unowned".equals(scope))where.append(" AND ").append(quantity).append("=0");else if("owned".equals(scope))where.append(" AND ").append(quantity).append(">0");
         if(!get(p,"q").isEmpty()){where.append(" AND (c.name LIKE ? OR c.oracle LIKE ? OR c.type LIKE ? OR c.setcode LIKE ?)");String q="%"+get(p,"q").substring(0,Math.min(160,get(p,"q").length()))+"%";for(int i=0;i<4;i++)args.add(q);}
+        if(!get(p,"set").isEmpty()){
+            String requestedSet=get(p,"set");
+            if(!requestedSet.matches("[a-zA-Z0-9]{1,12}"))
+                throw new IllegalArgumentException("Set code must be 1–12 letters or digits");
+            // Cards retain one representative set code. For exact printing
+            // searches use the confirmed-printings mode instead.
+            where.append(" AND EXISTS (SELECT 1 FROM variants vs WHERE vs.name=c.name "+
+                "AND vs.setcode=? COLLATE NOCASE)");
+            args.add(requestedSet);
+        }
         if(!get(p,"type").isEmpty()){where.append(" AND c.type LIKE ?");args.add("%"+get(p,"type")+"%");}
         if(!get(p,"rarity").isEmpty()){where.append(" AND c.rarity=?");args.add(get(p,"rarity"));}
         // Exact color identity choice(s): OR across selections, never fuzzy subsets.
