@@ -451,9 +451,9 @@ final class NativeWorkspaceScreen {
                     (state.optString("error","").isEmpty()?"":"\n"+state.optString("error","")));
             }catch(Exception e){info("Sync status unavailable: "+e.getMessage());}
         });
-        row("PC ↔ Android peer sync",
-            "Export a lossless snapshot or preview incoming changes before synchronization. "+
-            "Peer preview never overwrites your data.",null);
+        row("PC ↔ Android inventory sync",
+            "Compare Windows and Android against their shared baseline, then review "+
+            "per-card quantity changes before applying them to Android.",null);
         row("Wi-Fi peer exchange (trusted home network)",
             "Transfer snapshots wirelessly with a one-time link from Windows. "+
             "Five-minute one-use links. Review-only by default; applying an "+
@@ -498,7 +498,7 @@ final class NativeWorkspaceScreen {
                         });
                     }).show();
             });
-        button("Review & apply peer inventory",
+        button("Sync Windows inventory differences",
             ()->((MainActivity)activity).reviewAndApplyPeerInventory());
         button("Three-way compare (known shared baseline)",
             ()->((MainActivity)activity).previewThreeWayPeerSync());
