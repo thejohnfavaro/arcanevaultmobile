@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const insets=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/NativeSystemInsets.java','utf8');
+const activity=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/MainActivity.java','utf8');
+const manifest=fs.readFileSync('app/src/main/AndroidManifest.xml','utf8');
+assert.match(insets,/SDK_INT<35/,'Older devices already use system-bar constrained content');
+assert.match(insets,/WindowInsets\.Type\.systemBars\(\) \| WindowInsets\.Type\.displayCutout\(\)/);
+assert.match(insets,/final int bottom=root\.getPaddingBottom\(\)/);
+assert.match(insets,/bottom\+safe\.bottom/,'Bottom rows must clear system navigation area');
+assert.match(insets,/top\+safe\.top/,'Top controls must clear cutout/status bar');
+assert.match(insets,/return insets/,'Insets must not be consumed from dialogs and children');
+assert.match(activity,/NativeSystemInsets\.apply\(this,nativeRoot\)/);
+assert.match(activity,/NativeSystemInsets\.apply\(this,browser\)/);
+assert.match(manifest,/windowSoftInputMode="adjustResize"/,'Input screens need keyboard resize');
+console.log('PASS: Android navigation/status/cutout insets apply across native and legacy screens');

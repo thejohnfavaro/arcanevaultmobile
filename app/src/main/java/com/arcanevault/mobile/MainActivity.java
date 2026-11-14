@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
         durable = getSharedPreferences(COLLECTION_PREFS, MODE_PRIVATE);
         browser = new WebView(this);
         browser.setBackgroundColor(Color.rgb(13,16,23));
+        NativeSystemInsets.apply(this,browser);
         setContentView(browser);
         WebSettings webSettings = browser.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -158,7 +159,7 @@ public class MainActivity extends Activity {
     /** Native-first shell. Preserve legacy WebView and origin recovery. */
     private void showNativeHome() {
         nativeHomeVisible = true;
-        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork,
+        View nativeRoot=NativeCompanionScreen.create(this, durable, catalog, artwork,
             this::showLegacyTools, callback -> {
                 // Read the WebView's authoritative saved-deck library. The native
                 // screen is a projection and never writes a duplicate database.
@@ -169,7 +170,9 @@ public class MainActivity extends Activity {
                             callback.accept(value instanceof String?(String)value:"[]");
                         }catch(Exception error){callback.accept("[]");}
                     });
-            }));
+            });
+        NativeSystemInsets.apply(this,nativeRoot);
+        setContentView(nativeRoot);
     }
 
     /** Reads deck/art data from the authoritative legacy origin, fail-closed. */
@@ -205,6 +208,72 @@ public class MainActivity extends Activity {
             throw new IllegalStateException("Could not save device identity");
         return id;
     }
+    /** One-use LAN peer link entry: never sync by guessing an unverified URL. */
+    void wirelessPeerReview(boolean send) {
+        android.widget.EditText address=new android.widget.EditText(this);
+        address.setSingleLine(true);
+        address.setTextSize(13);
+        address.setHint("http://192.168.x.x:port/arcane-peer/token");
+        address.setInputType(android.text.InputType.TYPE_CLASS_TEXT|
+            android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(send?"Send Android snapshot to Windows":"Receive Windows snapshot")
+            .setMessage("Start the matching Wi-Fi offer in Windows Data & Sync, then paste its one-time link. "+
+                "Use a trusted home Wi-Fi network: the current LAN transfer is HTTP and unencrypted. "+
+                "Only a read-only comparison will be performed.")
+            .setView(address)
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton(send?"Send for review":"Compare",(dialog,which)->{
+                String link=address.getText().toString().trim();
+                try{com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(link);}
+                catch(Exception error){toast("Invalid wireless link: "+error.getMessage());return;}
+                withPeerData((decks,art)->{
+                    try{
+                        JSONObject local=com.arcanevault.mobile.next.NativePeerSync
+                            .export(durable,peerId(),decks,art);
+                        workers.execute(()->{
+                            try{
+                                if(send) {
+                                    com.arcanevault.mobile.next.NativeWirelessPeerClient.send(link,local);
+                                    runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                        .setTitle("Snapshot sent for Windows review")
+                                        .setMessage("Windows received the Android snapshot. "+
+                                            "No collection or deck was changed on either device.")
+                                        .setPositiveButton("OK",null).show());
+                                } else {
+                                    JSONObject remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
+                                        .receive(link);
+                                    JSONObject preview=com.arcanevault.mobile.next.NativePeerSync
+                                        .preview(local,remote);
+                                    org.json.JSONArray changes=preview.getJSONArray("changes");
+                                    StringBuilder message=new StringBuilder()
+                                        .append("Differences: ").append(changes.length())
+                                        .append("\nPotential conflicts: ")
+                                        .append(preview.getInt("conflicts"))
+                                        .append("\nMatching records: ")
+                                        .append(preview.getInt("equal"))
+                                        .append("\n\nRead-only wireless review. Nothing was applied.");
+                                    for(int i=0;i<Math.min(12,changes.length());i++){
+                                        JSONObject diff=changes.getJSONObject(i);
+                                        message.append("\n").append(diff.optString("action"))
+                                            .append(" · ").append(diff.optString("group"))
+                                            .append(" · ").append(diff.optString("key"));
+                                    }
+                                    if(changes.length()>12)message.append("\n… and ")
+                                        .append(changes.length()-12).append(" more");
+                                    runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                        .setTitle("Windows peer snapshot")
+                                        .setMessage(message.toString())
+                                        .setPositiveButton("Close",null).show());
+                                }
+                            }catch(Exception error){runOnUiThread(()->toast(
+                                "Wi-Fi peer review failed: "+error.getMessage()));}
+                        });
+                    }catch(Exception error){toast("Cannot export local peer data: "+error.getMessage());}
+                });
+            }).show();
+    }
+
     void exportPeerSync() {
         withPeerData((decks,art)->{
             try{

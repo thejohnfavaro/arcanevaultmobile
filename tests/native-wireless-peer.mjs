@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const main=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/MainActivity.java','utf8');
+const panel=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/NativeWorkspaceScreen.java','utf8');
+const client=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/next/NativeWirelessPeerClient.java','utf8');
+assert.match(main,/wirelessPeerReview\(boolean send\)/);
+assert.match(main,/NativeWirelessPeerClient\.validate\(link\)/);
+assert.match(main,/NativeWirelessPeerClient\.send\(link,local\)/);
+assert.match(main,/NativeWirelessPeerClient\s*\n\s*\.receive\(link\)/);
+assert.match(main,/NativePeerSync\s*\n\s*\.preview\(local,remote\)/);
+assert.match(panel,/Receive Windows sync over Wi-Fi/);
+assert.match(panel,/Send phone sync over Wi-Fi/);
+assert.match(client,/setInstanceFollowRedirects\(false\)/);
+assert.match(client,/setFixedLengthStreamingMode\(bytes\.length\)/);
+assert.match(client,/NativePeerSync\.MAX_BYTES/);
+assert.match(client,/ip\[0\]==10/);
+assert.doesNotMatch(client,/\.commit\(\)|\.apply\(\)|DELETE FROM|INSERT INTO/);
+console.log('PASS: wireless peer transfer bound to read-only validated private-LAN links');
