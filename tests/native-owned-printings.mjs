@@ -14,7 +14,7 @@ assert.match(screen,/if\(!"physical"\.equals\(source\)\)onlyOwnedPhysicalPrintin
 assert.match(screen,/onlyOwnedPhysicalPrintings=false;\s*updateCollectionFilters\(\);schedule\(\)/);
 assert.match(screen,/printingMode\?catalog\.ownedPhysicalPrintings\(options\):catalog\.search\(options\)/);
 assert.match(screen,/if\(printingMode\)\{renderOwnedPrintingRow\(row\);continue;\}/);
-assert.match(screen,/showPrintingDetail\(name,printing,imageUrl\)/);
+assert.ok(screen.includes('showInlinePrintingDetail(name,printing,()->closeInspector())'));
 assert.match(screen,/No confirmed printings found\. Name-only physical cards stay in Physical/);
 assert.match(query,/FROM physical_printings p/,'Read indexed physical identities');
 assert.match(query,/JOIN variants v ON p\.print_id!='' AND v\.print_id=p\.print_id COLLATE NOCASE/,'Only exact printed IDs count when IDs provided');

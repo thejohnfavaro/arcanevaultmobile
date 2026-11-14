@@ -19,7 +19,7 @@ for(const p of [
   /renderArtworkTile/,
   /GridLayout gallery/,
   /viewModeButton/,
-  /scroll\.addView\(browseContent\)/,
+  /browseScroll\.addView\(browseContent\)/,
   /filtersReady=true/
 ])assert.match(screen,p);
 assert.match(catalog,/EXISTS \(SELECT 1 FROM variants vs WHERE vs\.name=c\.name/);

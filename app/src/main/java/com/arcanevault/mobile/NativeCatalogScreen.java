@@ -47,10 +47,27 @@ final class NativeCatalogScreen {
     private final ArtworkCache artwork;
     private final LinearLayout layout;
     private final LinearLayout results;
+    private final ScrollView browseScroll;
+    private final ScrollView inspectorScroll;
+    private final LinearLayout inspectorContent;
+    private int inspectorRequest=0;
     private final TextView status;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService artworkWorker = Executors.newFixedThreadPool(2);
+    private final ExecutorService pagePrefetchWorker=Executors.newSingleThreadExecutor();
+    // Read-only page results, keyed by the full filter snapshot. Only retain
+    // three pages to avoid holding thousands of JSON objects in memory.
+    private final java.util.Map<String,JSONObject> pageCache=
+        java.util.Collections.synchronizedMap(
+        new java.util.LinkedHashMap<String,JSONObject>(4,0.75f,true) {
+            @Override protected boolean removeEldestEntry(
+                    java.util.Map.Entry<String,JSONObject> eldest) {
+                return size()>3;
+            }
+        });
+    private final java.util.Set<String> queuedPageArt=
+        java.util.Collections.synchronizedSet(new java.util.HashSet<>());
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
     private String source = "both", owned = "all", query = "";
@@ -184,14 +201,21 @@ final class NativeCatalogScreen {
             advancedButton.setText(advancedOpen?"Filters & Sort  ▴":"Filters & Sort  ▾");
         });
         updateCollectionFilters();
-        ScrollView scroll = new ScrollView(activity);
+        browseScroll = new ScrollView(activity);
         results = new LinearLayout(activity);
         results.setOrientation(LinearLayout.VERTICAL);
         LinearLayout browseContent=VaultNativeStyle.column(activity);
         browseContent.addView(advancedFilters);
         browseContent.addView(results);
-        scroll.addView(browseContent);
-        layout.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        browseScroll.addView(browseContent);
+        layout.addView(browseScroll,new LinearLayout.LayoutParams(-1,0,1));
+        inspectorContent=VaultNativeStyle.column(activity);
+        inspectorContent.setPadding(dp(8),dp(5),dp(8),dp(20));
+        inspectorScroll=new ScrollView(activity);
+        inspectorScroll.setFillViewport(false);
+        inspectorScroll.addView(inspectorContent);
+        inspectorScroll.setVisibility(View.GONE);
+        layout.addView(inspectorScroll,new LinearLayout.LayoutParams(-1,0,1));
         filtersReady=true;
         schedule();
     }
@@ -200,8 +224,11 @@ final class NativeCatalogScreen {
     void close() {
         disposed = true;
         request.incrementAndGet();
+        inspectorRequest++;
         worker.shutdownNow();
         artworkWorker.shutdownNow();
+        pagePrefetchWorker.shutdownNow();
+        pageCache.clear();queuedPageArt.clear();
     }
     private int dp(float n) { return (int)(activity.getResources().getDisplayMetrics().density*n+.5f); }
     private TextView text(String value,int size,boolean bold) {
@@ -365,11 +392,21 @@ final class NativeCatalogScreen {
                 options.put("arena","");
                 options.put("page",Integer.toString(selectedPage));
                 options.put("size","40");
-                JSONObject response=printingMode?catalog.ownedPhysicalPrintings(options):catalog.search(options);
+                // All 40 record rows are fetched in one query and retained for
+                // back/forward navigation. Never reuse a stale filter result.
+                String cacheKey=new java.util.TreeMap<>(options).toString()+
+                    "|confirmed="+printingMode;
+                JSONObject response=pageCache.get(cacheKey);
+                if(response==null) {
+                    response=printingMode?catalog.ownedPhysicalPrintings(options):catalog.search(options);
+                    pageCache.put(cacheKey,response);
+                }
                 if(disposed || id!=request.get())return;
+                prefetchPageArtwork(cacheKey,response,printingMode);
+                final JSONObject pageResponse=response;
                 ui.post(() -> {
                     if(disposed || id!=request.get() || activity.isFinishing())return;
-                    render(response,selectedPage,src,printingMode);
+                    render(pageResponse,selectedPage,src,printingMode);
                 });
             }catch(Exception error){
                 ui.post(() -> {
@@ -379,6 +416,38 @@ final class NativeCatalogScreen {
                 });
             }
         });
+    }
+
+    /** Warm the existing on-disk, 200 MiB Scryfall artwork cache for the
+     * entire 40-row page. Work is sequential and bounded off the UI thread;
+     * foreground thumbnail requests continue to use their own executor. */
+    private void prefetchPageArtwork(String cacheKey,JSONObject response,
+            boolean printingMode) {
+        if(!queuedPageArt.add(cacheKey))return;
+        JSONArray rows=response.optJSONArray("cards");
+        if(rows==null)return;
+        final java.util.ArrayList<String> urls=new java.util.ArrayList<>();
+        for(int i=0;i<rows.length()&&i<40;i++){
+            JSONObject item=rows.optJSONObject(i);
+            if(item==null)continue;
+            JSONObject imageData=printingMode?item.optJSONObject("printing"):
+                item.optJSONObject("meta");
+            String url=imageData==null?"":imageData.optString("image","");
+            if(url.startsWith("https://cards.scryfall.io/")&&!urls.contains(url))
+                urls.add(url);
+        }
+        pagePrefetchWorker.execute(()->{
+            for(String url:urls) {
+                if(disposed||Thread.currentThread().isInterrupted())return;
+                try { artwork.get(url); }
+                catch(Exception ignored) { /* Offline browsing keeps all text. */ }
+            }
+        });
+    }
+
+    private void invalidatePageCache(){
+        pageCache.clear();
+        queuedPageArt.clear();
     }
 
     private void render(JSONObject response,int selectedPage,String src,boolean printingMode) {
@@ -464,8 +533,10 @@ final class NativeCatalogScreen {
         pager.addView(next,new LinearLayout.LayoutParams(0,dp(48),1));
         back.setEnabled(selectedPage>0);
         next.setEnabled((selectedPage+1)*40<total);
-        back.setOnClickListener(v -> { page=Math.max(0,page-1); schedule(); });
-        next.setOnClickListener(v -> { page++; schedule(); });
+        back.setOnClickListener(v -> { page=Math.max(0,page-1); schedule();
+            browseScroll.post(()->browseScroll.smoothScrollTo(0,0)); });
+        next.setOnClickListener(v -> { page++; schedule();
+            browseScroll.post(()->browseScroll.smoothScrollTo(0,0)); });
         results.addView(pager);
     }
     /** A compact, 2-column card-art browser with the same inspect action as
@@ -542,7 +613,7 @@ final class NativeCatalogScreen {
         card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
         card.setContentDescription(name+", "+set+" collector "+collector+
             ", confirmed physical copies "+confirmed+". Tap to inspect edition");
-        card.setOnClickListener(v -> showPrintingDetail(name,printing,imageUrl));
+        card.setOnClickListener(v -> showInlinePrintingDetail(name,printing,()->closeInspector()));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
         lp.bottomMargin=dp(9);
         results.addView(card,lp);
@@ -570,65 +641,184 @@ final class NativeCatalogScreen {
         });
     }
 
-    private void showDetails(String name,String type,String oracle,String rarity,String imageUrl,int arenaQty,int physicalQty) {
-        LinearLayout body=VaultNativeStyle.column(activity);
-        body.setPadding(dp(16),dp(12),dp(16),dp(20));
-        body.setBackgroundColor(VaultNativeStyle.BACKGROUND);
-        TextView category=text("CARD INSPECTOR",11,true);
-        category.setTextColor(VaultNativeStyle.PRIMARY);
-        body.addView(category);
+    /** In-workspace card inspection preserves the active query, filters, page,
+     * and list scroll position. Returning does not re-fetch the catalog. */
+    private void openInspector(String heading) {
+        inspectorRequest++;
+        inspectorContent.removeAllViews();
+        browseScroll.setVisibility(View.GONE);
+        inspectorScroll.setVisibility(View.VISIBLE);
+        inspectorScroll.scrollTo(0,0);
+        Button back=VaultNativeStyle.button(activity,"← Back to catalog",false);
+        inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(46)));
+        back.setOnClickListener(v->closeInspector());
+        TextView title=text(heading,22,true);
+        title.setMaxLines(3);
+        inspectorContent.addView(title);
+    }
 
+    private void closeInspector() {
+        inspectorRequest++;
+        inspectorScroll.setVisibility(View.GONE);
+        browseScroll.setVisibility(View.VISIBLE);
+    }
+
+    private void addInspectorArtwork(String name,String imageUrl) {
         ImageView art=new ImageView(activity);
         art.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        art.setAdjustViewBounds(true);
         art.setContentDescription("Official card artwork for "+name);
         art.setBackground(VaultNativeStyle.rounded(activity,
             VaultNativeStyle.SURFACE,VaultNativeStyle.BORDER,12));
-        LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,dp(335));
-        imageParams.topMargin=dp(10);imageParams.bottomMargin=dp(12);
-        body.addView(art,imageParams);
-        TextView typeLabel=text(type,13,false);
-        typeLabel.setTextColor(VaultNativeStyle.SUBTEXT);
-        body.addView(typeLabel);
-        LinearLayout oraclePanel=VaultNativeStyle.column(activity);
-        oraclePanel.setPadding(dp(13),dp(10),dp(13),dp(12));
-        VaultNativeStyle.surface(activity,oraclePanel,false);
-        TextView oracleTitle=text("ORACLE TEXT",11,true);
-        oracleTitle.setTextColor(VaultNativeStyle.GOLD);
-        oraclePanel.addView(oracleTitle);
-        TextView oracleText=text(oracle.isEmpty()?"No rules text":oracle,14,false);
-        oracleText.setLineSpacing(dp(3),1f);
-        oraclePanel.addView(oracleText);
-        VaultNativeStyle.margin(body,oraclePanel,12,activity);
-        TextView rarityText=text("Rarity: "+rarity+"    •    Physical copies: "+physicalQty+
-            "    •    Arena copies: "+arenaQty,13,true);
-        rarityText.setTextColor(VaultNativeStyle.PRIMARY);
-        VaultNativeStyle.margin(body,rarityText,12,activity);
-        Button browsePrintings=VaultNativeStyle.button(activity,
-            "Browse printings & physical copies",true);
-        body.addView(browsePrintings,new LinearLayout.LayoutParams(-1,dp(50)));
-        browsePrintings.setOnClickListener(v->loadPrintings(name));
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(330));
+        params.topMargin=dp(8);
+        params.bottomMargin=dp(8);
+        inspectorContent.addView(art,params);
+        // Use the same guarded Scryfall cache as the catalog tiles.
+        loadThumbnail(art,imageUrl);
+    }
 
-        ScrollView scroll=new ScrollView(activity);
-        scroll.setFillViewport(false);
-        scroll.addView(body);
-        AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name)
-            .setView(scroll).setPositiveButton("Close",null).create();
-        dialog.show();
-        if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
-        artworkWorker.execute(() -> {
-            try {
-                byte[] image=artwork.get(imageUrl);
-                Bitmap bitmap=BitmapFactory.decodeByteArray(image,0,image.length);
-                if(bitmap==null)return;
-                ui.post(() -> {
-                    if(disposed||!dialog.isShowing()){bitmap.recycle();return;}
-                    art.setImageBitmap(bitmap);
+    private void showDetails(String name,String type,String oracle,String rarity,
+            String imageUrl,int arenaQty,int physicalQty) {
+        openInspector(name);
+        addInspectorArtwork(name,imageUrl);
+        TextView typeLine=text(type,14,true);
+        typeLine.setTextColor(VaultNativeStyle.SUBTEXT);
+        inspectorContent.addView(typeLine);
+        TextView copies=text("Physical ×"+physicalQty+"   ·   Arena ×"+arenaQty+
+            "   ·   "+rarity,13,true);
+        copies.setTextColor(VaultNativeStyle.PRIMARY);
+        inspectorContent.addView(copies);
+        LinearLayout oraclePanel=VaultNativeStyle.column(activity);
+        oraclePanel.setPadding(dp(12),dp(10),dp(12),dp(12));
+        VaultNativeStyle.surface(activity,oraclePanel,false);
+        TextView rulesHeader=text("ORACLE TEXT",11,true);
+        rulesHeader.setTextColor(VaultNativeStyle.GOLD);
+        oraclePanel.addView(rulesHeader);
+        TextView rules=text(oracle.isEmpty()?"No rules text":oracle,15,false);
+        rules.setLineSpacing(dp(3),1f);
+        oraclePanel.addView(rules);
+        VaultNativeStyle.margin(inspectorContent,oraclePanel,10,activity);
+
+        Button browsePrintings=VaultNativeStyle.button(activity,
+            "View printings & edit physical ownership",true);
+        inspectorContent.addView(browsePrintings,new LinearLayout.LayoutParams(-1,dp(48)));
+        browsePrintings.setOnClickListener(v->showInlinePrintings(name,
+            ()->showDetails(name,type,oracle,rarity,imageUrl,arenaQty,physicalQty)));
+    }
+
+    private void showInlinePrintings(String name,Runnable previous) {
+        openInspector("Printings · "+name);
+        Button back=VaultNativeStyle.button(activity,"← Card details",false);
+        inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(44)));
+        back.setOnClickListener(v->previous.run());
+        TextView loading=text("Checking official printings and confirmed ownership…",13,false);
+        inspectorContent.addView(loading);
+        final int token=inspectorRequest;
+        worker.execute(()->{
+            try{
+                Map<String,String> params=new HashMap<>();
+                params.put("name",name);
+                JSONObject response=catalog.variants(params);
+                JSONArray variants=response.optJSONArray("variants");
+                JSONArray ownership=new JSONArray(inventory.getString(
+                    "vault_physicalCollectionV1","[]"));
+                if(ownership.length()>150000)
+                    throw new IllegalStateException("Physical inventory exceeds safety limit");
+                JSONObject projection=NativePrintingOwnership.inspect(name,ownership,
+                    variants==null?new JSONArray():variants);
+                ui.post(()->{
+                    if(disposed||activity.isFinishing()||token!=inspectorRequest)return;
+                    inspectorContent.removeView(loading);
+                    JSONArray rows=projection.optJSONArray("printings");
+                    if(rows==null)rows=new JSONArray();
+                    int total=rows.length();
+                    TextView summary=text("Physical copies: "+
+                        projection.optInt("physicalCopies",0)+" · Confirmed: "+
+                        projection.optInt("confirmedCopies",0)+" · Unresolved: "+
+                        projection.optInt("unresolvedCopies",0),13,true);
+                    inspectorContent.addView(summary);
+                    TextView note=text("Ownership uses exact Scryfall printing IDs "+
+                        "or unambiguous set and collector numbers. Name-only "+
+                        "cards are never assigned to an edition.",12,false);
+                    note.setTextColor(VaultNativeStyle.SUBTEXT);
+                    inspectorContent.addView(note);
+                    if(total==0)inspectorContent.addView(text(
+                        "No indexed printings. Refresh Scryfall metadata in Data & Sync.",14,false));
+                    final JSONArray printings=rows;
+                    final int[] shown={0};
+                    final LinearLayout list=VaultNativeStyle.column(activity);
+                    inspectorContent.addView(list);
+                    Runnable append=new Runnable(){
+                        public void run(){
+                            int target=Math.min(total,shown[0]+32);
+                            for(int i=shown[0];i<target;i++){
+                                JSONObject edition=printings.optJSONObject(i);
+                                if(edition==null)continue;
+                                String code=edition.optString("set","").toUpperCase(java.util.Locale.ROOT);
+                                String label=code+" #"+edition.optString("collectorNumber","")+
+                                    " · "+edition.optString("setName","");
+                                int qty=edition.optInt("confirmedPhysicalCopies",0);
+                                Button select=VaultNativeStyle.button(activity,label+
+                                    (qty>0?"  ·  Owned ×"+qty:"  ·  Not owned"),false);
+                                select.setAllCaps(false);
+                                select.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
+                                select.setTextSize(12);
+                                VaultNativeStyle.margin(list,select,5,activity);
+                                select.setOnClickListener(v->showInlinePrintingDetail(
+                                    name,edition,()->showInlinePrintings(name,previous)));
+                            }
+                            shown[0]=target;
+                            if(shown[0]<total){
+                                Button more=VaultNativeStyle.button(activity,
+                                    "Show next printings ("+shown[0]+" / "+total+")",false);
+                                list.addView(more);
+                                more.setOnClickListener(v->{
+                                    list.removeView(more);
+                                    run();
+                                });
+                            }
+                        }
+                    };
+                    append.run();
                 });
-            }catch(Exception ignored){
-                // Metadata and Oracle text remain fully accessible while offline.
+            }catch(Exception error){
+                ui.post(()->{
+                    if(disposed||token!=inspectorRequest)return;
+                    loading.setText("Cannot load printings: "+error.getMessage());
+                });
             }
         });
+    }
+
+    private void showInlinePrintingDetail(String name,JSONObject printing,Runnable previous) {
+        String code=printing.optString("set","").toUpperCase(java.util.Locale.ROOT);
+        String collector=printing.optString("collectorNumber","");
+        openInspector(name+" · "+code+" #"+collector);
+        Button back=VaultNativeStyle.button(activity,"← All printings",false);
+        inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(44)));
+        back.setOnClickListener(v->previous.run());
+        String imageUrl=printing.optString("image","");
+        addInspectorArtwork(name,imageUrl);
+        inspectorContent.addView(text(printing.optString("setName","")+
+            " · "+printing.optString("rarity","")+
+            "\\nConfirmed physical copies: "+printing.optInt("confirmedPhysicalCopies",0)+
+            "\\nPrinting ID: "+printing.optString("id",""),13,false));
+        Button edit=VaultNativeStyle.button(activity,"Edit physical copies",true);
+        inspectorContent.addView(edit,new LinearLayout.LayoutParams(-1,dp(48)));
+        edit.setOnClickListener(v->new NativePhysicalEditor(activity,inventory,catalog)
+            .edit(name,printing,()->{
+                // The local inventory changed; no stale owned counts may remain.
+                invalidatePageCache();
+                schedule();
+                previous.run();
+            }));
+        if(imageUrl.startsWith("https://cards.scryfall.io/")){
+            Button preference=VaultNativeStyle.button(activity,
+                "Set preferred artwork",false);
+            inspectorContent.addView(preference,new LinearLayout.LayoutParams(-1,dp(48)));
+            preference.setOnClickListener(v->((MainActivity)activity)
+                .savePreferredArtwork(name,printing.optString("id",""),imageUrl));
+        }
     }
 
     private void loadPrintings(String name) {
