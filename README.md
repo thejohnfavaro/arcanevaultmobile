@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.0.28 (Android Studio project)
+# Arcane Vault for Android — v2.0.32 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
@@ -16,6 +16,32 @@
 - A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
+
+## Android v2.0.32: native printing inspection
+
+- In the native Catalog, open a card and tap **Browse printings & physical copies** to inspect official sets, collector numbers, printings and cached card artwork.
+- Confirmed physical copy quantities come from the authoritative native inventory and require matching Scryfall printing identity or unambiguous set + collector number. Name-only and conflicting rows appear as unresolved, not fabricated set ownership.
+- This milestone is read-only; editing owned printings, preferred artwork and full collection reconciliation remain in Legacy tools until their native safeguards are implemented.
+
+## Android v2.0.31: native Card Catalog
+
+- **Catalog** in native navigation searches the existing SQLite Scryfall catalog without starting an HTML card browser.
+- Search and page through results, narrow Arena-only or non-Arena listings, and open a native card inspector with Oracle text and cached Scryfall art.
+- Existing Legacy tools retain broader filtering, physical-owned printing features and sync. The new native catalog is read-only while we migrate these features one by one.
+
+## Android v2.0.30: native in-app update checker
+
+- On the native Home screen, select **Check for app updates**. Android discovers versioned GitHub releases, validates the signed APK and SHA-256, and asks for approval before running the system installer.
+- The installation is opt-in and uses the existing app package and matching signing certificate. A debug APK with a different signing certificate is rejected.
+- Android may ask to allow installs from this source. Backup your collection before updating, particularly when switching between old test builds and production signed releases.
+- If no matching signed release is published, the app reports that no newer signed update is available.
+
+## Android v2.0.29: native-first app foundation
+
+- The default Home, Physical, and Arena collection browsing now use Android-native views instead of HTML/WebView.
+- Native collection lists search existing stored inventories without rewriting the data and show additional records in bounded pages.
+- All features not yet migrated remain in **Legacy tools**; Android Back returns to native home. Existing WebView storage recovery remains intact.
+- This is phase one of a staged migration, not yet a fully native replacement of all features.
 
 ## Android v2.0.28: Set Progress help
 
