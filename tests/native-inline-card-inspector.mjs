@@ -18,6 +18,8 @@ for(const pattern of [
  /getWindowToken\(\)==null/,
  /loadThumbnail\(art,imageUrl\)/
 ])assert.match(source,pattern);
-assert.doesNotMatch(source,/private void showDetails\([\s\S]*?\n    private void showInlinePrintings[\s\S]*?\.setTitle\(name\)/,
- 'Inline card inspector should not use an alert dialog as its main container');
+const inspector=source.slice(source.indexOf('private void showDetails('),
+    source.indexOf('private void showInlinePrintings('));
+assert.doesNotMatch(inspector,/new AlertDialog\.Builder/,
+ 'Inline card inspector should not create a modal dialog');
 console.log('PASS: inline inspector preserves catalog state, reviews printing ownership, edits via native ledger');
