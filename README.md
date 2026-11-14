@@ -17,6 +17,13 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.0.34: Physical Collection in native Catalog
+
+- In the native Card Catalog, choose **All Cards**, **Arena**, or **Physical**. The second row now filters **All / Owned / Missing** against the selected collection (both collections for All Cards).
+- Physical quantities come from the existing native physical ownership mirror, not from Arena availability. A card can be in both collections; results show both counts separately.
+- Existing WebView catalog requests continue using their established Arena default unless they opt into a collection source.
+- Read-only UI and SQLite query changes; no import, ownership, printing or collection mutations.
+
 ## Android v2.0.33: native UX and card art
 
 - The native Android screens now use a consistent dark Arcane Vault design with better contrast, rounded surfaces, scrollable navigation and full-height catalog layout.
