@@ -410,10 +410,13 @@ final class CatalogStore extends SQLiteOpenHelper {
         String order="c.name COLLATE NOCASE";if("qty".equals(sort))order=quantity+" DESC, c.name COLLATE NOCASE";if("mv".equals(sort))order="c.mv ASC,c.name COLLATE NOCASE";if("rarity".equals(sort))order="CASE c.rarity WHEN 'mythic' THEN 4 WHEN 'rare' THEN 3 WHEN 'uncommon' THEN 2 ELSE 1 END DESC,c.name COLLATE NOCASE";
         int page=clamp(get(p,"page"),0,100000,0),size=clamp(get(p,"size"),1,250,48);
         List<String> qargs=new ArrayList<>(args);qargs.add(Integer.toString(size));qargs.add(Integer.toString(page*size));JSONArray rows=new JSONArray();
-        try(Cursor r=db.rawQuery("SELECT c.name,c.type,c.oracle,c.rarity,c.mv,c.colors,c.image,c.uri,c.legalities,c.layout,c.setcode,"+quantity+",c.arena,COALESCE(ao.qty,0),COALESCE(po.qty,0)"+from+" ORDER BY "+order+" LIMIT ? OFFSET ?",qargs.toArray(new String[0]))){
+        try(Cursor r=db.rawQuery("SELECT c.name,c.type,c.oracle,c.rarity,c.mv,c.colors,c.image,c.uri,c.legalities,c.layout,c.setcode,"+quantity+",c.arena,COALESCE(ao.qty,0),COALESCE(po.qty,0),"+
+            "COALESCE((SELECT v.image_back FROM variants v WHERE v.name=c.name "+
+            "AND v.image=c.image AND v.image_back!='' LIMIT 1),'')"+from+" ORDER BY "+order+" LIMIT ? OFFSET ?",qargs.toArray(new String[0]))){
             while(r.moveToNext()){
                 JSONObject meta=new JSONObject().put("type",r.getString(1)).put("oracle",r.getString(2)).put("rarity",r.getString(3)).put("mv",r.getDouble(4)).put("image",r.getString(6)).put("url",r.getString(7)).put("legalities",new JSONObject(r.getString(8))).put("layout",r.getString(9)).put("set_",r.getString(10)).put("arena",r.getInt(12)>0);
                 JSONArray ci=new JSONArray();for(char ch:r.getString(5).toCharArray())ci.put(String.valueOf(ch));meta.put("colors",ci);
+                meta.put("imageBack",r.getString(15));
                 rows.put(new JSONObject().put("name",r.getString(0)).put("qty",r.getInt(11))
                     .put("arenaQty",r.getInt(13)).put("physicalQty",r.getInt(14)).put("sets",new JSONArray().put(r.getString(10))).put("tags",new JSONArray()).put("typeHint","").put("meta",meta));
             }
@@ -526,7 +529,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         if("mv".equals(sort))order="COALESCE(c.mv,0) ASC,v.name COLLATE NOCASE";
         String query=confirmed+"SELECT v.name,v.print_id,v.setcode,v.setname,v.collector,v.rarity,"+
             "v.image,v.release,o.qty,COALESCE(c.type,''),COALESCE(c.oracle,''),"+
-            "COALESCE(c.arena,0)"+from+
+            "COALESCE(c.arena,0),v.image_back"+from+
             " ORDER BY "+order+" LIMIT ? OFFSET ?";
         try(Cursor c=db.rawQuery(query,args.toArray(new String[0]))){
             while(c.moveToNext()){
@@ -538,7 +541,7 @@ final class CatalogStore extends SQLiteOpenHelper {
                     .put("id",c.getString(1)).put("set",c.getString(2))
                     .put("setName",c.getString(3)).put("collectorNumber",c.getString(4))
                     .put("rarity",c.getString(5)).put("image",c.getString(6))
-                    .put("released",c.getString(7))
+                    .put("released",c.getString(7)).put("imageBack",c.getString(12))
                     .put("confirmedPhysicalCopies",c.getInt(8));
                 rows.put(new JSONObject().put("name",c.getString(0))
                     .put("qty",c.getInt(8)).put("physicalQty",c.getInt(8))
