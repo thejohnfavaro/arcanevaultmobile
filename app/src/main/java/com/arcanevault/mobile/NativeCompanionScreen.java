@@ -3,254 +3,256 @@ package com.arcanevault.mobile;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.graphics.Color;
-import android.graphics.Typeface;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
-/**
- * First screen of the native Android companion. The authoritative inventory
- * remains in existing Android SharedPreferences; this is a read-only projection.
- * No WebView, HTML, JavaScript, second copy of inventory, or data migration.
- */
+/** Native-first phone shell; original physical and Arena inventories remain authoritative. */
 final class NativeCompanionScreen {
-    private static final int BG = Color.rgb(13, 16, 23);
-    private static final int PANEL = Color.rgb(27, 32, 45);
-    private static final int TEXT = Color.rgb(240, 244, 251);
-    private static final int MUTED = Color.rgb(171, 186, 205);
-    private static final int ACCENT = Color.rgb(106, 225, 208);
-    private static final int PAGE_SIZE = 60;
+    private static final int PAGE_SIZE=60;
     private final Activity activity;
     private final SharedPreferences prefs;
-    private final Runnable openLegacy;
     private final CatalogStore catalog;
     private final ArtworkCache artwork;
-    private NativeCatalogScreen nativeCatalog;
+    private final Runnable openLegacy;
     private final LinearLayout root;
-    private final LinearLayout content;
-    private final TextView heading;
-    private final TextView message;
-    private String scope = "home";
-    private String query = "";
-    private int visibleCount = PAGE_SIZE;
-    private List<CardRow> physical = Collections.emptyList();
-    private List<CardRow> arena = Collections.emptyList();
+    private final FrameLayout stage;
+    private final TextView subtitle;
+    private final LinearLayout tabs;
+    private final Handler ui=new Handler(Looper.getMainLooper());
+    private NativeCatalogScreen nativeCatalog;
+    private String scope="home", query="";
+    private int visibleCount=PAGE_SIZE;
+    private List<CardRow> physical=Collections.emptyList(),arena=Collections.emptyList();
+    private int readGeneration;
 
     private static final class CardRow {
-        final String name;
-        final int qty;
-        CardRow(String name, int qty) { this.name = name; this.qty = qty; }
+        final String name;final int qty;
+        CardRow(String name,int qty){this.name=name;this.qty=qty;}
     }
 
-    private NativeCompanionScreen(Activity activity, SharedPreferences prefs, CatalogStore catalog, ArtworkCache artwork, Runnable openLegacy) {
-        this.activity = activity;
-        this.prefs = prefs;
-        this.catalog = catalog;
-        this.artwork = artwork;
-        this.openLegacy = openLegacy;
-        root = column();
-        root.setBackgroundColor(BG);
-        heading = text("ARCANE VAULT", 24, TEXT, true);
-        heading.setPadding(dp(18), dp(18), dp(18), dp(4));
-        root.addView(heading);
-        message = text("Loading your local collection…", 13, MUTED, false);
-        message.setPadding(dp(18), 0, dp(18), dp(12));
-        root.addView(message);
-        LinearLayout nav = new LinearLayout(activity);
-        nav.setOrientation(LinearLayout.HORIZONTAL);
-        for (String tab : new String[]{"Home", "Catalog", "Physical", "Arena", "Legacy tools"}) {
-            Button action = button(tab);
-            nav.addView(action, new LinearLayout.LayoutParams(0, dp(48), 1));
-            action.setOnClickListener(v -> {
-                if (tab.equals("Legacy tools")) { openLegacy.run(); return; }
-                if (nativeCatalog != null) { nativeCatalog.close(); nativeCatalog = null; }
-                scope = tab.toLowerCase(java.util.Locale.ROOT);
-                query = "";
-                visibleCount = PAGE_SIZE;
-                render();
-            });
-        }
-        root.addView(nav);
-        ScrollView scroll = new ScrollView(activity);
-        scroll.setFillViewport(true);
-        content = column();
-        content.setPadding(dp(14), dp(12), dp(14), dp(24));
-        scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        render();
+    private NativeCompanionScreen(Activity activity,SharedPreferences prefs,
+            CatalogStore catalog,ArtworkCache artwork,Runnable openLegacy) {
+        this.activity=activity;
+        this.prefs=prefs;this.catalog=catalog;this.artwork=artwork;this.openLegacy=openLegacy;
+        root=VaultNativeStyle.column(activity);
+        root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
+        root.setPadding(0,dp(14),0,0);
+
+        LinearLayout brand=VaultNativeStyle.row(activity);
+        brand.setPadding(dp(20),dp(6),dp(20),dp(10));
+        TextView mark=VaultNativeStyle.label(activity,"◆",26,VaultNativeStyle.GOLD,true);
+        brand.addView(mark);
+        LinearLayout titles=VaultNativeStyle.column(activity);
+        titles.setPadding(dp(12),0,0,0);
+        titles.addView(VaultNativeStyle.label(activity,"ARCANE VAULT",22,VaultNativeStyle.TEXT,true));
+        subtitle=VaultNativeStyle.label(activity,"Your collection. Anywhere.",12,VaultNativeStyle.SUBTEXT,false);
+        titles.addView(subtitle);
+        brand.addView(titles);
+        root.addView(brand);
+
+        HorizontalScrollView scroller=new HorizontalScrollView(activity);
+        scroller.setHorizontalScrollBarEnabled(false);
+        scroller.setFillViewport(false);
+        tabs=VaultNativeStyle.row(activity);
+        tabs.setPadding(dp(14),dp(4),dp(14),dp(12));
+        scroller.addView(tabs);
+        root.addView(scroller);
+        stage=new FrameLayout(activity);
+        root.addView(stage,new LinearLayout.LayoutParams(-1,0,1));
+        show("home");
         refresh();
     }
 
-    static View create(Activity activity, SharedPreferences prefs, CatalogStore catalog, ArtworkCache artwork, Runnable openLegacy) {
-        return new NativeCompanionScreen(activity, prefs, catalog, artwork, openLegacy).root;
+    static View create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
+            ArtworkCache artwork,Runnable openLegacy) {
+        return new NativeCompanionScreen(activity,prefs,catalog,artwork,openLegacy).root;
+    }
+    private int dp(float n){return VaultNativeStyle.dp(activity,n);}
+    private LinearLayout column(){return VaultNativeStyle.column(activity);}
+    private TextView text(String s,int size,int color,boolean bold){
+        return VaultNativeStyle.label(activity,s,size,color,bold);
+    }
+    private Button button(String title,boolean selected){return VaultNativeStyle.button(activity,title,selected);}
+
+    private void drawTabs(){
+        tabs.removeAllViews();
+        for(String tab:new String[]{"Home","Catalog","Physical","Arena","Legacy tools"}){
+            boolean active=scope.equals(tab.toLowerCase(Locale.ROOT));
+            Button action=button(tab,active);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44));
+            lp.rightMargin=dp(8);
+            tabs.addView(action,lp);
+            action.setOnClickListener(v->{
+                if(tab.equals("Legacy tools")){closeCatalog();openLegacy.run();return;}
+                show(tab.toLowerCase(Locale.ROOT));
+            });
+        }
+    }
+    private void closeCatalog(){
+        if(nativeCatalog!=null){nativeCatalog.close();nativeCatalog=null;}
+    }
+    private void show(String next){
+        closeCatalog();
+        scope=next;
+        query="";visibleCount=PAGE_SIZE;
+        drawTabs();
+        stage.removeAllViews();
+        if(scope.equals("catalog")){
+            nativeCatalog=new NativeCatalogScreen(activity,catalog,artwork,prefs);
+            stage.addView(nativeCatalog.view(),new FrameLayout.LayoutParams(-1,-1));
+            subtitle.setText("Discover cards and printings");
+            return;
+        }
+        subtitle.setText(scope.equals("home")?"Your collection. Anywhere.":
+            scope.equals("physical")?"Paper collection":"Arena collection");
+        ScrollView scroll=new ScrollView(activity);
+        scroll.setFillViewport(true);
+        LinearLayout content=column();
+        content.setPadding(dp(18),dp(12),dp(18),dp(26));
+        scroll.addView(content);
+        stage.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
+        if(scope.equals("home"))renderHome(content);
+        else renderInventory(content,scope.equals("physical")?physical:arena);
     }
 
-    private int dp(float value) { return (int)(value * activity.getResources().getDisplayMetrics().density + .5f); }
-    private LinearLayout column() {
-        LinearLayout layout = new LinearLayout(activity);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        return layout;
-    }
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView t = new TextView(activity);
-        t.setText(value);
-        t.setTextColor(color);
-        t.setTextSize(size);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return t;
-    }
-    private Button button(String value) {
-        Button b = new Button(activity);
-        b.setAllCaps(false);
-        b.setText(value);
-        b.setTextSize(12);
-        b.setTextColor(TEXT);
-        b.setMinimumHeight(0);
-        b.setPadding(dp(2), 0, dp(2), 0);
-        return b;
-    }
-    private View panel(String title, String detail) {
-        LinearLayout block = column();
-        block.setPadding(dp(16), dp(15), dp(16), dp(15));
-        block.setBackgroundColor(PANEL);
-        TextView name = text(title, 18, TEXT, true);
-        TextView description = text(detail, 13, MUTED, false);
-        description.setPadding(0, dp(5), 0, 0);
+    private void card(LinearLayout target,String eyebrow,String headline,String sub,int accent){
+        LinearLayout block=column();
+        block.setPadding(dp(18),dp(16),dp(18),dp(18));
+        VaultNativeStyle.surface(activity,block,false);
+        TextView over=text(eyebrow.toUpperCase(Locale.ROOT),11,accent,true);
+        block.addView(over);
+        TextView name=text(headline,23,VaultNativeStyle.TEXT,true);
+        name.setPadding(0,dp(8),0,dp(5));
         block.addView(name);
-        block.addView(description);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.bottomMargin = dp(12);
-        content.addView(block, lp);
-        return block;
+        block.addView(text(sub,13,VaultNativeStyle.SUBTEXT,false));
+        VaultNativeStyle.margin(target,block,12,activity);
     }
-
-    /** Parse only the native authoritative inventories off the UI thread. */
-    private static List<CardRow> load(SharedPreferences prefs, String key) throws Exception {
-        String source = prefs.getString(key, "[]");
-        JSONArray rows = new JSONArray(source == null ? "[]" : source);
-        if (rows.length() > 150000) throw new IllegalArgumentException("Inventory exceeds safety limit");
-        ArrayList<CardRow> result = new ArrayList<>(rows.length());
-        for (int i = 0; i < rows.length(); i++) {
-            JSONObject row = rows.optJSONObject(i);
-            if (row == null) continue;
-            String name = row.optString("name", "").trim();
-            int qty = row.optInt("qty", 0);
-            if (!name.isEmpty() && qty > 0) result.add(new CardRow(name, qty));
-        }
-        result.sort(Comparator.comparing(row -> row.name, String.CASE_INSENSITIVE_ORDER));
-        return result;
+    private static long copies(List<CardRow> rows){
+        long value=0;for(CardRow r:rows)value+=r.qty;return value;
     }
-
-    private void refresh() {
-        message.setText("Reading existing native inventories…");
-        // Do not block startup on large user collection JSON parsing.
-        new Thread(() -> {
-            try {
-                List<CardRow> paper = load(prefs, "vault_physicalCollectionV1");
-                List<CardRow> digital = load(prefs, "vault_cards");
-                activity.runOnUiThread(() -> {
-                    physical = paper;
-                    arena = digital;
-                    message.setText("Local collection • read-only native view");
-                    render();
-                });
-            } catch (Exception ex) {
-                activity.runOnUiThread(() -> {
-                    message.setText("Inventory unavailable: open Legacy tools to check or restore data.");
-                    render();
-                });
+    private void renderHome(LinearLayout content){
+        card(content,"Collection overview","Your vault",
+            "Native Android companion • synced data stays on this device",VaultNativeStyle.GOLD);
+        card(content,"Physical collection",String.format(Locale.US,"%,d cards",copies(physical)),
+            String.format(Locale.US,"%,d printing and name entries",physical.size()),VaultNativeStyle.PRIMARY);
+        card(content,"Arena collection",String.format(Locale.US,"%,d cards",copies(arena)),
+            String.format(Locale.US,"%,d entries",arena.size()),VaultNativeStyle.GOLD);
+        TextView tools=text("QUICK ACTIONS",12,VaultNativeStyle.SUBTEXT,true);
+        tools.setPadding(0,dp(14),0,dp(8));
+        content.addView(tools);
+        Button catalogButton=button("Explore Card Catalog",true);
+        VaultNativeStyle.margin(content,catalogButton,10,activity);
+        catalogButton.setOnClickListener(v->show("catalog"));
+        Button update=button("Check for app updates",false);
+        VaultNativeStyle.margin(content,update,10,activity);
+        update.setOnClickListener(v->new NativeAppUpdater(activity).check());
+        Button refresh=button("Refresh collection totals",false);
+        VaultNativeStyle.margin(content,refresh,10,activity);
+        refresh.setOnClickListener(v->refresh());
+        TextView note=text("Data & Sync, deck editing, and other tools are still available in Legacy tools while we finish their native screens.",
+                12,VaultNativeStyle.SUBTEXT,false);
+        note.setPadding(0,dp(12),0,0);
+        content.addView(note);
+    }
+    private void renderInventory(LinearLayout content,List<CardRow> rows){
+        boolean paper=scope.equals("physical");
+        card(content,paper?"Physical inventory":"Arena inventory",
+            String.format(Locale.US,"%,d copies",copies(rows)),
+            String.format(Locale.US,"%,d entries • read-only",rows.size()),
+            paper?VaultNativeStyle.PRIMARY:VaultNativeStyle.GOLD);
+        EditText search=new EditText(activity);
+        search.setHint("Search your cards");
+        VaultNativeStyle.search(activity,search);
+        VaultNativeStyle.margin(content,search,12,activity);
+        LinearLayout result=column();
+        content.addView(result);
+        search.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            public void onTextChanged(CharSequence s,int start,int before,int count){
+                query=s.toString();visibleCount=PAGE_SIZE;drawRows(result,rows);
             }
-        }, "arcane-native-collection-read").start();
-    }
-
-    private static long copies(List<CardRow> rows) {
-        long total = 0;
-        for (CardRow row : rows) total += row.qty;
-        return total;
-    }
-
-    private void render() {
-        content.removeAllViews();
-        if (scope.equals("catalog")) {
-            nativeCatalog = new NativeCatalogScreen(activity, catalog, artwork, prefs);
-            content.addView(nativeCatalog.view(), new LinearLayout.LayoutParams(-1, dp(540)));
-            return;
-        }
-        if (scope.equals("home")) {
-            panel("Your collection", "Native Android companion • no WebView required for this screen");
-            panel("Physical cards", String.format(java.util.Locale.US,
-                    "%,d copies across %,d rows", copies(physical), physical.size()));
-            panel("Arena cards", String.format(java.util.Locale.US,
-                    "%,d copies across %,d rows", copies(arena), arena.size()));
-            panel("Safely transitioning", "This screen reads your existing native inventory without changing it. " +
-                    "Existing Set Progress, imports, sync, decks and detailed catalog remain available under Legacy tools.");
-            Button updater = button("Check for app updates");
-            content.addView(updater);
-            updater.setOnClickListener(action -> new NativeAppUpdater(activity).check());
-            Button refresh = button("Refresh local totals");
-            content.addView(refresh);
-            refresh.setOnClickListener(v -> refresh());
-            return;
-        }
-        List<CardRow> rows = scope.equals("physical") ? physical : arena;
-        panel(scope.equals("physical") ? "Physical inventory" : "Arena inventory",
-                String.format(java.util.Locale.US, "%,d copies • %,d rows • read-only", copies(rows), rows.size()));
-        EditText search = new EditText(activity);
-        search.setSingleLine(true);
-        search.setTextColor(TEXT);
-        search.setHintTextColor(MUTED);
-        search.setHint("Find an owned card");
-        search.setText(query);
-        content.addView(search);
-        LinearLayout results = column();
-        content.addView(results);
-        search.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                query = s.toString();
-                visibleCount = PAGE_SIZE;
-                drawRows(results, rows);
-            }
-            public void afterTextChanged(Editable s) {}
+            public void afterTextChanged(Editable s){}
         });
-        drawRows(results, rows);
+        drawRows(result,rows);
     }
-    private void drawRows(LinearLayout target, List<CardRow> rows) {
+    private void drawRows(LinearLayout target,List<CardRow> rows){
         target.removeAllViews();
-        int matched = 0, shown = 0;
-        String filter = query.trim().toLowerCase(java.util.Locale.ROOT);
-        for (CardRow row : rows) {
-            if (!row.name.toLowerCase(java.util.Locale.ROOT).contains(filter)) continue;
+        int matched=0,shown=0;
+        String filter=query.trim().toLowerCase(Locale.ROOT);
+        for(CardRow row:rows){
+            if(!row.name.toLowerCase(Locale.ROOT).contains(filter))continue;
             matched++;
-            if (shown++ >= visibleCount) continue;
-            TextView card = text(row.name + "    ×" + row.qty, 15, TEXT, false);
-            card.setPadding(dp(12), dp(13), dp(12), dp(13));
-            card.setBackgroundColor(PANEL);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-            lp.bottomMargin = dp(3);
-            target.addView(card, lp);
+            if(shown>=visibleCount)continue;
+            shown++;
+            LinearLayout entry=VaultNativeStyle.row(activity);
+            entry.setPadding(dp(14),dp(12),dp(14),dp(12));
+            VaultNativeStyle.surface(activity,entry,false);
+            TextView name=text(row.name,15,VaultNativeStyle.TEXT,true);
+            name.setMaxLines(2);
+            entry.addView(name,new LinearLayout.LayoutParams(0,-2,1));
+            TextView count=text("×"+row.qty,14,VaultNativeStyle.PRIMARY,true);
+            count.setPadding(dp(10),0,0,0);
+            entry.addView(count);
+            VaultNativeStyle.margin(target,entry,7,activity);
         }
-        TextView count = text(matched + " matching entries" +
-                (matched > visibleCount ? " • showing first " + visibleCount : ""), 12, MUTED, false);
-        count.setPadding(0, dp(9), 0, dp(8));
-        target.addView(count);
-        if (matched > visibleCount) {
-            Button more = button("Load next 60");
+        String label=String.format(Locale.US,"%,d matching entries",matched);
+        TextView footer=text(label+(matched>visibleCount?" • "+visibleCount+" shown":""),12,
+                VaultNativeStyle.SUBTEXT,false);
+        footer.setPadding(0,dp(8),0,dp(10));target.addView(footer);
+        if(matched>visibleCount){
+            Button more=button("Load more cards",false);
             target.addView(more);
-            more.setOnClickListener(v -> { visibleCount += PAGE_SIZE; drawRows(target, rows); });
+            more.setOnClickListener(v->{visibleCount+=PAGE_SIZE;drawRows(target,rows);});
         }
+    }
+    private static List<CardRow> load(SharedPreferences prefs,String key)throws Exception{
+        String source=prefs.getString(key,"[]");
+        JSONArray list=new JSONArray(source==null?"[]":source);
+        if(list.length()>150000)throw new IllegalArgumentException("Inventory exceeds safety limit");
+        ArrayList<CardRow> output=new ArrayList<>(list.length());
+        for(int i=0;i<list.length();i++){
+            JSONObject item=list.optJSONObject(i);if(item==null)continue;
+            String name=item.optString("name","").trim();int qty=item.optInt("qty",0);
+            if(!name.isEmpty()&&qty>0)output.add(new CardRow(name,qty));
+        }
+        output.sort(Comparator.comparing(row->row.name,String.CASE_INSENSITIVE_ORDER));
+        return output;
+    }
+    private void refresh(){
+        int ticket=++readGeneration;
+        subtitle.setText("Refreshing local collection…");
+        new Thread(()->{
+            try{
+                List<CardRow> paper=load(prefs,"vault_physicalCollectionV1");
+                List<CardRow> digital=load(prefs,"vault_cards");
+                activity.runOnUiThread(()->{
+                    if(ticket!=readGeneration||activity.isFinishing())return;
+                    physical=paper;arena=digital;show(scope);
+                });
+            }catch(Exception error){
+                activity.runOnUiThread(()->{
+                    if(ticket!=readGeneration)return;
+                    subtitle.setText("Inventory unavailable • open Legacy tools to restore");
+                });
+            }
+        },"arcane-native-inventory-summary").start();
     }
 }
