@@ -73,7 +73,7 @@ final class NativeCatalogScreen {
     private final EditText search;
     private String source = "both", owned = "all", query = "";
     private boolean onlyOwnedPhysicalPrintings = false;
-    private String setCode="",typeFilter="",oracleFilter="",rarityFilter="",roleFilter="",sortMode="";
+    private String setCode="",typeFilter="",oracleFilter="",rarityFilter="",roleFilter="",sortMode="",oracleMatch="all";
     private String manaValueMin="",manaValueMax="";
     private String exactColorIdentity="";
     private boolean advancedOpen=false;
@@ -299,7 +299,9 @@ final class NativeCatalogScreen {
     private void buildAdvancedFilters(){
         filterField("SET CODE","Exact set code (e.g. MH3)",value->setCode=value);
         filterField("TYPE CONTAINS","Creature, Wizard, Enchantment…",value->typeFilter=value);
-        filterField("KEYWORD / RULES TEXT","Banding, Connive, Replicate…",value->oracleFilter=value);
+        filterField("KEYWORD / RULES TEXT","Comma-separated: Connive, Discard…",value->oracleFilter=value);
+        filterPicker("MECHANIC MATCH",new String[]{"Match All","Match Any"},
+            new String[]{"all","any"},value->oracleMatch=value);
         filterPicker("RARITY",RARITY_NAMES,RARITY_VALUES,value->rarityFilter=value);
         filterPicker("UTILIZATION TAG",ROLE_NAMES,ROLE_NAMES,value->
             roleFilter="All roles".equals(value)?"":value);
@@ -338,7 +340,7 @@ final class NativeCatalogScreen {
         Button reset=VaultNativeStyle.button(activity,"Reset advanced filters",false);
         advancedFilters.addView(reset,new LinearLayout.LayoutParams(-1,dp(42)));
         reset.setOnClickListener(v->{
-            setCode="";typeFilter="";oracleFilter="";rarityFilter="";roleFilter="";
+            setCode="";typeFilter="";oracleFilter="";oracleMatch="all";rarityFilter="";roleFilter="";
             sortMode="";exactColorIdentity="";manaValueMin="";manaValueMax="";
             advancedFilters.removeAllViews();identityButtons.clear();
             buildAdvancedFilters();page=0;schedule();
@@ -382,6 +384,7 @@ final class NativeCatalogScreen {
             selectedOracle=oracleFilter,
             selectedRarity=rarityFilter, selectedRole=roleFilter,
             selectedSort=sortMode, selectedIdentity=exactColorIdentity,
+            selectedOracleMatch=oracleMatch,
             selectedMvMin=manaValueMin,selectedMvMax=manaValueMax;
         final boolean printingMode=onlyOwnedPhysicalPrintings && "physical".equals(src);
         final int selectedPage=page;
@@ -392,6 +395,7 @@ final class NativeCatalogScreen {
                 options.put("q",q);options.put("scope",scope);
                 options.put("set",selectedSet);options.put("type",selectedType);
                 options.put("oracle",selectedOracle);
+                options.put("oracleMatch",selectedOracleMatch);
                 options.put("rarity",selectedRarity);options.put("role",selectedRole);
                 options.put("sort",selectedSort);options.put("colors",selectedIdentity);
                 options.put("mvMin",selectedMvMin);options.put("mvMax",selectedMvMax);
