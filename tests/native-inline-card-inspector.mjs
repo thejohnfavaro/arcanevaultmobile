@@ -16,7 +16,7 @@ for(const pattern of [
  /savePreferredArtwork/,
  /inspectorRequest/,
  /getWindowToken\(\)==null/,
- /loadThumbnail\(art,imageUrl\)/,
+ /flippableArt/,
  /private void prefetchPageArtwork\(/,
  /pageCache\.get\(cacheKey\)/,
  /pageCache\.put\(cacheKey,response\)/,
