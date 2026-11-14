@@ -59,6 +59,7 @@ jobs:
           node tests/regression.mjs
           node tests/new-features.mjs
           node tests/mobile-parity.mjs
+          node tests/native-updater.mjs
       - name: Test printing-aware ownership contract
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Validate signing credentials
