@@ -450,9 +450,12 @@ final class NativeWorkspaceScreen {
             "Peer preview never overwrites your data.",null);
         row("Wi-Fi peer exchange (trusted home network)",
             "Transfer snapshots wirelessly with a one-time link from Windows. "+
-            "Five-minute expiry; review-only and no automatic merging.",null);
+            "Five-minute one-use links. Review-only by default; applying an "+
+            "inventory merge requires a prior shared baseline and explicit confirmation.",null);
         button("Scan Windows Wi-Fi QR code",
             ()->((MainActivity)activity).scanWirelessPeerQr());
+        button("Scan QR & apply Windows inventory",
+            ()->((MainActivity)activity).scanWirelessPeerQrForApply());
         button("Receive Windows sync over Wi-Fi",
             ()->((MainActivity)activity).wirelessPeerReview(false));
         button("Send phone sync over Wi-Fi",
