@@ -367,7 +367,7 @@ public class MainActivity extends Activity {
                             .setPositiveButton("Sync & create baseline",(dialog,which)->{
                                 if("windows".equals(authority))
                                     applyWindowsFirstSync(link,local,windows);
-                                else finishUsbFirstSync(link,windows);
+                                else finishUsbFirstSync(link,windows,true);
                             }).show());
                     }catch(Exception error){
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
@@ -441,6 +441,10 @@ public class MainActivity extends Activity {
     /** Second USB exchange confirms both sides really match. Windows first
      * saves its verified checkpoint; Android then saves the peer snapshot. */
     private void finishUsbFirstSync(String link,JSONObject windows) {
+        finishUsbFirstSync(link,windows,false);
+    }
+    private void finishUsbFirstSync(String link,JSONObject windows,
+            boolean windowsWillUpdate) {
         withPeerData((decks,art)->{
             try {
                 JSONObject current=com.arcanevault.mobile.next.NativePeerSync.export(
@@ -449,7 +453,7 @@ public class MainActivity extends Activity {
                     try {
                         JSONObject differences=com.arcanevault.mobile.next.NativePeerSync
                             .preview(current,windows);
-                        if(differences.getJSONArray("changes").length()!=0)
+                        if(!windowsWillUpdate && differences.getJSONArray("changes").length()!=0)
                             throw new IOException("Local data did not match the selected sync source");
                         JSONObject response=com.arcanevault.mobile.next.NativeWirelessPeerClient
                             .exchangeUsb(link,current);
