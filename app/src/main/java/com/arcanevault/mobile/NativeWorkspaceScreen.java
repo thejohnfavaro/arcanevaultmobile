@@ -460,6 +460,12 @@ final class NativeWorkspaceScreen {
         button("Export peer sync file",()->((MainActivity)activity).exportPeerSync());
         button("Preview Windows / Android peer file",
             ()->((MainActivity)activity).previewPeerSync());
+        row("Apply approved peer changes",
+            "Inventory write-back only on Android. A selected prior shared baseline "+
+            "is required; conflicting edits and missing records are rejected. "+
+            "Deck and artwork write-back remains Windows-only.",null);
+        button("Review & apply peer inventory",
+            ()->((MainActivity)activity).reviewAndApplyPeerInventory());
         button("Three-way compare (known shared baseline)",
             ()->((MainActivity)activity).previewThreeWayPeerSync());
         button("Open advanced imports, QR and USB sync",legacy);
