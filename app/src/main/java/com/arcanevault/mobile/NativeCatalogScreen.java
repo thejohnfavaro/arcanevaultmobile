@@ -49,7 +49,8 @@ final class NativeCatalogScreen {
     private final ExecutorService artworkWorker = Executors.newFixedThreadPool(2);
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
-    private String source = "all", owned = "all", query = "";
+    private String source = "both", owned = "all", query = "";
+    private LinearLayout sourceFilters, ownershipFilters;
     private int page = 0;
     private volatile boolean disposed;
 
@@ -83,37 +84,48 @@ final class NativeCatalogScreen {
             }
             public void afterTextChanged(Editable s) {}
         });
+        TextView sourceLabel=text("COLLECTION",11,true);
+        sourceLabel.setTextColor(VaultNativeStyle.SUBTEXT);
+        layout.addView(sourceLabel);
         LinearLayout filters = new LinearLayout(activity);
+        sourceFilters=filters;
         filters.setOrientation(LinearLayout.HORIZONTAL);
-        for (String item : new String[]{"All cards", "Arena", "Not on Arena"}) {
-            Button b = button(item);
+        for (String item : new String[]{"All Cards", "Arena", "Physical"}) {
+            String selection=item.equals("All Cards")?"both":
+                item.equals("Arena")?"arena":"physical";
+            Button button=VaultNativeStyle.button(activity,item,source.equals(selection));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
-            lp.rightMargin=dp(7);filters.addView(b,lp);
-            b.setOnClickListener(v -> {
-                source = item.equals("All cards") ? "all" : item.equals("Arena") ? "arena" : "paper";
-                page = 0; schedule();
+            lp.rightMargin=dp(7);filters.addView(button,lp);
+            button.setOnClickListener(v -> {
+                source=selection;page=0;
+                updateCollectionFilters();schedule();
             });
         }
         HorizontalScrollView sourceScroll=new HorizontalScrollView(activity);
         sourceScroll.setHorizontalScrollBarEnabled(false);
         sourceScroll.addView(filters);
         layout.addView(sourceScroll);
+        TextView ownedLabel=text("OWNERSHIP",11,true);
+        ownedLabel.setTextColor(VaultNativeStyle.SUBTEXT);
+        layout.addView(ownedLabel);
         LinearLayout ownership = new LinearLayout(activity);
+        ownershipFilters=ownership;
         ownership.setOrientation(LinearLayout.HORIZONTAL);
-        for (String item : new String[]{"Any Arena qty", "Arena owned", "Arena missing"}) {
-            Button b = button(item);
+        for(String item : new String[]{"All", "Owned", "Missing"}) {
+            String selection=item.equals("Owned")?"owned":item.equals("Missing")?"unowned":"all";
+            Button button=VaultNativeStyle.button(activity,item,owned.equals(selection));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
-            lp.rightMargin=dp(7);ownership.addView(b,lp);
-            b.setOnClickListener(v -> {
-                owned = item.equals("Arena owned") ? "owned" : item.equals("Arena missing") ? "unowned" : "all";
-                page = 0; schedule();
+            lp.rightMargin=dp(7);ownership.addView(button,lp);
+            button.setOnClickListener(v -> {
+                owned=selection;page=0;
+                updateCollectionFilters();schedule();
             });
         }
         HorizontalScrollView ownedScroll=new HorizontalScrollView(activity);
         ownedScroll.setHorizontalScrollBarEnabled(false);
         ownedScroll.addView(ownership);
         LinearLayout.LayoutParams ownedParams=new LinearLayout.LayoutParams(-1,-2);
-        ownedParams.topMargin=dp(6);ownedParams.bottomMargin=dp(14);
+        ownedParams.bottomMargin=dp(14);
         layout.addView(ownedScroll,ownedParams);
         ScrollView scroll = new ScrollView(activity);
         results = new LinearLayout(activity);
@@ -140,6 +152,27 @@ final class NativeCatalogScreen {
         return VaultNativeStyle.button(activity,value,false);
     }
 
+    private void updateCollectionFilters() {
+        String[] sources={"both","arena","physical"};
+        for(int i=0;i<sourceFilters.getChildCount();i++) {
+            Button item=(Button)sourceFilters.getChildAt(i);
+            boolean active=source.equals(sources[i]);
+            item.setTextColor(active?VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
+            item.setBackground(VaultNativeStyle.rounded(activity,
+                active?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
+                active?Color.TRANSPARENT:VaultNativeStyle.BORDER,11));
+        }
+        String[] scopes={"all","owned","unowned"};
+        for(int i=0;i<ownershipFilters.getChildCount();i++) {
+            Button item=(Button)ownershipFilters.getChildAt(i);
+            boolean active=owned.equals(scopes[i]);
+            item.setTextColor(active?VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
+            item.setBackground(VaultNativeStyle.rounded(activity,
+                active?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
+                active?Color.TRANSPARENT:VaultNativeStyle.BORDER,11));
+        }
+    }
+
     private void schedule() {
         final int id=request.incrementAndGet();
         final String q=query, src=source, scope=owned;
@@ -149,7 +182,10 @@ final class NativeCatalogScreen {
             try {
                 Map<String,String> options=new HashMap<>();
                 options.put("q",q);options.put("scope",scope);
-                options.put("arena","arena".equals(src) ? "arena" : "paper".equals(src) ? "paper" : "");
+                options.put("source",src);
+                // A physical collection is not the same as cards unavailable on Arena.
+                // All Cards searches the full catalog and ownership across both inventories.
+                options.put("arena","");
                 options.put("page",Integer.toString(selectedPage));
                 options.put("size","40");
                 JSONObject response=catalog.search(options);
@@ -174,7 +210,7 @@ final class NativeCatalogScreen {
         JSONArray rows=response.optJSONArray("cards");
         int count=rows==null?0:rows.length();
         status.setText(total+" cards found • page "+(selectedPage+1)
-                +("paper".equals(src)?" • non-Arena catalog":"arena".equals(src)?" • Arena catalog":""));
+                +("physical".equals(src)?" • Physical Collection":"arena".equals(src)?" • Arena Collection":" • Both Collections"));
         if(total==0){
             results.addView(text("No cards found. If your catalog is empty, sync Scryfall data in Legacy tools.",14,false));
             return;
@@ -211,16 +247,19 @@ final class NativeCatalogScreen {
             typeView.setEllipsize(android.text.TextUtils.TruncateAt.END);
             typeView.setTextColor(VaultNativeStyle.SUBTEXT);
             detail.addView(typeView);
-            int arenaQty=row.optInt("qty",0);
+            int arenaQty=row.optInt("arenaQty",0);
+            int physicalQty=row.optInt("physicalQty",0);
             String rarityLabel=rarity.isEmpty()?"Card":rarity.substring(0,1).toUpperCase(java.util.Locale.ROOT)+rarity.substring(1);
             TextView metadata=text(rarityLabel+
+                (physicalQty>0?"   •   Physical ×"+physicalQty:"")+
                 (arenaQty>0?"   •   Arena ×"+arenaQty:""),12,true);
-            metadata.setTextColor(arenaQty>0?VaultNativeStyle.PRIMARY:VaultNativeStyle.GOLD);
+            metadata.setTextColor(physicalQty>0?VaultNativeStyle.PRIMARY:VaultNativeStyle.GOLD);
             detail.addView(metadata);
             entry.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
             entry.setContentDescription(name+", "+type+", "+rarityLabel+
+                (physicalQty>0?", Physical copies "+physicalQty:"")+
                 (arenaQty>0?", Arena copies "+arenaQty:"")+". Tap to inspect");
-            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,arenaQty));
+            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,arenaQty,physicalQty));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
             lp.bottomMargin=dp(9);
             results.addView(entry,lp);
@@ -258,7 +297,7 @@ final class NativeCatalogScreen {
         });
     }
 
-    private void showDetails(String name,String type,String oracle,String rarity,String imageUrl,int arenaQty) {
+    private void showDetails(String name,String type,String oracle,String rarity,String imageUrl,int arenaQty,int physicalQty) {
         LinearLayout body=VaultNativeStyle.column(activity);
         body.setPadding(dp(16),dp(12),dp(16),dp(20));
         body.setBackgroundColor(VaultNativeStyle.BACKGROUND);
@@ -288,7 +327,7 @@ final class NativeCatalogScreen {
         oracleText.setLineSpacing(dp(3),1f);
         oraclePanel.addView(oracleText);
         VaultNativeStyle.margin(body,oraclePanel,12,activity);
-        TextView rarityText=text("Rarity: "+rarity+
+        TextView rarityText=text("Rarity: "+rarity+"    •    Physical copies: "+physicalQty+
             "    •    Arena copies: "+arenaQty,13,true);
         rarityText.setTextColor(VaultNativeStyle.PRIMARY);
         VaultNativeStyle.margin(body,rarityText,12,activity);
