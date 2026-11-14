@@ -160,14 +160,6 @@ public class MainActivity extends Activity {
         if (appUrl != null) browser.loadUrl(appUrl);
     }
 
-    @Override public void onBackPressed() {
-        if (!nativeHomeVisible) {
-            showNativeHome();
-            return;
-        }
-        super.onBackPressed();
-    }
-
     // Enumerate WebView's previous localhost origins. Old builds used an ephemeral
     // port as the origin, so their localStorage is still on disk but invisible.
     private void startLegacyRecovery() {
@@ -503,9 +495,13 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onBackPressed(){
-        // First close modal, then navigate to Cards instead of exiting abruptly.
-        browser.evaluateJavascript("(function(){let d=document.querySelector('dialog[open]');if(d){d.close();return 'closed'}return 'none'})()",result->{
-            if("\"none\"".equals(result)) super.onBackPressed();
+        if (nativeHomeVisible) {
+            super.onBackPressed();
+            return;
+        }
+        // Preserve the old modal-close behavior inside the legacy tools.
+        browser.evaluateJavascript("(function(){let d=document.querySelector('dialog[open]');if(d){d.close();return 'closed'}return 'none'})()", result -> {
+            if ("\"none\"".equals(result)) showNativeHome();
         });
     }
     @Override protected void onDestroy(){
