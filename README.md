@@ -17,6 +17,13 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.0.30: native in-app update checker
+
+- On the native Home screen, select **Check for app updates**. Android discovers versioned GitHub releases, validates the signed APK and SHA-256, and asks for approval before running the system installer.
+- The installation is opt-in and uses the existing app package and matching signing certificate. A debug APK with a different signing certificate is rejected.
+- Android may ask to allow installs from this source. Backup your collection before updating, particularly when switching between old test builds and production signed releases.
+- If no matching signed release is published, the app reports that no newer signed update is available.
+
 ## Android v2.0.29: native-first app foundation
 
 - The default Home, Physical, and Arena collection browsing now use Android-native views instead of HTML/WebView.
