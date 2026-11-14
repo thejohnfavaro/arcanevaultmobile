@@ -186,6 +186,9 @@ final class NativeCompanionScreen {
                     "%,d copies across %,d rows", copies(arena), arena.size()));
             panel("Safely transitioning", "This screen reads your existing native inventory without changing it. " +
                     "Existing Set Progress, imports, sync, decks and detailed catalog remain available under Legacy tools.");
+            Button updater = button("Check for app updates");
+            content.addView(updater);
+            updater.setOnClickListener(action -> new NativeAppUpdater(activity).check());
             Button refresh = button("Refresh local totals");
             content.addView(refresh);
             refresh.setOnClickListener(v -> refresh());

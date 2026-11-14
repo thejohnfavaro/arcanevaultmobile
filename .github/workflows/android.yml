@@ -45,6 +45,7 @@ jobs:
           node tests/regression.mjs
           node tests/new-features.mjs
           node tests/mobile-parity.mjs
+          node tests/native-updater.mjs
       - name: Test printing-aware ownership contract
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build debug APK
@@ -52,7 +53,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ArcaneVault-Android-2.0.29-debug
+          name: ArcaneVault-Android-2.0.30-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 

@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.0.29 (Android Studio project)
+# Arcane Vault for Android — v2.0.30 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
@@ -16,6 +16,13 @@
 - A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
+
+## Android v2.0.30: native in-app update checker
+
+- On the native Home screen, select **Check for app updates**. Android discovers versioned GitHub releases, validates the signed APK and SHA-256, and asks for approval before running the system installer.
+- The installation is opt-in and uses the existing app package and matching signing certificate. A debug APK with a different signing certificate is rejected.
+- Android may ask to allow installs from this source. Backup your collection before updating, particularly when switching between old test builds and production signed releases.
+- If no matching signed release is published, the app reports that no newer signed update is available.
 
 ## Android v2.0.29: native-first app foundation
 
