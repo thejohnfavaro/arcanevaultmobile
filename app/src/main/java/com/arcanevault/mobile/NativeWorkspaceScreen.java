@@ -54,7 +54,20 @@ final class NativeWorkspaceScreen {
         content=VaultNativeStyle.column(activity);
         scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        if(section.equals("sets"))setProgress("",0);
+        if(section.equals("sets")){
+            EditText search=new EditText(activity);
+            VaultNativeStyle.search(activity,search);
+            search.setHint("Search physical set progress");
+            root.addView(search,3,new LinearLayout.LayoutParams(-1,dp(48)));
+            search.addTextChangedListener(new TextWatcher(){
+                public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+                public void onTextChanged(CharSequence s,int start,int before,int count){
+                    setProgress(s.toString(),0);
+                }
+                public void afterTextChanged(Editable e){}
+            });
+            setProgress("",0);
+        }
         else if(section.equals("decks"))deckLibrary();
         else dataSync();
     }
@@ -101,18 +114,6 @@ final class NativeWorkspaceScreen {
                         "Physical ownership by verified printing. Name-only cards are not assigned to sets.",
                         12,VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,hint,10,activity);
-                    EditText search=new EditText(activity);
-                    VaultNativeStyle.search(activity,search);
-                    search.setHint("Search sets");
-                    search.setText(filter);
-                    VaultNativeStyle.margin(content,search,10,activity);
-                    search.addTextChangedListener(new TextWatcher(){
-                        public void beforeTextChanged(CharSequence s,int start,int count,int after){}
-                        public void onTextChanged(CharSequence s,int start,int before,int count){
-                            setProgress(s.toString(),0);
-                        }
-                        public void afterTextChanged(Editable e){}
-                    });
                     int start=pageNumber*40;
                     for(int i=start;i<Math.min(finalSets.length(),start+40);i++){
                         JSONObject set=finalSets.optJSONObject(i);
@@ -121,7 +122,8 @@ final class NativeWorkspaceScreen {
                             set.optString("code","").toUpperCase(),
                             set.optInt("owned",0)+"/"+set.optInt("total",0)+
                             " printings · "+set.optDouble("percentage",0)+"% · "+
-                            set.optString("releaseDate",""),null);
+                            set.optString("releaseDate",""),()->showSet(set.optString("code",""),
+                                set.optString("name","Unknown set"),0));
                     }
                     if(start+40<finalSets.length())
                         button("Show more sets",()->setProgress(filter,pageNumber+1));
@@ -132,6 +134,47 @@ final class NativeWorkspaceScreen {
             }
         });
     }
+    private void showSet(String set,String title,int pageNumber){
+        status.setText("Reading "+title+" printings…");
+        executor.execute(()->{
+            try {
+                Map<String,String> args=new HashMap<>();
+                args.put("set",set);args.put("page",Integer.toString(pageNumber));
+                args.put("size","48");
+                JSONObject response=catalog.setPrintings(args);
+                JSONArray printings=response.optJSONArray("printings");
+                if(printings==null)printings=new JSONArray();
+                final JSONArray entries=printings;
+                ui.post(()->{
+                    if(closed||activity.isFinishing())return;
+                    content.removeAllViews();
+                    button("← Back to sets",()->setProgress("",0));
+                    TextView hint=VaultNativeStyle.label(activity,
+                        "Confirmed copies are based on printing identity, not card name.",
+                        12,VaultNativeStyle.SUBTEXT,false);
+                    VaultNativeStyle.margin(content,hint,12,activity);
+                    for(int i=0;i<entries.length();i++){
+                        JSONObject p=entries.optJSONObject(i);if(p==null)continue;
+                        int qty=p.optInt("confirmedPhysicalCopies",0);
+                        String name=p.optString("name","");
+                        String collector=p.optString("collectorNumber","");
+                        row(name+" · #"+collector,
+                            (qty>0?"Owned ×"+qty:"Missing")+
+                                " · "+p.optString("rarity",""),
+                            ()->new AlertDialog.Builder(activity).setTitle(name)
+                                .setMessage(title+" #"+collector+"\n"+
+                                    "Confirmed physical copies: "+qty+"\n"+
+                                    "Printing ID: "+p.optString("id",""))
+                                .setPositiveButton("Close",null).show());
+                    }
+                    if((pageNumber+1)*48<response.optInt("total",0))
+                        button("Next printings",()->showSet(set,title,pageNumber+1));
+                    status.setText(title+" · "+response.optInt("total",0)+" printings");
+                });
+            }catch(Exception e){ui.post(()->{if(!closed)status.setText("Set details unavailable: "+e.getMessage());});}
+        });
+    }
+
     private void deckLibrary(){
         status.setText("Reading saved deck library from the existing app…");
         decks.fetch(json->ui.post(()->{
