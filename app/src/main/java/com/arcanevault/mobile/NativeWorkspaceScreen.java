@@ -12,6 +12,12 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.HorizontalScrollView;
+import android.widget.CheckBox;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
+import android.graphics.Color;
+import java.util.List;
 import android.text.Editable;
 import android.text.TextWatcher;
 import org.json.JSONArray;
@@ -37,6 +43,16 @@ final class NativeWorkspaceScreen {
     private final TextView status;
     private volatile boolean closed;
     private int page=0;
+    private int setRequestId=0;
+    private String setQuery="";
+    private String setSource="physical";
+    private boolean hideEmptySets=true;
+    private boolean hideUnownedSetSlots=false;
+    private String setSort=NativeSetProgressFilters.RECENT;
+    private static final String PREF_SET_HIDE_EMPTY="native_set_hide_empty_v1";
+    private static final String PREF_SET_SORT="native_set_sort_v1";
+    private static final String PREF_SET_SCOPE="native_set_source_v1";
+    private static final String PREF_SET_HIDE_UNOWNED="native_set_hide_unowned_v1";
 
     private NativeWorkspaceScreen(Activity activity,SharedPreferences prefs,CatalogStore catalog,
             Runnable legacy,DeckLoader decks,String section){
@@ -55,14 +71,85 @@ final class NativeWorkspaceScreen {
         scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         if(section.equals("sets")){
+            hideEmptySets=prefs.getBoolean(PREF_SET_HIDE_EMPTY,true);
+            hideUnownedSetSlots=prefs.getBoolean(PREF_SET_HIDE_UNOWNED,false);
+            setSort=prefs.getString(PREF_SET_SORT,NativeSetProgressFilters.RECENT);
+            if(!java.util.Arrays.asList(NativeSetProgressFilters.SORTS).contains(setSort))
+                setSort=NativeSetProgressFilters.RECENT;
+            setSource=prefs.getString(PREF_SET_SCOPE,"physical");
+            if(!setSource.equals("physical")&&!setSource.equals("arena"))
+                setSource="physical";
+            LinearLayout settings=VaultNativeStyle.column(activity);
+            settings.setPadding(0,dp(7),0,dp(6));
+            TextView scopeLabel=VaultNativeStyle.label(activity,"COLLECTION",11,VaultNativeStyle.SUBTEXT,true);
+            settings.addView(scopeLabel);
+            LinearLayout sourceRow=VaultNativeStyle.row(activity);
+            for(String target:new String[]{"physical","arena"}){
+                Button select=VaultNativeStyle.button(activity,
+                    target.equals("physical")?"Physical printings":"Arena card names",
+                    target.equals(setSource));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
+                lp.rightMargin=dp(7);
+                sourceRow.addView(select,lp);
+                select.setOnClickListener(v->{
+                    if(setSource.equals(target))return;
+                    setSource=target;
+                    prefs.edit().putString(PREF_SET_SCOPE,setSource).apply();
+                    // Re-render the selected buttons, keeping current search and sort.
+                    for(int i=0;i<sourceRow.getChildCount();i++){
+                        Button b=(Button)sourceRow.getChildAt(i);
+                        boolean selected=(i==0)==setSource.equals("physical");
+                        b.setTextColor(selected?VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
+                        b.setBackground(VaultNativeStyle.rounded(activity,
+                            selected?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
+                            selected?Color.TRANSPARENT:VaultNativeStyle.BORDER,11));
+                    }
+                    setProgress(setQuery,0);
+                });
+            }
+            settings.addView(sourceRow);
+            CheckBox hide=new CheckBox(activity);
+            hide.setText("Hide sets with no progress");
+            hide.setTextColor(VaultNativeStyle.TEXT);
+            hide.setButtonTintList(android.content.res.ColorStateList.valueOf(VaultNativeStyle.PRIMARY));
+            hide.setChecked(hideEmptySets);
+            hide.setOnCheckedChangeListener((b,checked)->{
+                hideEmptySets=checked;
+                prefs.edit().putBoolean(PREF_SET_HIDE_EMPTY,checked).apply();
+                setProgress(setQuery,0);
+            });
+            settings.addView(hide);
+            TextView sortLabel=VaultNativeStyle.label(activity,"SORT SETS",11,VaultNativeStyle.SUBTEXT,true);
+            settings.addView(sortLabel);
+            Spinner sort=new Spinner(activity);
+            String[] names={"Newest release first","Oldest release first","Set name A–Z","Most complete"};
+            ArrayAdapter<String> adapter=new ArrayAdapter<>(activity,
+                android.R.layout.simple_spinner_item,names);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            sort.setAdapter(adapter);
+            int selectedIndex=java.util.Arrays.asList(NativeSetProgressFilters.SORTS).indexOf(setSort);
+            sort.setSelection(Math.max(0,selectedIndex));
+            sort.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+                public void onNothingSelected(AdapterView<?> parent){}
+                public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                    String requested=NativeSetProgressFilters.SORTS[position];
+                    if(requested.equals(setSort))return;
+                    setSort=requested;
+                    prefs.edit().putString(PREF_SET_SORT,setSort).apply();
+                    setProgress(setQuery,0);
+                }
+            });
+            settings.addView(sort,new LinearLayout.LayoutParams(-1,dp(46)));
+            root.addView(settings,2);
             EditText search=new EditText(activity);
             VaultNativeStyle.search(activity,search);
-            search.setHint("Search physical set progress");
-            root.addView(search,2,new LinearLayout.LayoutParams(-1,dp(48)));
+            search.setHint("Search sets by name or code");
+            root.addView(search,3,new LinearLayout.LayoutParams(-1,dp(48)));
             search.addTextChangedListener(new TextWatcher(){
                 public void beforeTextChanged(CharSequence s,int start,int count,int after){}
                 public void onTextChanged(CharSequence s,int start,int before,int count){
-                    setProgress(s.toString(),0);
+                    setQuery=s.toString();
+                    setProgress(setQuery,0);
                 }
                 public void afterTextChanged(Editable e){}
             });
@@ -98,64 +185,107 @@ final class NativeWorkspaceScreen {
         return b;
     }
     private void setProgress(String filter,int pageNumber){
-        page=pageNumber;status.setText("Reading official set progress…");
+        page=pageNumber;
+        setQuery=filter;
+        final int request=++setRequestId;
+        final String source=setSource;
+        final String order=setSort;
+        final boolean hide=hideEmptySets;
+        status.setText("Reading "+source+" set progress…");
         executor.execute(()->{
             try{
                 Map<String,String> p=new HashMap<>();
-                p.put("source","physical");p.put("q",filter);
+                p.put("source",source);
+                p.put("arena",source.equals("arena")?"arena":"");
+                p.put("q",filter);
                 JSONObject result=catalog.sets(p);
                 JSONArray sets=result.optJSONArray("sets");
                 if(sets==null)sets=new JSONArray();
-                JSONArray finalSets=sets;
+                List<JSONObject> filtered=NativeSetProgressFilters.select(sets,hide,order);
+                int allSets=sets.length();
                 ui.post(()->{
-                    if(closed||activity.isFinishing())return;
+                    if(closed||activity.isFinishing()||request!=setRequestId)return;
                     content.removeAllViews();
                     TextView hint=VaultNativeStyle.label(activity,
-                        "Physical ownership by verified printing. Name-only cards are not assigned to sets.",
+                        source.equals("physical")?
+                        "Verified physical editions only. Name-only ownership cannot establish a set.":
+                        "Arena tracks owned card names in Arena-available sets, not exact printings.",
                         12,VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,hint,10,activity);
+                    if(filtered.isEmpty())
+                        row("No sets match these filters",
+                            "Try showing empty sets, changing collection, or clearing the search.",null);
                     int start=pageNumber*40;
-                    for(int i=start;i<Math.min(finalSets.length(),start+40);i++){
-                        JSONObject set=finalSets.optJSONObject(i);
-                        if(set==null)continue;
-                        row(set.optString("name","Unknown set")+" · "+
-                            set.optString("code","").toUpperCase(),
-                            set.optInt("owned",0)+"/"+set.optInt("total",0)+
-                            " printings · "+set.optDouble("percentage",0)+"% · "+
-                            set.optString("releaseDate",""),()->showSet(set.optString("code",""),
-                                set.optString("name","Unknown set"),0));
+                    for(int i=start;i<Math.min(filtered.size(),start+40);i++){
+                        JSONObject set=filtered.get(i);
+                        String code=set.optString("code","");
+                        String name=set.optString("name","Unknown set");
+                        int owned=set.optInt("owned",0);
+                        int total=set.optInt("total",0);
+                        String release=set.optString("releaseDate","");
+                        row(name+" · "+code.toUpperCase(java.util.Locale.ROOT),
+                            owned+"/"+total+
+                            (source.equals("physical")?" verified printings":" Arena card names")+
+                            " · "+set.optDouble("percentage",0)+"%"+
+                            (release.isEmpty()?"":" · "+release),
+                            ()->showSet(code,name,0));
                     }
-                    if(start+40<finalSets.length())
-                        button("Show more sets",()->setProgress(filter,pageNumber+1));
-                    status.setText(finalSets.length()+" sets · physical printing progress");
+                    if(start+40<filtered.size())
+                        button("Next sets ("+(start+40)+" / "+filtered.size()+")",
+                            ()->setProgress(filter,pageNumber+1));
+                    if(start>0)button("Previous sets",()->setProgress(filter,pageNumber-1));
+                    status.setText(filtered.size()+" shown / "+allSets+" sets · "+
+                        NativeSetProgressFilters.title(order));
                 });
             }catch(Exception error){
-                ui.post(()->{if(!closed)status.setText("Set progress unavailable: "+error.getMessage());});
+                ui.post(()->{
+                    if(!closed&&request==setRequestId)
+                        status.setText("Set progress unavailable: "+error.getMessage());
+                });
             }
         });
     }
     private void showSet(String set,String title,int pageNumber){
+        final int request=++setRequestId;
+        final String source=setSource;
+        final boolean hideUnowned=hideUnownedSetSlots;
         status.setText("Reading "+title+" printings…");
         executor.execute(()->{
             try {
                 Map<String,String> args=new HashMap<>();
                 args.put("set",set);args.put("page",Integer.toString(pageNumber));
                 args.put("size","48");
-                JSONObject response=catalog.setPrintings(args);
-                JSONArray printings=response.optJSONArray("printings");
+                args.put("source",source);
+                JSONObject response=source.equals("physical")?
+                    catalog.setPrintings(args):catalog.setCards(args);
+                JSONArray printings=response.optJSONArray(source.equals("physical")?"printings":"cards");
                 if(printings==null)printings=new JSONArray();
                 final JSONArray entries=printings;
                 ui.post(()->{
-                    if(closed||activity.isFinishing())return;
+                    if(closed||activity.isFinishing()||request!=setRequestId)return;
                     content.removeAllViews();
-                    button("← Back to sets",()->setProgress("",0));
+                    button("← Back to sets",()->setProgress(setQuery,0));
+                    CheckBox ownedOnly=new CheckBox(activity);
+                    ownedOnly.setText(source.equals("physical")?
+                        "Hide unowned printings":"Hide unowned Arena cards");
+                    ownedOnly.setTextColor(VaultNativeStyle.TEXT);
+                    ownedOnly.setButtonTintList(android.content.res.ColorStateList.valueOf(VaultNativeStyle.PRIMARY));
+                    ownedOnly.setChecked(hideUnowned);
+                    ownedOnly.setOnCheckedChangeListener((v,checked)->{
+                        hideUnownedSetSlots=checked;
+                        prefs.edit().putBoolean(PREF_SET_HIDE_UNOWNED,checked).apply();
+                        showSet(set,title,0);
+                    });
+                    content.addView(ownedOnly);
                     TextView hint=VaultNativeStyle.label(activity,
                         "Confirmed copies are based on printing identity, not card name.",
                         12,VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,hint,12,activity);
                     for(int i=0;i<entries.length();i++){
                         JSONObject p=entries.optJSONObject(i);if(p==null)continue;
-                        int qty=p.optInt("confirmedPhysicalCopies",0);
+                        int qty=source.equals("physical")?
+                            p.optInt("confirmedPhysicalCopies",0):p.optInt("qty",0);
+                        if(hideUnowned&&qty<=0)continue;
                         String name=p.optString("name","");
                         String collector=p.optString("collectorNumber","");
                         row(name+" · #"+collector,
@@ -163,13 +293,14 @@ final class NativeWorkspaceScreen {
                                 " · "+p.optString("rarity",""),
                             ()->new AlertDialog.Builder(activity).setTitle(name)
                                 .setMessage(title+" #"+collector+"\n"+
-                                    "Confirmed physical copies: "+qty+"\n"+
+                                    (source.equals("physical")?"Confirmed physical copies: ":"Arena copies: ")+qty+"\n"+
                                     "Printing ID: "+p.optString("id",""))
                                 .setPositiveButton("Close",null).show());
                     }
-                    if((pageNumber+1)*48<response.optInt("total",0))
+                    if((source.equals("physical") && (pageNumber+1)*48<response.optInt("total",0)) ||
+                        (source.equals("arena") && response.optBoolean("hasMore",false)))
                         button("Next printings",()->showSet(set,title,pageNumber+1));
-                    status.setText(title+" · "+response.optInt("total",0)+" printings");
+                    status.setText(title+" · "+(source.equals("physical")?"Physical printings":"Arena card names"));
                 });
             }catch(Exception e){ui.post(()->{if(!closed)status.setText("Set details unavailable: "+e.getMessage());});}
         });
