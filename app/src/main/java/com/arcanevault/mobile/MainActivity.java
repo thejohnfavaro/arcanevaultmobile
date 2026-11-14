@@ -209,11 +209,36 @@ public class MainActivity extends Activity {
         return id;
     }
     /** One-use LAN peer link entry: never sync by guessing an unverified URL. */
-    void wirelessPeerReview(boolean send) {
+    /** Reuse the established in-app Google Code Scanner without camera permissions. */
+    void scanWirelessPeerQr() {
+        GmsBarcodeScannerOptions options=new GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE).build();
+        GmsBarcodeScanning.getClient(this,options).startScan()
+            .addOnSuccessListener(barcode->{
+                String url=barcode.getRawValue();
+                try{com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(url);}
+                catch(Exception error){
+                    toast("Not a valid Arcane Vault Wi-Fi QR: "+error.getMessage());return;
+                }
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle("Windows ↔ Android QR sync")
+                    .setMessage("What did you select on Windows? The transfer will only be reviewed; "+
+                        "it will not modify either collection. Use trusted home Wi-Fi.")
+                    .setNegativeButton("Cancel",null)
+                    .setNeutralButton("Receive from PC",(d,w)->wirelessPeerReview(false,url))
+                    .setPositiveButton("Send to PC",(d,w)->wirelessPeerReview(true,url)).show();
+            })
+            .addOnFailureListener(error->toast(
+                "QR scanner unavailable. Use the one-time link instead: "+error.getMessage()));
+    }
+
+    void wirelessPeerReview(boolean send) { wirelessPeerReview(send,null); }
+    void wirelessPeerReview(boolean send,String scannedLink) {
         android.widget.EditText address=new android.widget.EditText(this);
         address.setSingleLine(true);
         address.setTextSize(13);
         address.setHint("http://192.168.x.x:port/arcane-peer/token");
+        if(scannedLink!=null)address.setText(scannedLink);
         address.setInputType(android.text.InputType.TYPE_CLASS_TEXT|
             android.text.InputType.TYPE_TEXT_VARIATION_URI);
         new android.app.AlertDialog.Builder(this)

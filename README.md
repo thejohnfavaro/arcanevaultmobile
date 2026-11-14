@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.1.2 (Android Studio project)
+# Arcane Vault for Android — v2.1.3 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
@@ -16,6 +16,13 @@
 - A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
+
+## Android v2.1.3: Set Progress filtering and scan-to-sync
+
+- Set Progress now supports Physical/Arena scope, hide empty sets, newest/oldest release date, name and completion sorting, and an owned-only checklist. The filters persist across visits.
+- Native Data & Sync includes **Scan Windows Wi-Fi QR code**. Scan the QR from Windows Share/Receive peer sync, select direction, then confirm the one-use link.
+- Physical completion counts verified exact editions; Arena coverage counts card names and is labeled separately.
+- Sync transport remains local, unencrypted HTTP on trusted home Wi-Fi, and **only compares peer snapshots**, not writes data.
 
 ## Android v2.1.2: Wi-Fi peer review and phone system-bar safe areas
 
