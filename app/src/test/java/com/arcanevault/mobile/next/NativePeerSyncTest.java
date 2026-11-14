@@ -80,6 +80,34 @@ public final class NativePeerSyncTest {
         assertFalse(divergent.getBoolean("safeToAutoApply"));
     }
 
+    @Test public void candidateMergesIndependentRecordsWithoutMutatingInputs()throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject local=peer("00000000-0000-4000-8000-000000000701",5);
+        JSONObject remote=peer("00000000-0000-4000-8000-000000000702",4);
+        remote.getJSONObject("data").getJSONArray("physicalCards").put(new JSONObject()
+            .put("name","Counterspell").put("qty",1).put("set","2XM")
+            .put("number","47").put("scryfallId","22222222-2222-4222-8222-222222222222"));
+        String localBefore=local.toString();
+        JSONObject plan=NativePeerSync.prepareMerge(local,remote,baseline);
+        assertEquals(1,plan.getInt("incomingChanges"));
+        assertEquals(1,plan.getInt("localChanges"));
+        assertFalse(plan.getBoolean("safeToAutoApply"));
+        assertEquals(2,plan.getJSONObject("candidate").getJSONArray("physicalCards").length());
+        assertEquals(5,plan.getJSONObject("candidate").getJSONArray("cards")
+            .getJSONObject(0).getInt("qty"));
+        assertEquals(localBefore,local.toString());
+    }
+    @Test public void conflictAndMissingPeerRowsAreRejected()throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject local=peer("00000000-0000-4000-8000-000000000701",5);
+        JSONObject conflicting=peer("00000000-0000-4000-8000-000000000702",6);
+        try {NativePeerSync.prepareMerge(local,conflicting,baseline);fail("conflict accepted");}
+        catch(IllegalArgumentException expected){}
+        JSONObject absence=peer("00000000-0000-4000-8000-000000000702",4);
+        absence.getJSONObject("data").put("physicalCards",new JSONArray());
+        try {NativePeerSync.prepareMerge(local,absence,baseline);fail("absence deleted printing");}
+        catch(IllegalArgumentException expected){}
+    }
     @Test public void malformedAndDuplicateDecksRejected()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject peer=peer("00000000-0000-4000-8000-000000000702",4);
