@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.0.28 (Android Studio project)
+# Arcane Vault for Android — v2.0.29 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
