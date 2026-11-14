@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
     private JSONObject recoveredSettings = new JSONObject();
     private String appUrl;
     private ValueCallback<Uri[]> pickerCallback;
+    private boolean nativeHomeVisible = false;
     private byte[] pendingExport;
     private HttpServerLite server;
     private ExecutorService workers;
@@ -145,6 +146,18 @@ public class MainActivity extends Activity {
             appUrl = "http://127.0.0.1:" + server.getPort() + "/";
             startLegacyRecovery();
         } catch(IOException e) {toast("Unable to start local app service: " + e.getMessage());}
+    }
+
+    /** Native-first shell. Preserve legacy WebView and origin recovery. */
+    private void showNativeHome() {
+        nativeHomeVisible = true;
+        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork, this::showLegacyTools));
+    }
+
+    private void showLegacyTools() {
+        nativeHomeVisible = false;
+        setContentView(browser);
+        if (appUrl != null) browser.loadUrl(appUrl);
     }
 
     // Enumerate WebView's previous localhost origins. Old builds used an ephemeral
@@ -274,6 +287,7 @@ public class MainActivity extends Activity {
         durable.edit().putString("recoveryReport","Checked "+legacyScanned+" older storage locations; restored "+imported+" full collection inventories and "+indexedRecovered+" aggregate inventory fallbacks. "+legacyConflicts+" older differences preserved for safety.").commit();
         browser.loadUrl(appUrl);
         if(recoveredSettings.length()==0) cleanVerifiedLegacyOrigins();
+        showNativeHome();
     }
     private void cleanVerifiedLegacyOrigins(){
         if (durable.getString("migrationSettings",null)!=null) return;
@@ -481,9 +495,13 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onBackPressed(){
-        // First close modal, then navigate to Cards instead of exiting abruptly.
-        browser.evaluateJavascript("(function(){let d=document.querySelector('dialog[open]');if(d){d.close();return 'closed'}return 'none'})()",result->{
-            if("\"none\"".equals(result)) super.onBackPressed();
+        if (nativeHomeVisible) {
+            super.onBackPressed();
+            return;
+        }
+        // Preserve the old modal-close behavior inside the legacy tools.
+        browser.evaluateJavascript("(function(){let d=document.querySelector('dialog[open]');if(d){d.close();return 'closed'}return 'none'})()", result -> {
+            if ("\"none\"".equals(result)) showNativeHome();
         });
     }
     @Override protected void onDestroy(){
