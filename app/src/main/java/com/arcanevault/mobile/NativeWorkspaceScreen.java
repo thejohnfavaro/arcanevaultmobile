@@ -44,6 +44,7 @@ final class NativeWorkspaceScreen {
     private volatile boolean closed;
     private int page=0;
     private String syncSection="devices";
+    private String deckCommanderFilter="";
     private int setRequestId=0;
     private String setQuery="";
     private String setSource="physical";
@@ -56,8 +57,9 @@ final class NativeWorkspaceScreen {
     private static final String PREF_SET_HIDE_UNOWNED="native_set_hide_unowned_v1";
 
     private NativeWorkspaceScreen(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            Runnable legacy,DeckLoader decks,String section){
+            Runnable legacy,DeckLoader decks,String section,String initialCommander){
         this.activity=activity;this.prefs=prefs;this.catalog=catalog;
+        this.deckCommanderFilter=initialCommander==null?"":initialCommander.trim();
         this.legacy=legacy;this.decks=decks;
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(18),dp(14),dp(18),dp(14));
@@ -161,7 +163,11 @@ final class NativeWorkspaceScreen {
     }
     static NativeWorkspaceScreen create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
             Runnable legacy,DeckLoader decks,String section){
-        return new NativeWorkspaceScreen(activity,prefs,catalog,legacy,decks,section);
+        return create(activity,prefs,catalog,legacy,decks,section,"");
+    }
+    static NativeWorkspaceScreen create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
+            Runnable legacy,DeckLoader decks,String section,String initialCommander){
+        return new NativeWorkspaceScreen(activity,prefs,catalog,legacy,decks,section,initialCommander);
     }
     View view(){return root;}
     void close(){closed=true;executor.shutdownNow();}
@@ -317,10 +323,22 @@ final class NativeWorkspaceScreen {
             content.removeAllViews();
             try{
                 JSONArray library=new JSONArray(json);
-                status.setText(library.length()+" saved decks · read-only");
+                String selectedCommander=deckCommanderFilter;
+                status.setText(library.length()+" saved decks · read-only"+
+                    (selectedCommander.isEmpty()?"":" · Commander: "+selectedCommander));
+                if(!selectedCommander.isEmpty()){
+                    button("Show all saved decks",()->{
+                        deckCommanderFilter="";deckLibrary();
+                    });
+                }
                 if(library.length()==0)row("No saved decks","Save decks in Legacy tools to see them here.",null);
+                int matching=0;
                 for(int i=0;i<Math.min(library.length(),300);i++){
                     JSONObject d=library.optJSONObject(i);if(d==null)continue;
+                    String listedCommander=d.optString("commander","").trim();
+                    if(!selectedCommander.isEmpty() &&
+                        !selectedCommander.equalsIgnoreCase(listedCommander))continue;
+                    matching++;
                     JSONArray entries=d.optJSONArray("entries");
                     int qty=1;
                     if(entries!=null)for(int n=0;n<entries.length();n++)
@@ -331,6 +349,10 @@ final class NativeWorkspaceScreen {
                     row(name,commander+" · "+qty+" total cards · "+d.optString("folder","Unfiled"),
                         ()->showDeck(d));
                 }
+                if(matching==0 && !selectedCommander.isEmpty())
+                    row("No saved decks for this commander",
+                        "You can open the existing editor to build a deck. No deck was created automatically.",
+                        null);
                 button("Open deck editing tools",legacy);
             }catch(Exception e){
                 status.setText("Could not load deck library: "+e.getMessage());

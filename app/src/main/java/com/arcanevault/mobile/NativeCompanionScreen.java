@@ -116,6 +116,20 @@ final class NativeCompanionScreen {
         if(commanderBrowser!=null){commanderBrowser.close();commanderBrowser=null;}
         if(workspace!=null){workspace.close();workspace=null;}
     }
+    /** Navigate within the same native workspace; the selected commander is
+     * used only as a read-only saved-deck filter, never a deck mutation. */
+    private void showDecksForCommander(String commanderName){
+        if(commanderName==null||commanderName.trim().isEmpty())return;
+        closeCatalog();
+        scope="decks";query="";visibleCount=PAGE_SIZE;
+        drawTabs();
+        stage.removeAllViews();
+        workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,
+            deckLoader,"decks",commanderName);
+        stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
+        subtitle.setText("Saved decks for "+commanderName);
+    }
+
     private void show(String next){
         closeCatalog();
         scope=next;
@@ -132,7 +146,7 @@ final class NativeCompanionScreen {
         }
         if(scope.equals("edh lab")){
             commanderBrowser=new NativeCommanderBrowserScreen(
-                activity,catalog,artwork,openLegacy);
+                activity,catalog,artwork,openLegacy,this::showDecksForCommander);
             stage.addView(commanderBrowser.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText("Commander discovery and preview");
             return;

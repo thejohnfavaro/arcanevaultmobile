@@ -436,19 +436,39 @@ final class CatalogStore extends SQLiteOpenHelper {
         String term=get(p,"q"),source=get(p,"source");
         if(term.length()>120)term=term.substring(0,120);
         int page=clamp(get(p,"page"),0,100000,0),size=clamp(get(p,"size"),1,80,40);
-        String from=" FROM cards c LEFT JOIN ownership ao ON ao.name=c.name "+
+        String owned=get(p,"owned");
+        String colors=get(p,"colors");
+        if(!colors.isEmpty()&&!colors.equals("C")&&!colors.matches("[WUBRG]{1,5}"))
+            throw new IllegalArgumentException("Unsupported commander color identity");
+        StringBuilder canonical=new StringBuilder();
+        for(char c:"WUBRG".toCharArray())if(colors.indexOf(c)>=0)canonical.append(c);
+        if(!colors.equals("C")&&canonical.length()!=colors.length())
+            throw new IllegalArgumentException("Duplicate commander color symbols");
+        String colorExpression="(CASE WHEN instr(COALESCE(c.colors,''),'W')>0 THEN 'W' ELSE '' END "+
+            "|| CASE WHEN instr(COALESCE(c.colors,''),'U')>0 THEN 'U' ELSE '' END "+
+            "|| CASE WHEN instr(COALESCE(c.colors,''),'B')>0 THEN 'B' ELSE '' END "+
+            "|| CASE WHEN instr(COALESCE(c.colors,''),'R')>0 THEN 'R' ELSE '' END "+
+            "|| CASE WHEN instr(COALESCE(c.colors,''),'G')>0 THEN 'G' ELSE '' END)";
+        StringBuilder from=new StringBuilder(" FROM cards c LEFT JOIN ownership ao ON ao.name=c.name "+
             "LEFT JOIN physical_ownership po ON po.name=c.name "+
             "WHERE (c.type LIKE '%Legendary%Creature%' OR "+
             "c.oracle LIKE '%can be your commander%') "+
             "AND (?='' OR c.name LIKE ? OR c.oracle LIKE ?) "+
-            ("arena".equals(source)?"AND c.arena=1 ":"");
+            ("arena".equals(source)?"AND c.arena=1 ":""));
         String q="%"+term+"%";
-        String[] args=new String[]{term,q,q};
+        java.util.ArrayList<String> args=new java.util.ArrayList<>(Arrays.asList(term,q,q));
+        if("physical".equals(owned))from.append(" AND COALESCE(po.qty,0)>0");
+        else if("arena".equals(owned))from.append(" AND COALESCE(ao.qty,0)>0");
+        else if("any".equals(owned))from.append(" AND (COALESCE(po.qty,0)+COALESCE(ao.qty,0))>0");
+        if(!colors.isEmpty()){
+            from.append(" AND ").append(colorExpression).append("=?");
+            args.add("C".equals(colors)?"":canonical.toString());
+        }
         SQLiteDatabase db=getReadableDatabase();int count=0;
-        try(Cursor c=db.rawQuery("SELECT COUNT(*)"+from,args)){
+        try(Cursor c=db.rawQuery("SELECT COUNT(*)"+from,args.toArray(new String[0]))){
             if(c.moveToFirst())count=c.getInt(0);
         }
-        java.util.ArrayList<String> paged=new java.util.ArrayList<>(Arrays.asList(args));
+        java.util.ArrayList<String> paged=new java.util.ArrayList<>(args);
         paged.add(Integer.toString(size));paged.add(Integer.toString(page*size));
         JSONArray rows=new JSONArray();
         String sql="SELECT c.name,c.type,c.oracle,c.colors,c.image,c.mv,c.rarity,"+
