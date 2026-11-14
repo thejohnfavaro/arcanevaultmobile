@@ -21,6 +21,9 @@ assert.match(manifest,/android\.permission\.REQUEST_INSTALL_PACKAGES/);
 assert.match(manifest,/android:exported="false" android:grantUriPermissions="true"/);
 assert.match(screen,/Check for app updates/);
 assert.match(screen,/new NativeAppUpdater\(activity\)\.check\(\)/);
-assert.match(gradle,/versionCode 61/);
-assert.match(gradle,/versionName '2\.1\.5'/);
+assert.match(gradle,/versionCode [1-9][0-9]*/);
+const versionName=gradle.match(/versionName '([0-9]+\.[0-9]+\.[0-9]+)'/);
+assert.ok(versionName,'Updater versionName must be semantic');
+assert.ok(fs.existsSync(`releases/android-v${versionName[1]}.md`),
+  'Signed updater release notes must match installed version');
 console.log('PASS: native Android update flow exposes an opt-in signed, checksummed, scoped installer without collection writes');
