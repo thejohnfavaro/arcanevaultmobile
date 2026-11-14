@@ -69,7 +69,7 @@ final class NativeWorkspaceScreen {
         status=VaultNativeStyle.label(activity,"Loading local data…",12,VaultNativeStyle.SUBTEXT,false);
         status.setPadding(0,dp(9),0,dp(11));
         root.addView(status);
-        ScrollView scroll=new ScrollView(activity);
+        ScrollView scroll=VaultNativeStyle.scroll(activity);
         content=VaultNativeStyle.column(activity);
         scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -396,7 +396,7 @@ final class NativeWorkspaceScreen {
                     TextView text=VaultNativeStyle.label(activity,list.toString(),14,
                         VaultNativeStyle.TEXT,false);
                     text.setPadding(dp(18),dp(12),dp(18),dp(12));
-                    ScrollView scroll=new ScrollView(activity);scroll.addView(text);
+                    ScrollView scroll=VaultNativeStyle.scroll(activity);scroll.addView(text);
                     new AlertDialog.Builder(activity)
                         .setTitle(deck.optString("name","Untitled deck")+
                             (missingCount>0?" · "+missingCount+" missing":" · owned"))
@@ -411,7 +411,7 @@ final class NativeWorkspaceScreen {
         content.removeAllViews();
         status.setText("Windows ↔ Android · review before applying changes");
         LinearLayout categories=VaultNativeStyle.row(activity);
-        HorizontalScrollView categoriesScroll=new HorizontalScrollView(activity);
+        HorizontalScrollView categoriesScroll=VaultNativeStyle.horizontalScroll(activity);
         categoriesScroll.setHorizontalScrollBarEnabled(false);
         String[] sections={"devices","snapshots","imports","updates"};
         String[] labels={"Device Sync","Snapshots","Import & Export","Updates"};
