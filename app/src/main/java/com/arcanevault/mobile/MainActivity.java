@@ -216,7 +216,6 @@ public class MainActivity extends Activity {
         address.setHint("http://192.168.x.x:port/arcane-peer/token");
         address.setInputType(android.text.InputType.TYPE_CLASS_TEXT|
             android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        NativeSystemInsets.apply(this,address);
         new android.app.AlertDialog.Builder(this)
             .setTitle(send?"Send Android snapshot to Windows":"Receive Windows snapshot")
             .setMessage("Start the matching Wi-Fi offer in Windows Data & Sync, then paste its one-time link. "+
