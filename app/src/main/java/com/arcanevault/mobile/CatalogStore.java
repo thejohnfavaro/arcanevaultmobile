@@ -430,6 +430,46 @@ final class CatalogStore extends SQLiteOpenHelper {
      * Set+collector fallback requires exactly one matching catalog printing.
      * This is a read-only projection of physical_printings, not another ledger.
      */
+    /** Native commander discovery uses the actual local Scryfall catalog,
+     * never a second deck inventory or inferred commander legality. */
+    JSONObject commanders(Map<String,String> p)throws Exception {
+        String term=get(p,"q"),source=get(p,"source");
+        if(term.length()>120)term=term.substring(0,120);
+        int page=clamp(get(p,"page"),0,100000,0),size=clamp(get(p,"size"),1,80,40);
+        String from=" FROM cards c LEFT JOIN ownership ao ON ao.name=c.name "+
+            "LEFT JOIN physical_ownership po ON po.name=c.name "+
+            "WHERE (c.type LIKE '%Legendary%Creature%' OR "+
+            "c.oracle LIKE '%can be your commander%') "+
+            "AND (?='' OR c.name LIKE ? OR c.oracle LIKE ?) "+
+            ("arena".equals(source)?"AND c.arena=1 ":"");
+        String q="%"+term+"%";
+        String[] args=new String[]{term,q,q};
+        SQLiteDatabase db=getReadableDatabase();int count=0;
+        try(Cursor c=db.rawQuery("SELECT COUNT(*)"+from,args)){
+            if(c.moveToFirst())count=c.getInt(0);
+        }
+        java.util.ArrayList<String> paged=new java.util.ArrayList<>(Arrays.asList(args));
+        paged.add(Integer.toString(size));paged.add(Integer.toString(page*size));
+        JSONArray rows=new JSONArray();
+        String sql="SELECT c.name,c.type,c.oracle,c.colors,c.image,c.mv,c.rarity,"+
+            "COALESCE(ao.qty,0),COALESCE(po.qty,0),"+
+            "COALESCE((SELECT v.image_back FROM variants v WHERE v.name=c.name "+
+            "AND v.image=c.image AND v.image_back!='' LIMIT 1),'')"+
+            from+" ORDER BY c.name COLLATE NOCASE LIMIT ? OFFSET ?";
+        try(Cursor c=db.rawQuery(sql,paged.toArray(new String[0]))){
+            while(c.moveToNext()){
+                rows.put(new JSONObject().put("name",c.getString(0))
+                    .put("type",c.getString(1)).put("oracle",c.getString(2))
+                    .put("colors",c.getString(3)).put("image",c.getString(4))
+                    .put("mv",c.getDouble(5)).put("rarity",c.getString(6))
+                    .put("arenaQty",c.getInt(7)).put("physicalQty",c.getInt(8))
+                    .put("imageBack",c.getString(9)));
+            }
+        }
+        return new JSONObject().put("total",count).put("page",page)
+            .put("size",size).put("cards",rows);
+    }
+
     JSONObject ownedPhysicalPrintings(Map<String,String> p)throws Exception{
         String term=get(p,"q");
         if(term.length()>160)term=term.substring(0,160);
