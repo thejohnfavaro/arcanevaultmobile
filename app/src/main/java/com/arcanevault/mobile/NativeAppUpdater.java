@@ -69,6 +69,37 @@ final class NativeAppUpdater {
         });
     }
 
+    /**
+     * Android owns installed APK replacement; Arcane Vault must not try to
+     * delete historical packages or downgrade the installed application.
+     * Clear only our own obsolete verified installer once the new package
+     * successfully starts. An APK for a *newer* version remains installable.
+     * Collection, sync baselines, user exports, and Scryfall artwork are
+     * outside this isolated cache directory.
+     */
+    static void cleanupAfterInstalledLaunch(Activity activity) {
+        JOBS.execute(()->{
+            try {
+                File directory=new File(activity.getCacheDir(),"verified-updates");
+                if(!directory.isDirectory())return;
+                File partial=new File(directory,"update.partial");
+                if(partial.isFile())partial.delete();
+                File verified=new File(directory,"update.apk");
+                if(!verified.isFile())return;
+                PackageManager pm=activity.getPackageManager();
+                int flags=PackageManager.GET_SIGNING_CERTIFICATES;
+                PackageInfo installed=pm.getPackageInfo(activity.getPackageName(),flags);
+                PackageInfo staged=pm.getPackageArchiveInfo(verified.getAbsolutePath(),flags);
+                if(installed!=null && staged!=null &&
+                    activity.getPackageName().equals(staged.packageName) &&
+                    staged.getLongVersionCode()<=installed.getLongVersionCode())
+                    verified.delete();
+            }catch(Exception ignored){
+                // Stale updater cache may remain but must never prevent startup.
+            }
+        });
+    }
+
     private Candidate findLatest() throws Exception {
         JSONArray releases = new JSONArray(readText(RELEASES, 2_000_000));
         int[] current = parseVersion(activity.getPackageManager()

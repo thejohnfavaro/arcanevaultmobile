@@ -83,6 +83,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        NativeAppUpdater.cleanupAfterInstalledLaunch(this);
         getWindow().setStatusBarColor(Color.rgb(13,16,23));
         getWindow().setNavigationBarColor(Color.rgb(13,16,23));
         durable = getSharedPreferences(COLLECTION_PREFS, MODE_PRIVATE);

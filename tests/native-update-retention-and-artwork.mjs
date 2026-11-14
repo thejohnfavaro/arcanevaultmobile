@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=(file)=>fs.readFileSync(file,'utf8');
+const updater=read('app/src/main/java/com/arcanevault/mobile/NativeAppUpdater.java');
+const main=read('app/src/main/java/com/arcanevault/mobile/MainActivity.java');
+const browser=read('app/src/main/java/com/arcanevault/mobile/NativeCommanderBrowserScreen.java');
+const catalog=read('app/src/main/java/com/arcanevault/mobile/NativeCatalogScreen.java');
+assert.match(updater,/cleanupAfterInstalledLaunch\(Activity activity\)/);
+assert.match(updater,/verified-updates/);
+assert.match(updater,/staged\.getLongVersionCode\(\)<=installed\.getLongVersionCode\(\)/);
+assert.match(main,/NativeAppUpdater\.cleanupAfterInstalledLaunch\(this\)/);
+assert.match(browser,/loadRowArt\(thumbnail,imageUrl\)/);
+assert.match(browser,/card\.optString\("image",""\)/);
+assert.match(browser,/if\(front\.startsWith\("https:\/\/cards\.scryfall\.io\/"\)\)/);
+assert.match(catalog,/hasOfficialArt\(imageUrl\)/);
+assert.match(catalog,/if\(!hasOfficialArt\(imageUrl\)\)return/);
+console.log('PASS: Android cleans only installed updater staging and omits missing-art views; EDH results include thumbnails');
