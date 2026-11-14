@@ -116,7 +116,7 @@ final class NativeCompanionScreen {
         drawTabs();
         stage.removeAllViews();
         if(scope.equals("catalog")){
-            nativeCatalog=new NativeCatalogScreen(activity,catalog,artwork,prefs);
+            nativeCatalog=new NativeCatalogScreen(activity, catalog, artwork, prefs);
             stage.addView(nativeCatalog.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText("Discover cards and printings");
             return;
