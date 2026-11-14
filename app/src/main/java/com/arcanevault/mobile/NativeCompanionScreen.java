@@ -185,7 +185,7 @@ final class NativeCompanionScreen {
     private void render() {
         content.removeAllViews();
         if (scope.equals("catalog")) {
-            nativeCatalog = new NativeCatalogScreen(activity, catalog, artwork);
+            nativeCatalog = new NativeCatalogScreen(activity, catalog, artwork, prefs);
             content.addView(nativeCatalog.view(), new LinearLayout.LayoutParams(-1, dp(540)));
             return;
         }
