@@ -94,7 +94,7 @@ final class NativeCompanionScreen {
 
     private void drawTabs(){
         tabs.removeAllViews();
-        for(String tab:new String[]{"Home","Catalog","Physical","Arena","Legacy tools"}){
+        for(String tab:new String[]{"Home", "Catalog", "Physical", "Arena", "Legacy tools"}){
             boolean active=scope.equals(tab.toLowerCase(Locale.ROOT));
             Button action=button(tab,active);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44));
