@@ -38,6 +38,7 @@ final class NativeCompanionScreen {
     private final LinearLayout tabs;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private NativeCatalogScreen nativeCatalog;
+    private NativeCommanderBrowserScreen commanderBrowser;
     private NativeWorkspaceScreen workspace;
     private final NativeWorkspaceScreen.DeckLoader deckLoader;
     private String scope="home", query="";
@@ -98,7 +99,7 @@ final class NativeCompanionScreen {
 
     private void drawTabs(){
         tabs.removeAllViews();
-        for(String tab:new String[]{"Home", "Catalog", "Physical", "Arena", "Sets", "Decks", "Data & Sync", "Legacy tools"}){
+        for(String tab:new String[]{"Home", "Catalog", "Physical", "Arena", "Sets", "Decks", "EDH Lab", "Data & Sync", "Legacy tools"}){
             boolean active=scope.equals(tab.toLowerCase(Locale.ROOT));
             Button action=button(tab,active);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44));
@@ -112,6 +113,7 @@ final class NativeCompanionScreen {
     }
     private void closeCatalog(){
         if(nativeCatalog!=null){nativeCatalog.close();nativeCatalog=null;}
+        if(commanderBrowser!=null){commanderBrowser.close();commanderBrowser=null;}
         if(workspace!=null){workspace.close();workspace=null;}
     }
     private void show(String next){
@@ -126,6 +128,13 @@ final class NativeCompanionScreen {
             stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
                 scope.equals("decks")?"Saved deck library":"Backups, sync and recovery");
+            return;
+        }
+        if(scope.equals("edh lab")){
+            commanderBrowser=new NativeCommanderBrowserScreen(
+                activity,catalog,artwork,openLegacy);
+            stage.addView(commanderBrowser.view(),new FrameLayout.LayoutParams(-1,-1));
+            subtitle.setText("Commander discovery and preview");
             return;
         }
         if(scope.equals("catalog")){
