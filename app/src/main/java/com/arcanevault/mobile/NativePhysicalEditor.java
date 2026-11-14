@@ -65,6 +65,11 @@ final class NativePhysicalEditor {
                 JSONObject row=rows.optJSONObject(i);
                 if(row==null||!name.equalsIgnoreCase(row.optString("name","")))continue;
                 String savedId=row.optString("scryfallId","");
+                boolean editable="nonfoil".equalsIgnoreCase(row.optString("finish","nonfoil")) &&
+                    row.optString("language","").isEmpty() &&
+                    row.optString("condition","").isEmpty() &&
+                    row.optString("location","").isEmpty();
+                if(!editable)continue;
                 if(!savedId.isEmpty() && savedId.equalsIgnoreCase(id))
                     count+=row.optInt("qty",0);
                 else if(savedId.isEmpty()&&set.equalsIgnoreCase(row.optString("set",""))&&
