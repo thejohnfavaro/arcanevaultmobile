@@ -166,10 +166,10 @@ final class NativeCommanderBrowserScreen {
         LinearLayout workspace=new LinearLayout(activity);
         workspace.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
         root.addView(workspace,new LinearLayout.LayoutParams(-1,0,1));
-        listScroll=new ScrollView(activity);
+        listScroll=VaultNativeStyle.scroll(activity);
         list=VaultNativeStyle.column(activity);
         listScroll.addView(list);
-        previewScroll=new ScrollView(activity);
+        previewScroll=VaultNativeStyle.scroll(activity);
         preview=VaultNativeStyle.column(activity);
         preview.setPadding(dp(12),dp(8),dp(12),dp(14));
         previewScroll.addView(preview);

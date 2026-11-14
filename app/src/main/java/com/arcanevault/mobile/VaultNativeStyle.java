@@ -11,6 +11,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.ScrollView;
+import android.widget.HorizontalScrollView;
 
 /** Native Android visual foundation. Never relies on WebView CSS. */
 final class VaultNativeStyle {
@@ -74,6 +76,33 @@ final class VaultNativeStyle {
         col.setOrientation(LinearLayout.VERTICAL);
         return col;
     }
+    /** Shared native scrollbar chrome. Android keeps native gesture, kinetic
+     * scrolling, accessibility and overscroll semantics. Only the bar's paint
+     * and fade behavior change; no layout-wide side padding or overlays. */
+    static ScrollView scroll(Activity activity) {
+        ScrollView view=new ScrollView(activity);
+        scrollChrome(activity,view,false);
+        return view;
+    }
+    static HorizontalScrollView horizontalScroll(Activity activity) {
+        HorizontalScrollView view=new HorizontalScrollView(activity);
+        scrollChrome(activity,view,true);
+        return view;
+    }
+    private static void scrollChrome(Activity activity,View view,boolean horizontal) {
+        view.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+        view.setScrollbarFadingEnabled(true);
+        view.setScrollBarFadeDuration(450);
+        view.setScrollBarDefaultDelayBeforeFade(750);
+        if(android.os.Build.VERSION.SDK_INT>=29){
+            GradientDrawable thumb=new GradientDrawable();
+            thumb.setColor(PRIMARY);
+            thumb.setCornerRadius(dp(activity,6));
+            if(horizontal)((HorizontalScrollView)view).setHorizontalScrollbarThumbDrawable(thumb);
+            else ((ScrollView)view).setVerticalScrollbarThumbDrawable(thumb);
+        }
+    }
+
     static void margin(LinearLayout parent,View child,int bottom,Activity a) {
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
         lp.bottomMargin=dp(a,bottom);

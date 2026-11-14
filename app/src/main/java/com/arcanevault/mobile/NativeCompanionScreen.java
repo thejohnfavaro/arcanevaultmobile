@@ -73,7 +73,7 @@ final class NativeCompanionScreen {
         brand.addView(titles);
         root.addView(brand);
 
-        HorizontalScrollView scroller=new HorizontalScrollView(activity);
+        HorizontalScrollView scroller=VaultNativeStyle.horizontalScroll(activity);
         scroller.setHorizontalScrollBarEnabled(false);
         scroller.setFillViewport(false);
         tabs=VaultNativeStyle.row(activity);
@@ -159,7 +159,7 @@ final class NativeCompanionScreen {
         }
         subtitle.setText(scope.equals("home")?"Your collection. Anywhere.":
             scope.equals("physical")?"Paper collection":"Arena collection");
-        ScrollView scroll=new ScrollView(activity);
+        ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.setFillViewport(true);
         LinearLayout content=column();
         content.setPadding(dp(18),dp(12),dp(18),dp(26));
