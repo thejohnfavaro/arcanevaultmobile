@@ -69,8 +69,33 @@ final class NativePeerInventoryApply {
             throw new IllegalStateException("Inventory changed since review; compare again.");
         String newArena=target.getJSONArray("cards").toString();
         String newPhysical=target.getJSONArray("physicalCards").toString();
-        if(oldArena.equals(newArena)&&oldPhysical.equals(newPhysical))
-            throw new IllegalStateException("No inventory differences to apply.");
+        return writeInventories(context,prefs,catalog,newArena,newPhysical);
+    }
+
+    static String restoreLast(Context context,SharedPreferences prefs,
+            CatalogStore catalog)throws Exception {
+        if(prefs.getString(PENDING,null)!=null)
+            throw new IllegalStateException("Interrupted sync must recover before restoration");
+        String filename=prefs.getString(LAST_BACKUP,null);
+        if(filename==null)throw new IllegalStateException("No peer-sync backup exists");
+        JSONObject stored=new JSONObject(
+            new String(java.nio.file.Files.readAllBytes(
+                backup(context,filename).toPath()),StandardCharsets.UTF_8));
+        return writeInventories(context,prefs,catalog,
+            stored.getJSONArray("arena").toString(),
+            stored.getJSONArray("physical").toString());
+    }
+
+    private static synchronized String writeInventories(Context context,
+            SharedPreferences prefs,CatalogStore catalog,
+            String newArena,String newPhysical)throws Exception {
+        if(prefs.getString(PENDING,null)!=null)
+            throw new IllegalStateException("An interrupted peer sync requires recovery");
+        String oldArena=prefs.getString(ARENA,"[]");
+        String oldPhysical=prefs.getString(PAPER,"[]");
+        if(canonicalEqual(new JSONArray(oldArena),new JSONArray(newArena)) &&
+            canonicalEqual(new JSONArray(oldPhysical),new JSONArray(newPhysical)))
+            throw new IllegalStateException("Inventories already match.");
         if(newArena.length()+newPhysical.length()>20_000_000)
             throw new IllegalArgumentException("Inventory exceeds Android write safety limit");
         JSONArray physicalRows=new JSONArray(newPhysical);
