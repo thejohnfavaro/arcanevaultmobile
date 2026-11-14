@@ -666,7 +666,7 @@ final class NativeCatalogScreen {
                 Bitmap bitmap=BitmapFactory.decodeByteArray(encoded,0,encoded.length,options);
                 if(bitmap==null)return;
                 ui.post(() -> {
-                    if(disposed || activity.isFinishing() || target.getWindowToken()==null) {
+                    if(disposed || activity.isFinishing()) {
                         bitmap.recycle();return;
                     }
                     target.setImageBitmap(bitmap);
