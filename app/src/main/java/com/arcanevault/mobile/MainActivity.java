@@ -414,6 +414,74 @@ public class MainActivity extends Activity {
             }).show();
     }
 
+    /** Save a durable peer-format snapshot without opening the Android file picker.
+     * This is a local reference/recovery snapshot, NOT a confirmed common
+     * Windows/Android baseline. Retain every previous snapshot.
+     */
+    void createSyncSnapshot() {
+        withPeerData((decks,art)->{
+            try {
+                JSONObject peer=com.arcanevault.mobile.next.NativePeerSync
+                    .export(durable,peerId(),decks,art);
+                byte[] bytes=peer.toString().getBytes(StandardCharsets.UTF_8);
+                if(bytes.length<20 ||
+                    bytes.length>com.arcanevault.mobile.next.NativePeerSync.MAX_BYTES)
+                    throw new IllegalArgumentException("Peer snapshot is empty or too large");
+                workers.execute(()->{
+                    try {
+                        java.io.File folder=new java.io.File(getFilesDir(),"sync-snapshots");
+                        if(!folder.isDirectory()&&!folder.mkdirs())
+                            throw new IOException("Cannot create sync snapshot directory");
+                        String stamp=java.time.format.DateTimeFormatter
+                            .ofPattern("yyyyMMdd-HHmmss-SSS",java.util.Locale.US)
+                            .withZone(java.time.ZoneOffset.UTC)
+                            .format(java.time.Instant.now());
+                        java.io.File file=new java.io.File(folder,"ArcaneVault-Android-"+
+                            stamp+"-"+java.util.UUID.randomUUID().toString().substring(0,8)+".json");
+                        // AtomicFile writes a staged file and then replaces it
+                        // atomically; the random unique filename prevents replacing
+                        // any previously saved snapshot.
+                        android.util.AtomicFile atomic=new android.util.AtomicFile(file);
+                        java.io.FileOutputStream output=null;
+                        try {
+                            output=atomic.startWrite();
+                            output.write(bytes);
+                            atomic.finishWrite(output);
+                        }catch(Exception error){
+                            if(output!=null)atomic.failWrite(output);
+                            throw error;
+                        }
+                        byte[] saved=java.nio.file.Files.readAllBytes(file.toPath());
+                        if(!java.security.MessageDigest.isEqual(
+                            java.security.MessageDigest.getInstance("SHA-256").digest(bytes),
+                            java.security.MessageDigest.getInstance("SHA-256").digest(saved)))
+                            throw new IOException("Saved sync snapshot did not verify");
+                        JSONObject check=new JSONObject(new String(saved,StandardCharsets.UTF_8));
+                        if(!com.arcanevault.mobile.next.NativePeerSync.FORMAT.equals(
+                                check.optString("format")) ||
+                            !peer.getString("deviceId").equals(check.optString("deviceId")) ||
+                            !peer.getString("revision").equals(check.optString("revision")))
+                            throw new IOException("Saved sync snapshot identity mismatch");
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("Sync snapshot saved")
+                            .setMessage("Your Android collection, decks and artwork " +
+                                "preferences were saved locally with no file picker. " +
+                                "The live data was not changed. Older snapshots were kept.\\n\\n" +
+                                file.getAbsolutePath() + "\\n\\n" +
+                                "This is a local reference snapshot, not proof that " +
+                                "Windows has the same common sync baseline.")
+                            .setPositiveButton("OK",null).show());
+                    }catch(Exception error){
+                        runOnUiThread(()->toast("Snapshot could not be saved: "+
+                            error.getMessage()));
+                    }
+                });
+            }catch(Exception error){
+                toast("Snapshot could not be created: "+error.getMessage());
+            }
+        });
+    }
+
     void exportPeerSync() {
         withPeerData((decks,art)->{
             try{
