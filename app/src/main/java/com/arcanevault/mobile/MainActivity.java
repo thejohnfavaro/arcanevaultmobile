@@ -324,16 +324,16 @@ public class MainActivity extends Activity {
                         StringBuilder message=new StringBuilder()
                             .append(changes.length()).append(" record differences · ")
                             .append(result.getInt("conflicts")).append(" existing/deleted record conflicts")
-                            .append("\\n").append(result.getInt("equal")).append(" matching records")
-                            .append("\\n\\nThis is a dry-run preview. No collection or deck has been changed. ")
+                            .append("\n").append(result.getInt("equal")).append(" matching records")
+                            .append("\n\nThis is a dry-run preview. No collection or deck has been changed. ")
                             .append("Without a shared sync baseline, we do not auto-apply conflicts.");
                         for(int i=0;i<Math.min(changes.length(),10);i++){
                             JSONObject row=changes.getJSONObject(i);
-                            message.append("\\n").append(row.getString("action"))
+                            message.append("\n").append(row.getString("action"))
                                 .append(" · ").append(row.getString("group")).append(": ")
                                 .append(row.getString("key"));
                         }
-                        if(changes.length()>10)message.append("\\n… and ")
+                        if(changes.length()>10)message.append("\n… and ")
                             .append(changes.length()-10).append(" more");
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                             .setTitle("Windows / Android peer comparison")
