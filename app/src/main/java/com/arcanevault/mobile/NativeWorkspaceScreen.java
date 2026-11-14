@@ -391,6 +391,12 @@ final class NativeWorkspaceScreen {
         row("Safe recovery snapshot",prefs.contains("vault_nativePhysicalBackupV1")?
             "A prior physical collection snapshot is available. Restore only if needed.":
             "No native edit recovery snapshot yet.",null);
+        button("Save Sync Snapshot (One Tap)",
+            ()->((MainActivity)activity).createSyncSnapshot());
+        row("Local sync snapshot",
+            "Instantly saves the current collection, decks and artwork locally. "+
+            "Previous snapshots are retained. A local snapshot is not automatically "+
+            "a confirmed common baseline shared with Windows.",null);
         button("Export physical inventory backup",()->shareInventory("physical"));
         button("Export Arena inventory backup",()->shareInventory("arena"));
         button("Restore pre-edit physical snapshot",()->{
