@@ -484,16 +484,16 @@ final class NativeWorkspaceScreen {
         });
         }
         if(syncSection.equals("devices")) {
-        row("PC ↔ Android inventory sync",
+        row("PC ↔ Android collection and deck sync",
             "Compare Windows and Android against their shared baseline, then review "+
-            "per-card quantity changes before applying them to Android.",null);
+            "inventory, saved-deck, and artwork differences before applying them to Android.",null);
         row("Wi-Fi peer exchange (trusted home network)",
             "Transfer snapshots wirelessly with a one-time link from Windows. "+
             "Five-minute one-use links. Review-only by default; applying an "+
-            "inventory merge requires a prior shared baseline and explicit confirmation.",null);
+            "merge requires a prior shared baseline and explicit confirmation.",null);
         button("Scan Windows Wi-Fi QR code",
             ()->((MainActivity)activity).scanWirelessPeerQr());
-        button("Scan QR & apply Windows inventory",
+        button("Scan QR & review Windows changes",
             ()->((MainActivity)activity).scanWirelessPeerQrForApply());
         button("Receive Windows sync over Wi-Fi",
             ()->((MainActivity)activity).wirelessPeerReview(false));
@@ -503,9 +503,9 @@ final class NativeWorkspaceScreen {
         button("Preview Windows / Android peer file",
             ()->((MainActivity)activity).previewPeerSync());
         row("Apply approved peer changes",
-            "Inventory write-back only on Android. A selected prior shared baseline "+
-            "is required; conflicting edits and missing records are rejected. "+
-            "Deck and artwork write-back remains Windows-only.",null);
+            "Opt-in inventory, saved-deck and artwork write-back. A previously "+
+            "shared baseline is required; conflicts and ambiguous deletions "+
+            "are refused. A full recovery snapshot is created before writing.",null);
         if(prefs.contains(NativePeerInventoryApply.LAST_BACKUP))
             button("Restore last peer-sync inventory backup",()->{
                 new AlertDialog.Builder(activity)
@@ -531,8 +531,10 @@ final class NativeWorkspaceScreen {
                         });
                     }).show();
             });
-        button("Sync Windows inventory differences",
+        button("Review & apply Windows changes (including decks)",
             ()->((MainActivity)activity).reviewAndApplyPeerInventory());
+        button("Restore latest full pre-sync snapshot",()->
+            ((MainActivity)activity).restoreLatestFullPeerSnapshot());
         button("Three-way compare (known shared baseline)",
             ()->((MainActivity)activity).previewThreeWayPeerSync());
         }
