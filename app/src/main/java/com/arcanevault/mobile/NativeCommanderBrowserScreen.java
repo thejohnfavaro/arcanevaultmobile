@@ -14,6 +14,7 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -36,6 +37,7 @@ final class NativeCommanderBrowserScreen {
     private final CatalogStore catalog;
     private final ArtworkCache artwork;
     private final Runnable openLegacy;
+    private final java.util.function.Consumer<String> openCommanderDecks;
     private final LinearLayout root,list,preview;
     private final ScrollView listScroll,previewScroll;
     private final TextView status;
@@ -45,14 +47,18 @@ final class NativeCommanderBrowserScreen {
     private final ExecutorService images=Executors.newSingleThreadExecutor();
     private final AtomicInteger generation=new AtomicInteger();
     private int imageGeneration;
-    private String query="",source="";
+    private String query="",source="",owned="",colors="";
+    private boolean filterOpen=false;
+    private final LinearLayout filterPanel;
     private int page;
     private volatile boolean closed;
 
     NativeCommanderBrowserScreen(Activity activity,CatalogStore catalog,
-            ArtworkCache artwork,Runnable openLegacy){
+            ArtworkCache artwork,Runnable openLegacy,
+            java.util.function.Consumer<String> openCommanderDecks){
         this.activity=activity;this.catalog=catalog;this.artwork=artwork;
         this.openLegacy=openLegacy;
+        this.openCommanderDecks=openCommanderDecks;
         wide=activity.getResources().getConfiguration().screenWidthDp>=700;
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(14),dp(8),dp(14),dp(12));
@@ -84,6 +90,79 @@ final class NativeCommanderBrowserScreen {
         arena.setOnClickListener(v->{source="arena";page=0;load();
             arena.setEnabled(false);all.setEnabled(true);});
         root.addView(scopes);
+        // Filters remain collapsed on phones, so card previews keep their space.
+        Button toggleFilters=VaultNativeStyle.button(activity,"Commander Filters ▾",false);
+        addRow(root,toggleFilters);
+        filterPanel=VaultNativeStyle.column(activity);
+        filterPanel.setPadding(dp(10),dp(7),dp(10),dp(8));
+        VaultNativeStyle.surface(activity,filterPanel,false);
+        addRow(root,filterPanel);
+        filterPanel.setVisibility(View.GONE);
+        toggleFilters.setOnClickListener(v->{
+            filterOpen=!filterOpen;
+            filterPanel.setVisibility(filterOpen?View.VISIBLE:View.GONE);
+            toggleFilters.setText(filterOpen?"Commander Filters ▴":"Commander Filters ▾");
+        });
+        addRow(filterPanel,VaultNativeStyle.label(activity,
+            "OWNERSHIP",11,VaultNativeStyle.SUBTEXT,true));
+        LinearLayout ownership=VaultNativeStyle.row(activity);
+        String[] ownershipNames={"All","Owned","Physical","Arena"};
+        String[] ownershipValues={"","any","physical","arena"};
+        for(int i=0;i<ownershipNames.length;i++){
+            final String value=ownershipValues[i];
+            Button option=VaultNativeStyle.button(activity,ownershipNames[i],i==0);
+            ownership.addView(option,new LinearLayout.LayoutParams(0,dp(40),1));
+            option.setOnClickListener(v->{
+                owned=value;page=0;load();
+                for(int n=0;n<ownership.getChildCount();n++){
+                    Button button=(Button)ownership.getChildAt(n);
+                    button.setEnabled(!ownershipValues[n].equals(owned));
+                }
+            });
+            option.setEnabled(i!=0);
+        }
+        addRow(filterPanel,ownership);
+        addRow(filterPanel,VaultNativeStyle.label(activity,
+            "EXACT COLOR IDENTITY",11,VaultNativeStyle.SUBTEXT,true));
+        LinearLayout colorRow=VaultNativeStyle.row(activity);
+        java.util.Map<String,Button> colorButtons=new java.util.LinkedHashMap<>();
+        for(String symbol:new String[]{"W","U","B","R","G","C"}){
+            Button choice=VaultNativeStyle.button(activity,symbol,false);
+            colorButtons.put(symbol,choice);
+            colorRow.addView(choice,new LinearLayout.LayoutParams(0,dp(40),1));
+            choice.setContentDescription(("C".equals(symbol)?"Colorless":symbol)+
+                " commander color identity");
+            choice.setOnClickListener(v->{
+                if("C".equals(symbol))colors="C".equals(colors)?"":"C";
+                else{
+                    String old="C".equals(colors)?"":colors;
+                    StringBuilder next=new StringBuilder();
+                    for(char c:"WUBRG".toCharArray())
+                        if((String.valueOf(c).equals(symbol))!=(old.indexOf(c)>=0))
+                            next.append(c);
+                    colors=next.toString();
+                }
+                for(java.util.Map.Entry<String,Button> entry:colorButtons.entrySet()){
+                    boolean selected=entry.getKey().equals("C")?
+                        "C".equals(colors):colors.contains(entry.getKey());
+                    entry.getValue().setAlpha(selected?1f:0.55f);
+                }
+                page=0;load();
+            });
+            choice.setAlpha(0.55f);
+        }
+        addRow(filterPanel,colorRow);
+        Button clear=VaultNativeStyle.button(activity,"Clear commander filters",false);
+        addRow(filterPanel,clear);
+        clear.setOnClickListener(v->{
+            colors="";owned="";page=0;
+            for(Button button:colorButtons.values())button.setAlpha(0.55f);
+            for(int n=0;n<ownership.getChildCount();n++){
+                Button button=(Button)ownership.getChildAt(n);
+                button.setEnabled(n!=0);
+            }
+            load();
+        });
         LinearLayout workspace=new LinearLayout(activity);
         workspace.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
         root.addView(workspace,new LinearLayout.LayoutParams(-1,0,1));
@@ -120,13 +199,14 @@ final class NativeCommanderBrowserScreen {
     }
     private void load(){
         final int request=generation.incrementAndGet();
-        final String q=query,scope=source;
+        final String q=query,scope=source,ownership=owned,identity=colors;
         final int selectedPage=page;
         status.setText("Searching official commander candidates…");
         data.execute(()->{
             try{
                 Map<String,String> args=new HashMap<>();
                 args.put("q",q);args.put("source",scope);
+                args.put("owned",ownership);args.put("colors",identity);
                 args.put("page",Integer.toString(selectedPage));
                 args.put("size","35");
                 JSONObject results=catalog.commanders(args);
@@ -262,16 +342,20 @@ final class NativeCommanderBrowserScreen {
             card.optString("oracle",""),14,VaultNativeStyle.TEXT,false);
         oracle.setLineSpacing(dp(3),1f);
         addRow(preview,oracle);
-        Button open=VaultNativeStyle.button(activity,
-            "Copy commander name & open deck tools",true);
-        open.setOnClickListener(v->{
+        Button savedDecks=VaultNativeStyle.button(activity,
+            "View saved decks with this commander",true);
+        savedDecks.setOnClickListener(v->openCommanderDecks.accept(name));
+        addRow(preview,savedDecks);
+        Button legacy=VaultNativeStyle.button(activity,
+            "Copy commander name & open deck editor",false);
+        legacy.setOnClickListener(v->{
             ClipboardManager clip=(ClipboardManager)
                 activity.getSystemService(Context.CLIPBOARD_SERVICE);
             if(clip!=null)clip.setPrimaryClip(ClipData.newPlainText(
                 "Commander",name));
             openLegacy.run();
         });
-        addRow(preview,open);
+        addRow(preview,legacy);
         previewScroll.post(()->previewScroll.scrollTo(0,0));
     }
     private void loadRowArt(ImageView view,String url){
