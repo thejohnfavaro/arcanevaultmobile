@@ -489,7 +489,7 @@ final class NativeWorkspaceScreen {
             "inventory, saved-deck, and artwork differences before applying them to Android.",null);
         row("Wi-Fi peer exchange (trusted home network)",
             "Transfer snapshots wirelessly with a one-time link from Windows. "+
-            "Five-minute one-use links. Review-only by default; applying an "+
+            "Five-minute one-use links. Review-only by default; applying a "+
             "merge requires a prior shared baseline and explicit confirmation.",null);
         button("Scan Windows Wi-Fi QR code",
             ()->((MainActivity)activity).scanWirelessPeerQr());
