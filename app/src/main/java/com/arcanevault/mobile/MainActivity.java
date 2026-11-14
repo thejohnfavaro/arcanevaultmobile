@@ -357,6 +357,7 @@ public class MainActivity extends Activity {
         }catch(Exception ignored){return false;}
     }
     private void wirelessPeerReview(boolean send,String scannedLink,boolean prepareApply) {
+        final boolean usb=linkIsUsb(scannedLink);
         android.widget.EditText address=new android.widget.EditText(this);
         address.setSingleLine(true);
         address.setTextSize(13);
@@ -374,8 +375,10 @@ public class MainActivity extends Activity {
             .setNegativeButton("Cancel",null)
             .setPositiveButton(send?"Send for review":prepareApply?"Download & review":"Compare",(dialog,which)->{
                 String link=address.getText().toString().trim();
-                try{com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(link);}
-                catch(Exception error){toast("Invalid wireless link: "+error.getMessage());return;}
+                try{
+                    if(usb)com.arcanevault.mobile.next.NativeWirelessPeerClient.validateUsb(link);
+                    else com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(link);
+                }catch(Exception error){toast("Invalid peer link: "+error.getMessage());return;}
                 withPeerData((decks,art)->{
                     try{
                         JSONObject local=com.arcanevault.mobile.next.NativePeerSync
@@ -383,14 +386,19 @@ public class MainActivity extends Activity {
                         workers.execute(()->{
                             try{
                                 if(send) {
-                                    com.arcanevault.mobile.next.NativeWirelessPeerClient.send(link,local);
+                                    if(usb)com.arcanevault.mobile.next.NativeWirelessPeerClient
+                                        .sendUsb(link,local);
+                                    else com.arcanevault.mobile.next.NativeWirelessPeerClient.send(link,local);
                                     runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                                         .setTitle("Snapshot sent for Windows review")
                                         .setMessage("Windows received the Android snapshot. "+
                                             "No collection or deck was changed on either device.")
                                         .setPositiveButton("OK",null).show());
                                 } else {
-                                    JSONObject remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
+                                    JSONObject remote;
+                                    if(usb)remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
+                                        .receiveUsb(link);
+                                    else remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
                                         .receive(link);
                                     if(prepareApply) {
                                         // No write occurs during Wi-Fi transfer.
