@@ -58,6 +58,7 @@ jobs:
           node tests/native-set-filters-qr.mjs
           node tests/native-peer-apply.mjs
           node tests/native-wireless-apply.mjs
+          node tests/native-usb-peer.mjs
       - name: Test printing-aware ownership contract
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build debug APK
