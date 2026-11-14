@@ -165,6 +165,23 @@ public class MainActivity extends Activity {
             }));
     }
 
+    /** Preferred artwork uses the existing legacy library key; no duplicate map. */
+    void savePreferredArtwork(String name,String printingId,String imageUrl){
+        if(name==null||name.isEmpty()||name.length()>200||imageUrl==null||
+            !imageUrl.startsWith("https://cards.scryfall.io/"))return;
+        String key=JSONObject.quote(name.toLowerCase(java.util.Locale.ROOT));
+        String id=JSONObject.quote(printingId==null?"":printingId);
+        String image=JSONObject.quote(imageUrl);
+        String script="(function(){try{let p=JSON.parse(localStorage.getItem('vault_preferredArtworkV1')||'{}');"+
+            "p["+key+"]={image:"+image+",printingId:"+id+"};"+
+            "localStorage.setItem('vault_preferredArtworkV1',JSON.stringify(p));return 'saved'}"+
+            "catch(e){return 'error'}})()";
+        browser.evaluateJavascript(script,result->{
+            if("\"saved\"".equals(result))Toast.makeText(this,"Preferred artwork saved",Toast.LENGTH_SHORT).show();
+            else Toast.makeText(this,"Artwork preference could not be saved",Toast.LENGTH_LONG).show();
+        });
+    }
+
     private void showLegacyTools() {
         nativeHomeVisible = false;
         setContentView(browser);
