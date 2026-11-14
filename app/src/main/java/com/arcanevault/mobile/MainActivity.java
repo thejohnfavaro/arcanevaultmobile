@@ -340,8 +340,55 @@ public class MainActivity extends Activity {
             }).show();
     }
 
+    /** A checkpoint is permitted only when a newly refreshed phone snapshot
+     * matches every recognized record in the received peer snapshot. */
+    private void rememberMatchingWirelessBaseline(JSONObject received) {
+        withPeerData((decks,art)->{
+            try {
+                JSONObject current=com.arcanevault.mobile.next.NativePeerSync
+                    .export(durable,peerId(),decks,art);
+                workers.execute(()->{
+                    try {
+                        String path=NativePeerCheckpoint.saveIdentical(this,current,received);
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("Matching baseline remembered")
+                            .setMessage("The identical peer snapshot was saved for later "+
+                                "three-way comparisons. Reconfirm on Windows to "+
+                                "establish a checkpoint there too. This is local "+
+                                "confirmation, not cryptographic pairing.\n\n"+path)
+                            .setPositiveButton("OK",null).show());
+                    } catch(Exception ex) {
+                        runOnUiThread(()->toast("Baseline not saved: "+ex.getMessage()));
+                    }
+                });
+            } catch(Exception ex) {
+                toast("Could not verify current records: "+ex.getMessage());
+            }
+        });
+    }
+
     private void chooseWirelessApplyBaseline(JSONObject incoming) {
         pendingWirelessIncoming=incoming;
+        if(NativePeerCheckpoint.exists(this,incoming.optString("deviceId",""))) {
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Use remembered peer baseline?")
+                .setMessage("An earlier identical peer checkpoint is stored locally. "+
+                    "Use it to prepare this inventory update? You will still review "+
+                    "the three-way result and approve any writes.")
+                .setNegativeButton("Choose file",(d,w)->selectWirelessBaselineFile())
+                .setNeutralButton("Cancel",(d,w)->pendingWirelessIncoming=null)
+                .setPositiveButton("Use saved checkpoint",(d,w)->{
+                    JSONObject received=pendingWirelessIncoming;
+                    pendingWirelessIncoming=null;
+                    if(received!=null)
+                        applyPeerInventorySnapshot(()->received,
+                            ()->NativePeerCheckpoint.load(this,received.getString("deviceId")));
+                }).show();
+            return;
+        }
+        selectWirelessBaselineFile();
+    }
+    private void selectWirelessBaselineFile() {
         new android.app.AlertDialog.Builder(this)
             .setTitle("Wireless snapshot received")
             .setMessage("Choose the previously shared, unchanged PC/Android "+
