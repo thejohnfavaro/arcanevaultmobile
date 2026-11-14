@@ -193,6 +193,95 @@ public final class NativePeerSync {
             .put("records",changes).put("safeToAutoApply",false);
     }
 
+    /**
+     * Merge source records using a manually supplied common base. Never
+     * interpret a missing row as deletion: that requires a signed tombstone.
+     * Unknown workspace keys remain local, but conflicting opaque edits stop
+     * the merge. This only prepares a candidate, never mutates storage.
+     */
+    public static JSONObject prepareMerge(JSONObject local,JSONObject remote,
+            JSONObject baseline)throws Exception {
+        JSONObject own=require(local), peer=require(remote), base=require(baseline);
+        if(local.getString("deviceId").equals(remote.getString("deviceId")))
+            throw new IllegalArgumentException("Peer snapshot belongs to this same device");
+        JSONObject proposed=new JSONObject(own.toString());
+        int incoming=0,onlyLocal=0;
+        for(String group:new String[]{"cards","physicalCards","deckLibrary"}){
+            Map<String,JSONObject> a=index(group,own.getJSONArray(group));
+            Map<String,JSONObject> b=index(group,base.getJSONArray(group));
+            Map<String,JSONObject> c=index(group,peer.getJSONArray(group));
+            Set<String> keys=new TreeSet<>();
+            keys.addAll(a.keySet());keys.addAll(b.keySet());keys.addAll(c.keySet());
+            Map<String,JSONObject> merged=new HashMap<>();
+            for(String id:keys){
+                JSONObject l=a.get(id),old=b.get(id),r=c.get(id);
+                if(old!=null&&l!=null&&r==null)
+                    throw new IllegalArgumentException("Peer absence needs tombstone: "+group+"/"+id);
+                if(old!=null&&r!=null&&l==null)
+                    throw new IllegalArgumentException("Local absence needs tombstone: "+group+"/"+id);
+                boolean ownBase=equivalent(l,old),peerBase=equivalent(r,old);
+                if(!equivalent(l,r)&&!ownBase&&!peerBase)
+                    throw new IllegalArgumentException("Conflicting edits: "+group+"/"+id);
+                JSONObject chosen;
+                if(ownBase&&!peerBase){
+                    incoming++;
+                    chosen=r;
+                } else {
+                    if(!ownBase&&!equivalent(l,r))onlyLocal++;
+                    chosen=l;
+                }
+                if(chosen!=null)merged.put(id,new JSONObject(chosen.toString()));
+            }
+            JSONArray combined=new JSONArray();
+            for(JSONArray src:new JSONArray[]{own.getJSONArray(group),peer.getJSONArray(group)}){
+                for(int i=0;i<src.length();i++){
+                    JSONObject row=src.getJSONObject(i);
+                    JSONObject match=merged.remove(key(group,row));
+                    if(match!=null)combined.put(match);
+                }
+            }
+            if(!merged.isEmpty())throw new IllegalArgumentException("Unmatched peer entries");
+            proposed.put(group,combined);
+        }
+        JSONObject localArt=own.getJSONObject("preferredArtwork");
+        JSONObject baseArt=base.getJSONObject("preferredArtwork");
+        JSONObject peerArt=peer.getJSONObject("preferredArtwork");
+        JSONObject art=new JSONObject(localArt.toString());
+        Set<String> artKeys=new TreeSet<>();
+        for(JSONObject obj:new JSONObject[]{localArt,baseArt,peerArt})
+            for(java.util.Iterator<String> it=obj.keys();it.hasNext();)artKeys.add(it.next());
+        for(String id:artKeys){
+            boolean hasLocal=localArt.has(id),hasBase=baseArt.has(id),hasPeer=peerArt.has(id);
+            if(hasBase&&(!hasLocal||!hasPeer))
+                throw new IllegalArgumentException("Artwork deletion needs tombstone: "+id);
+            Object l=hasLocal?localArt.get(id):null;
+            Object b=hasBase?baseArt.get(id):null;
+            Object r=hasPeer?peerArt.get(id):null;
+            boolean ownBase=equivalent(l,b),peerBase=equivalent(r,b);
+            if(!equivalent(l,r)&&!ownBase&&!peerBase)
+                throw new IllegalArgumentException("Conflicting artwork: "+id);
+            if(ownBase&&!peerBase){art.put(id,r);incoming++;}
+            else if(!ownBase&&!equivalent(l,r))onlyLocal++;
+        }
+        proposed.put("preferredArtwork",art);
+        for(java.util.Iterator<String> it=peer.keys();it.hasNext();){
+            String field=it.next();
+            if(field.equals("cards")||field.equals("physicalCards")||
+                field.equals("deckLibrary")||field.equals("preferredArtwork")||
+                field.equals("schema")||field.equals("source")||field.equals("exported"))continue;
+            if(base.has(field)&&!equivalent(base.opt(field),peer.opt(field)) &&
+                own.has(field)&&!equivalent(own.opt(field),peer.opt(field)))
+                throw new IllegalArgumentException("Unreconciled workspace field: "+field);
+        }
+        if(proposed.toString().getBytes(StandardCharsets.UTF_8).length>MAX_BYTES)
+            throw new IllegalArgumentException("Merged snapshot too large");
+        return new JSONObject().put("candidate",proposed)
+            .put("incomingChanges",incoming).put("localChanges",onlyLocal)
+            .put("remoteDevice",remote.getString("deviceId"))
+            .put("localRevision",local.getString("revision"))
+            .put("safeToAutoApply",false);
+    }
+
     /** Overview only; never writes either local storage or SQLite. */
     public static JSONObject preview(JSONObject local,JSONObject incoming)throws Exception {
         JSONObject data=require(incoming);

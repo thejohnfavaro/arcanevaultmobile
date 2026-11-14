@@ -1,4 +1,4 @@
-# Arcane Vault for Android — v2.1.3 (Android Studio project)
+# Arcane Vault for Android — v2.1.4 (Android Studio project)
 
 **This repository contains Android application source; signed APKs, when available, are published separately through the Android release workflow.** The portable features through Windows 5.17 have been incorporated into the separate Android project; Windows-only log reading, PC deck discovery, and desktop in-app installation cannot operate directly on Android. See `CHANGELOG_2_0_0.md` for the complete feature inventory and limitations.
 
@@ -16,6 +16,13 @@
 - A debug APK must not be used to replace a release-signed installation when their certificates differ. Preserve a private full backup and use the matching signed update channel.
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
+
+## Android v2.1.4: reviewed peer inventory write-back
+
+- Native Data & Sync offers **Review & apply peer inventory**: provide the latest peer snapshot and the previously common baseline, inspect conflict-free changes, then explicitly confirm.
+- Physical printings and Arena quantities are merged into the durable Android collection with a crash-recovery journal and SQLite reindex; concurrent edits or missing-record deletions are refused.
+- Android **does not yet apply saved deck or artwork changes** because these remain authoritative in WebView storage. Windows 0.9.96 can apply those with a verified workspace rollback after approval.
+- Peer sync still uses a user-selected baseline and has no automatic cross-device commit; use trusted LAN only.
 
 ## Android v2.1.3: Set Progress filtering and scan-to-sync
 
