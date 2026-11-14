@@ -17,6 +17,12 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.0.35: Owned Physical Printings
+
+- Within **Physical**, use **Show owned physical printings** to browse confirmed editions with individual set/collector and Scryfall artwork, not every printing of an owned card name.
+- The mode uses only unambiguous printing identities from the local physical inventory mirror and indexed Scryfall printings; missing/contradictory IDs and name-only entries are not guessed. These remain visible in the regular Physical/Owned name list.
+- Read-only feature. Legacy tools remain available for changing ownership or importing corrected printing identities.
+
 ## Android v2.0.34: Physical Collection in native Catalog
 
 - In the native Card Catalog, choose **All Cards**, **Arena**, or **Physical**. The second row now filters **All / Owned / Missing** against the selected collection (both collections for All Cards).
