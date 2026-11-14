@@ -110,11 +110,34 @@ final class NativePeerInventoryApply {
         return output.getAbsolutePath();
     }
 
-    private static boolean canonicalEqual(Object a,Object b){
-        // JSONArray/JSONObject serialization preserves record ordering, but
-        // may normalize member ordering. These values are obtained from the
-        // local export in the same Android process, so string comparisons are
-        // sufficient for the optimistic check and fail closed if reordered.
-        return a.toString().equals(b.toString());
+    static boolean canonicalEqual(Object a,Object b)throws Exception {
+        return canonical(a).equals(canonical(b));
+    }
+    private static String canonical(Object value)throws Exception {
+        if(value==null||value==JSONObject.NULL)return "null";
+        if(value instanceof JSONObject){
+            JSONObject obj=(JSONObject)value;
+            java.util.TreeSet<String> names=new java.util.TreeSet<>();
+            for(java.util.Iterator<String> it=obj.keys();it.hasNext();)names.add(it.next());
+            StringBuilder out=new StringBuilder("{");
+            for(String name:names){
+                if(out.length()>1)out.append(',');
+                out.append(JSONObject.quote(name)).append(':')
+                    .append(canonical(obj.get(name)));
+            }
+            return out.append('}').toString();
+        }
+        if(value instanceof JSONArray){
+            JSONArray array=(JSONArray)value;
+            StringBuilder out=new StringBuilder("[");
+            for(int i=0;i<array.length();i++){
+                if(i>0)out.append(',');
+                out.append(canonical(array.get(i)));
+            }
+            return out.append(']').toString();
+        }
+        if(value instanceof String)return JSONObject.quote((String)value);
+        if(value instanceof Boolean||value instanceof Number)return value.toString();
+        throw new IllegalArgumentException("Unsupported sync record");
     }
 }
