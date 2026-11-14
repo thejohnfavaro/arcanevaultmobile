@@ -17,6 +17,12 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.0.31: native Card Catalog
+
+- **Catalog** in native navigation searches the existing SQLite Scryfall catalog without starting an HTML card browser.
+- Search and page through results, narrow Arena-only or non-Arena listings, and open a native card inspector with Oracle text and cached Scryfall art.
+- Existing Legacy tools retain broader filtering, physical-owned printing features and sync. The new native catalog is read-only while we migrate these features one by one.
+
 ## Android v2.0.30: native in-app update checker
 
 - On the native Home screen, select **Check for app updates**. Android discovers versioned GitHub releases, validates the signed APK and SHA-256, and asks for approval before running the system installer.
