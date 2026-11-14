@@ -87,6 +87,12 @@ public class MainActivity extends Activity {
         webSettings.setDomStorageEnabled(true);
         webSettings.setDatabaseEnabled(true);
         webSettings.setAllowFileAccess(false);
+        webSettings.setAllowFileAccessFromFileURLs(false);
+        webSettings.setAllowUniversalAccessFromFileURLs(false);
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
+        webSettings.setSupportMultipleWindows(false);
+        webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        if(android.os.Build.VERSION.SDK_INT>=26)webSettings.setSafeBrowsingEnabled(true);
         webSettings.setAllowContentAccess(true);
         webSettings.setMediaPlaybackRequiresUserGesture(true);
         browser.addJavascriptInterface(new AndroidBridge(), "ArcaneAndroid");
