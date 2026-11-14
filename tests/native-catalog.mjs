@@ -12,7 +12,7 @@ assert.match(native,/artwork\.get\(imageUrl\)/,'Official art uses existing guard
 assert.match(native,/BitmapFactory\.decodeByteArray/);
 assert.match(native,/new AlertDialog\.Builder\(activity\)/,'Native inspector replaces HTML card details');
 assert.match(native,/options\.put\("size","40"\)/,'Bounded native catalog page size');
-assert.match(shell,/new NativeCatalogScreen\(activity, catalog, artwork\)/);
+assert.match(shell,/new NativeCatalogScreen\(activity, catalog, artwork, prefs\)/);
 assert.match(shell,/new String\[\]\{"Home", "Catalog", "Physical", "Arena", "Legacy tools"\}/);
 assert.match(activity,/NativeCompanionScreen\.create\(this, durable, catalog, artwork, this::showLegacyTools\)/);
 assert.match(backend,/JSONObject search\(Map<String,String> p\)/);
