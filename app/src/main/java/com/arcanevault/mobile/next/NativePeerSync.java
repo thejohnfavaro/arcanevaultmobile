@@ -108,9 +108,37 @@ public final class NativePeerSync {
         }
         return records;
     }
-    private static boolean equivalent(Object a,Object b){
+    /** Stable across Windows and Android JSON object property ordering. */
+    private static String canonical(Object value)throws Exception {
+        if(value==null||value==JSONObject.NULL)return "null";
+        if(value instanceof JSONObject){
+            JSONObject object=(JSONObject)value;
+            Set<String> keys=new TreeSet<>();
+            for(java.util.Iterator<String> it=object.keys();it.hasNext();)keys.add(it.next());
+            StringBuilder result=new StringBuilder("{");
+            for(String key:keys){
+                if(result.length()>1)result.append(',');
+                result.append(JSONObject.quote(key)).append(':')
+                    .append(canonical(object.get(key)));
+            }
+            return result.append('}').toString();
+        }
+        if(value instanceof JSONArray){
+            JSONArray array=(JSONArray)value;
+            StringBuilder result=new StringBuilder("[");
+            for(int i=0;i<array.length();i++){
+                if(i>0)result.append(',');
+                result.append(canonical(array.get(i)));
+            }
+            return result.append(']').toString();
+        }
+        if(value instanceof String)return JSONObject.quote((String)value);
+        if(value instanceof Boolean || value instanceof Number)return value.toString();
+        throw new IllegalArgumentException("Unsupported peer JSON value");
+    }
+    private static boolean equivalent(Object a,Object b)throws Exception {
         if(a==null||b==null)return a==b;
-        return a.toString().equals(b.toString());
+        return canonical(a).equals(canonical(b));
     }
 
     /** Overview only; never writes either local storage or SQLite. */
