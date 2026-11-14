@@ -347,9 +347,14 @@ final class CatalogStore extends SQLiteOpenHelper {
     private static String get(Map<String,String> p,String name){return p.getOrDefault(name,"").trim();}
     JSONObject search(Map<String,String> p)throws Exception{
         String scope=get(p,"scope"),color=get(p,"colors"),role=get(p,"role"),sort=get(p,"sort"),arena=get(p,"arena");
+        // Legacy web callers omit source: keep Arena semantics for compatibility.
+        // Native callers explicitly select Arena, physical or combined ownership.
+        String source=get(p,"source");
+        String quantity="physical".equals(source) ? "COALESCE(po.qty,0)" :
+            "both".equals(source) ? "(COALESCE(ao.qty,0)+COALESCE(po.qty,0))" : "COALESCE(ao.qty,0)";
         StringBuilder where=new StringBuilder(" WHERE 1=1 ");List<String> args=new ArrayList<>();
         if("arena".equals(arena))where.append(" AND c.arena=1");else if("paper".equals(arena))where.append(" AND c.arena=0");
-        if("unowned".equals(scope))where.append(" AND COALESCE(o.qty,0)=0");else if("owned".equals(scope))where.append(" AND COALESCE(o.qty,0)>0");
+        if("unowned".equals(scope))where.append(" AND ").append(quantity).append("=0");else if("owned".equals(scope))where.append(" AND ").append(quantity).append(">0");
         if(!get(p,"q").isEmpty()){where.append(" AND (c.name LIKE ? OR c.oracle LIKE ? OR c.type LIKE ? OR c.setcode LIKE ?)");String q="%"+get(p,"q").substring(0,Math.min(160,get(p,"q").length()))+"%";for(int i=0;i<4;i++)args.add(q);}
         if(!get(p,"type").isEmpty()){where.append(" AND c.type LIKE ?");args.add("%"+get(p,"type")+"%");}
         if(!get(p,"rarity").isEmpty()){where.append(" AND c.rarity=?");args.add(get(p,"rarity"));}
@@ -379,20 +384,23 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         Map<String,String> hints=new HashMap<>();hints.put("Ramp","%add %mana%");hints.put("Removal","%destroy target%");hints.put("Board Wipe","%destroy all%");hints.put("Discard","%discard%");hints.put("Counterspell","%counter target%");hints.put("Card Draw","%draw %card%");hints.put("Card Selection","%scry%");hints.put("Lifegain","%gain %life%");hints.put("Tutor","%search your library%");hints.put("Stax","%can't cast%");hints.put("Haste","%haste%");hints.put("Protection","%hexproof%");hints.put("Recursion","%from your graveyard%");hints.put("Sacrifice","%sacrifice%");hints.put("Tokens","%create %token%");hints.put("Graveyard Hate","%exile %graveyard%");hints.put("Finisher","%loses the game%");hints.put("Equipment","%Equipment%");
         if(hints.containsKey(role)){where.append("Equipment".equals(role)?" AND c.type LIKE ?":" AND c.oracle LIKE ?");args.add(hints.get(role));}
-        String from=" FROM cards c LEFT JOIN ownership o ON o.name=c.name"+where;
+        String from=" FROM cards c LEFT JOIN ownership ao ON ao.name=c.name"+
+            " LEFT JOIN physical_ownership po ON po.name=c.name"+where;
         SQLiteDatabase db=getReadableDatabase();int found;
         try(Cursor r=db.rawQuery("SELECT COUNT(*)"+from,args.toArray(new String[0]))){r.moveToFirst();found=r.getInt(0);}
-        String order="c.name COLLATE NOCASE";if("qty".equals(sort))order="COALESCE(o.qty,0) DESC, c.name COLLATE NOCASE";if("mv".equals(sort))order="c.mv ASC,c.name COLLATE NOCASE";if("rarity".equals(sort))order="CASE c.rarity WHEN 'mythic' THEN 4 WHEN 'rare' THEN 3 WHEN 'uncommon' THEN 2 ELSE 1 END DESC,c.name COLLATE NOCASE";
+        String order="c.name COLLATE NOCASE";if("qty".equals(sort))order=quantity+" DESC, c.name COLLATE NOCASE";if("mv".equals(sort))order="c.mv ASC,c.name COLLATE NOCASE";if("rarity".equals(sort))order="CASE c.rarity WHEN 'mythic' THEN 4 WHEN 'rare' THEN 3 WHEN 'uncommon' THEN 2 ELSE 1 END DESC,c.name COLLATE NOCASE";
         int page=clamp(get(p,"page"),0,100000,0),size=clamp(get(p,"size"),1,250,48);
         List<String> qargs=new ArrayList<>(args);qargs.add(Integer.toString(size));qargs.add(Integer.toString(page*size));JSONArray rows=new JSONArray();
-        try(Cursor r=db.rawQuery("SELECT c.name,c.type,c.oracle,c.rarity,c.mv,c.colors,c.image,c.uri,c.legalities,c.layout,c.setcode,COALESCE(o.qty,0),c.arena"+from+" ORDER BY "+order+" LIMIT ? OFFSET ?",qargs.toArray(new String[0]))){
+        try(Cursor r=db.rawQuery("SELECT c.name,c.type,c.oracle,c.rarity,c.mv,c.colors,c.image,c.uri,c.legalities,c.layout,c.setcode,"+quantity+",c.arena,COALESCE(ao.qty,0),COALESCE(po.qty,0)"+from+" ORDER BY "+order+" LIMIT ? OFFSET ?",qargs.toArray(new String[0]))){
             while(r.moveToNext()){
                 JSONObject meta=new JSONObject().put("type",r.getString(1)).put("oracle",r.getString(2)).put("rarity",r.getString(3)).put("mv",r.getDouble(4)).put("image",r.getString(6)).put("url",r.getString(7)).put("legalities",new JSONObject(r.getString(8))).put("layout",r.getString(9)).put("set_",r.getString(10)).put("arena",r.getInt(12)>0);
                 JSONArray ci=new JSONArray();for(char ch:r.getString(5).toCharArray())ci.put(String.valueOf(ch));meta.put("colors",ci);
-                rows.put(new JSONObject().put("name",r.getString(0)).put("qty",r.getInt(11)).put("sets",new JSONArray().put(r.getString(10))).put("tags",new JSONArray()).put("typeHint","").put("meta",meta));
+                rows.put(new JSONObject().put("name",r.getString(0)).put("qty",r.getInt(11))
+                    .put("arenaQty",r.getInt(13)).put("physicalQty",r.getInt(14)).put("sets",new JSONArray().put(r.getString(10))).put("tags",new JSONArray()).put("typeHint","").put("meta",meta));
             }
         }
-        return new JSONObject().put("total",found).put("page",page).put("size",size).put("cards",rows);
+        return new JSONObject().put("total",found).put("page",page).put("size",size)
+            .put("source",source.isEmpty()?"arena":source).put("cards",rows);
     }
     JSONObject variants(Map<String,String> p)throws Exception{
         String name=get(p,"name"),scope=get(p,"scope");if(name.isEmpty()||name.length()>300)throw new IllegalArgumentException("Invalid name");
