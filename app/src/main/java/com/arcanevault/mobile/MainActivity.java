@@ -45,7 +45,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
-    private static final int FILE_PICK = 21, FILE_SAVE = 22, PEER_PICK = 23, PEER_3WAY_PICK = 24, PEER_BASE_PICK = 25;
+    private static final int FILE_PICK = 21, FILE_SAVE = 22, PEER_PICK = 23, PEER_3WAY_PICK = 24, PEER_BASE_PICK = 25, PEER_WIRELESS_BASE_PICK = 26;
     private static final int APP_PORT = 18765;
     private static final String COLLECTION_PREFS = "arcane_vault_collections_v1";
     private static final String RECOVERY_PATH = "/__arcane_recover__";
@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
     private byte[] pendingExport;
     private Uri pendingPeerComparison;
     private boolean pendingPeerApply;
+    private JSONObject pendingWirelessIncoming;
     private HttpServerLite server;
     private ExecutorService workers;
     private CatalogStore catalog;
@@ -247,8 +248,25 @@ public class MainActivity extends Activity {
                 "QR scanner unavailable. Use the one-time link instead: "+error.getMessage()));
     }
 
-    void wirelessPeerReview(boolean send) { wirelessPeerReview(send,null); }
+    /** Scan a Windows one-use QR and prepare an opt-in inventory merge. */
+    void scanWirelessPeerQrForApply() {
+        GmsBarcodeScannerOptions options=new GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE).build();
+        GmsBarcodeScanning.getClient(this,options).startScan()
+            .addOnSuccessListener(barcode->{
+                String link=barcode.getRawValue();
+                try{com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(link);}
+                catch(Exception ex){toast("Invalid Windows peer QR: "+ex.getMessage());return;}
+                wirelessPeerReview(false,link,true);
+            })
+            .addOnFailureListener(error->toast("QR scanner unavailable: "+error.getMessage()));
+    }
+
+    void wirelessPeerReview(boolean send) { wirelessPeerReview(send,null,false); }
     void wirelessPeerReview(boolean send,String scannedLink) {
+        wirelessPeerReview(send,scannedLink,false);
+    }
+    private void wirelessPeerReview(boolean send,String scannedLink,boolean prepareApply) {
         android.widget.EditText address=new android.widget.EditText(this);
         address.setSingleLine(true);
         address.setTextSize(13);
@@ -260,10 +278,11 @@ public class MainActivity extends Activity {
             .setTitle(send?"Send Android snapshot to Windows":"Receive Windows snapshot")
             .setMessage("Start the matching Wi-Fi offer in Windows Data & Sync, then paste its one-time link. "+
                 "Use a trusted home Wi-Fi network: the current LAN transfer is HTTP and unencrypted. "+
-                "Only a read-only comparison will be performed.")
+                (prepareApply?"After downloading you will select a common baseline and approve "+
+                "any inventory write. It is not automatic sync.":"Only a read-only comparison will be performed."))
             .setView(address)
             .setNegativeButton("Cancel",null)
-            .setPositiveButton(send?"Send for review":"Compare",(dialog,which)->{
+            .setPositiveButton(send?"Send for review":prepareApply?"Download & review":"Compare",(dialog,which)->{
                 String link=address.getText().toString().trim();
                 try{com.arcanevault.mobile.next.NativeWirelessPeerClient.validate(link);}
                 catch(Exception error){toast("Invalid wireless link: "+error.getMessage());return;}
@@ -283,6 +302,13 @@ public class MainActivity extends Activity {
                                 } else {
                                     JSONObject remote=com.arcanevault.mobile.next.NativeWirelessPeerClient
                                         .receive(link);
+                                    if(prepareApply) {
+                                        // No write occurs during Wi-Fi transfer.
+                                        // Store latest snapshot only until user selects
+                                        // an earlier baseline with Android's file picker.
+                                        runOnUiThread(()->chooseWirelessApplyBaseline(remote));
+                                        return;
+                                    }
                                     JSONObject preview=com.arcanevault.mobile.next.NativePeerSync
                                         .preview(local,remote);
                                     org.json.JSONArray changes=preview.getJSONArray("changes");
@@ -301,16 +327,90 @@ public class MainActivity extends Activity {
                                     }
                                     if(changes.length()>12)message.append("\n… and ")
                                         .append(changes.length()-12).append(" more");
-                                    runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                                        .setTitle("Windows peer snapshot")
-                                        .setMessage(message.toString())
-                                        .setPositiveButton("Close",null).show());
+                                    boolean same=changes.length()==0 &&
+                                        !local.optString("deviceId").equalsIgnoreCase(
+                                            remote.optString("deviceId"));
+                                    runOnUiThread(()->{
+                                        android.app.AlertDialog.Builder baselineDialog=
+                                            new android.app.AlertDialog.Builder(this)
+                                            .setTitle("Windows peer snapshot")
+                                            .setMessage(message.toString())
+                                            .setPositiveButton("Close",null);
+                                        if(same)baselineDialog.setNeutralButton(
+                                            "Remember shared baseline",
+                                            (d,w)->rememberMatchingWirelessBaseline(remote));
+                                        baselineDialog.show();
+                                    });
                                 }
                             }catch(Exception error){runOnUiThread(()->toast(
                                 "Wi-Fi peer review failed: "+error.getMessage()));}
                         });
                     }catch(Exception error){toast("Cannot export local peer data: "+error.getMessage());}
                 });
+            }).show();
+    }
+
+    /** A checkpoint is permitted only when a newly refreshed phone snapshot
+     * matches every recognized record in the received peer snapshot. */
+    private void rememberMatchingWirelessBaseline(JSONObject received) {
+        withPeerData((decks,art)->{
+            try {
+                JSONObject current=com.arcanevault.mobile.next.NativePeerSync
+                    .export(durable,peerId(),decks,art);
+                workers.execute(()->{
+                    try {
+                        String path=NativePeerCheckpoint.saveIdentical(this,current,received);
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("Matching baseline remembered")
+                            .setMessage("The identical peer snapshot was saved for later "+
+                                "three-way comparisons. Reconfirm on Windows to "+
+                                "establish a checkpoint there too. This is local "+
+                                "confirmation, not cryptographic pairing.\n\n"+path)
+                            .setPositiveButton("OK",null).show());
+                    } catch(Exception ex) {
+                        runOnUiThread(()->toast("Baseline not saved: "+ex.getMessage()));
+                    }
+                });
+            } catch(Exception ex) {
+                toast("Could not verify current records: "+ex.getMessage());
+            }
+        });
+    }
+
+    private void chooseWirelessApplyBaseline(JSONObject incoming) {
+        pendingWirelessIncoming=incoming;
+        if(NativePeerCheckpoint.exists(this,incoming.optString("deviceId",""))) {
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Use remembered peer baseline?")
+                .setMessage("An earlier identical peer checkpoint is stored locally. "+
+                    "Use it to prepare this inventory update? You will still review "+
+                    "the three-way result and approve any writes.")
+                .setNegativeButton("Choose file",(d,w)->selectWirelessBaselineFile())
+                .setNeutralButton("Cancel",(d,w)->pendingWirelessIncoming=null)
+                .setPositiveButton("Use saved checkpoint",(d,w)->{
+                    JSONObject received=pendingWirelessIncoming;
+                    pendingWirelessIncoming=null;
+                    if(received!=null)
+                        applyPeerInventorySnapshot(()->received,
+                            ()->NativePeerCheckpoint.load(this,received.getString("deviceId")));
+                }).show();
+            return;
+        }
+        selectWirelessBaselineFile();
+    }
+    private void selectWirelessBaselineFile() {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Wireless snapshot received")
+            .setMessage("Choose the previously shared, unchanged PC/Android "+
+                "baseline snapshot. Without a genuine common baseline we cannot "+
+                "safely infer which device edited which cards. The Wi-Fi "+
+                "transfer has NOT changed your collection.")
+            .setNegativeButton("Cancel",(d,w)->pendingWirelessIncoming=null)
+            .setPositiveButton("Select common baseline",(d,w)->{
+                Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("application/json");
+                startActivityForResult(picker,PEER_WIRELESS_BASE_PICK);
             }).show();
     }
 
@@ -388,18 +488,27 @@ public class MainActivity extends Activity {
             return new JSONObject(bytes.toString("UTF-8"));
         }
     }
+    private interface PeerSnapshotLoader { JSONObject load()throws Exception; }
     private void applyThreeWayInventoryUris(Uri latest,Uri baseline) {
         if(latest==null||baseline==null||latest.equals(baseline)){
             toast("Choose distinct peer and previously shared baseline files.");return;
         }
+        applyPeerInventorySnapshot(()->loadPeerFile(latest),baseline);
+    }
+    private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,Uri baseline) {
+        if(baseline==null)return;
+        applyPeerInventorySnapshot(incoming,()->loadPeerFile(baseline));
+    }
+    private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,
+            PeerSnapshotLoader baseline) {
         withPeerData((decks,art)->{
             try{
                 JSONObject local=com.arcanevault.mobile.next.NativePeerSync
                     .export(durable,peerId(),decks,art);
                 workers.execute(()->{
                     try{
-                        JSONObject remote=loadPeerFile(latest);
-                        JSONObject original=loadPeerFile(baseline);
+                        JSONObject remote=incoming.load();
+                        JSONObject original=baseline.load();
                         JSONObject proposal=com.arcanevault.mobile.next.NativePeerSync
                             .prepareMerge(local,remote,original);
                         JSONObject candidate=proposal.getJSONObject("candidate");
@@ -896,6 +1005,11 @@ public class MainActivity extends Activity {
             pickerCallback=null;
         } else if(request==PEER_3WAY_PICK){
             if(result==RESULT_OK && data!=null)readPeerBaseline(data.getData());
+        } else if(request==PEER_WIRELESS_BASE_PICK){
+            JSONObject received=pendingWirelessIncoming;
+            pendingWirelessIncoming=null;
+            if(result==RESULT_OK && data!=null && received!=null)
+                applyPeerInventorySnapshot(()->received,data.getData());
         } else if(request==PEER_BASE_PICK){
             Uri latest=pendingPeerComparison;
             pendingPeerComparison=null;

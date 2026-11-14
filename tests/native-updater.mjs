@@ -21,6 +21,6 @@ assert.match(manifest,/android\.permission\.REQUEST_INSTALL_PACKAGES/);
 assert.match(manifest,/android:exported="false" android:grantUriPermissions="true"/);
 assert.match(screen,/Check for app updates/);
 assert.match(screen,/new NativeAppUpdater\(activity\)\.check\(\)/);
-assert.match(gradle,/versionCode 60/);
-assert.match(gradle,/versionName '2\.1\.4'/);
+assert.match(gradle,/versionCode 61/);
+assert.match(gradle,/versionName '2\.1\.5'/);
 console.log('PASS: native Android update flow exposes an opt-in signed, checksummed, scoped installer without collection writes');

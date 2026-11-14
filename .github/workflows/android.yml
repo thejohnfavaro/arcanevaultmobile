@@ -57,6 +57,7 @@ jobs:
           node tests/native-wireless-peer.mjs
           node tests/native-set-filters-qr.mjs
           node tests/native-peer-apply.mjs
+          node tests/native-wireless-apply.mjs
       - name: Test printing-aware ownership contract
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build debug APK
@@ -64,7 +65,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ArcaneVault-Android-2.1.4-debug
+          name: ArcaneVault-Android-2.1.5-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
