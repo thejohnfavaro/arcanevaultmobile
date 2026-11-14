@@ -153,18 +153,34 @@ final class NativeCommanderBrowserScreen {
         for(int i=0;i<count;i++){
             JSONObject card=cards.optJSONObject(i);
             if(card==null)continue;
-            LinearLayout row=VaultNativeStyle.column(activity);
-            row.setPadding(dp(12),dp(9),dp(12),dp(9));
+            LinearLayout row=VaultNativeStyle.row(activity);
+            row.setPadding(dp(10),dp(8),dp(10),dp(8));
             VaultNativeStyle.surface(activity,row,false);
+            String imageUrl=card.optString("image","");
+            if(imageUrl.startsWith("https://cards.scryfall.io/")){
+                ImageView thumbnail=new ImageView(activity);
+                thumbnail.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                thumbnail.setContentDescription("Commander artwork for "+
+                    card.optString("name",""));
+                LinearLayout.LayoutParams photo=new LinearLayout.LayoutParams(
+                    dp(72),dp(101));
+                photo.rightMargin=dp(11);
+                row.addView(thumbnail,photo);
+                // Only request artwork when a real official image URL exists.
+                thumbnail.setTag(imageUrl);
+                loadRowArt(thumbnail,imageUrl);
+            }
+            LinearLayout information=VaultNativeStyle.column(activity);
             TextView name=VaultNativeStyle.label(activity,
                 card.optString("name","Unknown commander"),15,VaultNativeStyle.TEXT,true);
-            row.addView(name);
+            information.addView(name);
             TextView desc=VaultNativeStyle.label(activity,
                 card.optString("type","")+" · "+
                 card.optString("colors","")+" · Physical ×"+
                 card.optInt("physicalQty",0)+" · Arena ×"+card.optInt("arenaQty",0),
                 12,VaultNativeStyle.SUBTEXT,false);
-            row.addView(desc);
+            information.addView(desc);
+            row.addView(information,new LinearLayout.LayoutParams(0,-2,1));
             row.setOnClickListener(v->showPreview(card));
             row.setContentDescription(card.optString("name","")+
                 ". Tap to preview commander card.");
@@ -222,8 +238,10 @@ final class NativeCommanderBrowserScreen {
                     (showingReverse[0]?"front":"alternate")+" commander card face");
             });
         }
-        addRow(preview,face);
-        face.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(wide?300:350)));
+        if(front.startsWith("https://cards.scryfall.io/")){
+            addRow(preview,face);
+            face.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(wide?300:350)));
+        }
         addRow(preview,VaultNativeStyle.label(activity,
             card.optString("type",""),13,VaultNativeStyle.TEXT,true));
         addRow(preview,VaultNativeStyle.label(activity,
@@ -256,6 +274,25 @@ final class NativeCommanderBrowserScreen {
         addRow(preview,open);
         previewScroll.post(()->previewScroll.scrollTo(0,0));
     }
+    private void loadRowArt(ImageView view,String url){
+        images.execute(()->{
+            try{
+                byte[] bytes=artwork.get(url);
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inSampleSize=4;
+                Bitmap thumb=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+                if(thumb==null)return;
+                ui.post(()->{
+                    if(closed || activity.isFinishing() ||
+                        !url.equals(view.getTag())) {
+                        thumb.recycle();return;
+                    }
+                    view.setImageBitmap(thumb);
+                });
+            }catch(Exception ignored){ /* Text remains usable offline. */ }
+        });
+    }
+
     private void loadArt(ImageView view,String url,int version){
         if(!url.startsWith("https://cards.scryfall.io/"))return;
         images.execute(()->{
