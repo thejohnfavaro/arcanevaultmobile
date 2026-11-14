@@ -37,6 +37,7 @@ final class NativeCompanionScreen {
     private final SharedPreferences prefs;
     private final Runnable openLegacy;
     private final CatalogStore catalog;
+    private final ArtworkCache artwork;
     private NativeCatalogScreen nativeCatalog;
     private final LinearLayout root;
     private final LinearLayout content;
@@ -54,10 +55,11 @@ final class NativeCompanionScreen {
         CardRow(String name, int qty) { this.name = name; this.qty = qty; }
     }
 
-    private NativeCompanionScreen(Activity activity, SharedPreferences prefs, CatalogStore catalog, Runnable openLegacy) {
+    private NativeCompanionScreen(Activity activity, SharedPreferences prefs, CatalogStore catalog, ArtworkCache artwork, Runnable openLegacy) {
         this.activity = activity;
         this.prefs = prefs;
         this.catalog = catalog;
+        this.artwork = artwork;
         this.openLegacy = openLegacy;
         root = column();
         root.setBackgroundColor(BG);
@@ -93,7 +95,7 @@ final class NativeCompanionScreen {
     }
 
     static View create(Activity activity, SharedPreferences prefs, CatalogStore catalog, Runnable openLegacy) {
-        return new NativeCompanionScreen(activity, prefs, catalog, openLegacy).root;
+        return new NativeCompanionScreen(activity, prefs, catalog, artwork, openLegacy).root;
     }
 
     private int dp(float value) { return (int)(value * activity.getResources().getDisplayMetrics().density + .5f); }
@@ -183,7 +185,7 @@ final class NativeCompanionScreen {
     private void render() {
         content.removeAllViews();
         if (scope.equals("catalog")) {
-            nativeCatalog = new NativeCatalogScreen(activity, catalog);
+            nativeCatalog = new NativeCatalogScreen(activity, catalog, artwork);
             content.addView(nativeCatalog.view(), new LinearLayout.LayoutParams(-1, dp(540)));
             return;
         }
