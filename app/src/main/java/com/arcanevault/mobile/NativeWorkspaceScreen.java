@@ -249,7 +249,7 @@ final class NativeWorkspaceScreen {
         final int request=++setRequestId;
         final String source=setSource;
         final boolean hideUnowned=hideUnownedSetSlots;
-        status.setText("Reading "+title+" printings…");
+        status.setText("Reading "+title+(source.equals("physical")?" printings":" Arena cards")+"…");
         executor.execute(()->{
             try {
                 Map<String,String> args=new HashMap<>();
@@ -291,18 +291,18 @@ final class NativeWorkspaceScreen {
                         if(hideUnowned&&qty<=0)continue;
                         String name=p.optString("name","");
                         String collector=p.optString("collectorNumber","");
-                        row(name+" · #"+collector,
+                        row(name+(source.equals("physical")?" · #"+collector:""),
                             (qty>0?"Owned ×"+qty:"Missing")+
                                 " · "+p.optString("rarity",""),
                             ()->new AlertDialog.Builder(activity).setTitle(name)
-                                .setMessage(title+" #"+collector+"\n"+
+                                .setMessage(title+(source.equals("physical")?" #"+collector:"")+"\n"+
                                     (source.equals("physical")?"Confirmed physical copies: ":"Arena copies: ")+qty+"\n"+
-                                    "Printing ID: "+p.optString("id",""))
+                                    (source.equals("physical")?"Printing ID: "+p.optString("id",""):"Arena card-name ownership"))
                                 .setPositiveButton("Close",null).show());
                     }
                     if((source.equals("physical") && (pageNumber+1)*48<response.optInt("total",0)) ||
                         (source.equals("arena") && response.optBoolean("hasMore",false)))
-                        button("Next printings",()->showSet(set,title,pageNumber+1));
+                        button(source.equals("physical")?"Next printings":"Next Arena cards",()->showSet(set,title,pageNumber+1));
                     status.setText(title+" · "+(source.equals("physical")?"Physical printings":"Arena card names"));
                 });
             }catch(Exception e){ui.post(()->{if(!closed)status.setText("Set details unavailable: "+e.getMessage());});}
