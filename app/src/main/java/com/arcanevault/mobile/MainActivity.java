@@ -860,7 +860,7 @@ public class MainActivity extends Activity {
     void restoreLatestFullPeerSnapshot() {
         java.io.File folder=new java.io.File(getFilesDir(),"peer-full-recovery");
         java.io.File[] files=folder.listFiles((dir,name)->
-            name.matches("pre-peer-[a-f0-9-]{36}\\\\.json"));
+            name.matches("pre-peer-[a-f0-9-]{36}\\.json"));
         if(files==null||files.length==0){
             toast("No full pre-sync recovery snapshot is available.");
             return;
