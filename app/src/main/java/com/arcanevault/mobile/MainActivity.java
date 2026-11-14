@@ -380,6 +380,79 @@ public class MainActivity extends Activity {
             return new JSONObject(bytes.toString("UTF-8"));
         }
     }
+    private void applyThreeWayInventoryUris(Uri latest,Uri baseline) {
+        if(latest==null||baseline==null||latest.equals(baseline)){
+            toast("Choose distinct peer and previously shared baseline files.");return;
+        }
+        withPeerData((decks,art)->{
+            try{
+                JSONObject local=com.arcanevault.mobile.next.NativePeerSync
+                    .export(durable,peerId(),decks,art);
+                workers.execute(()->{
+                    try{
+                        JSONObject remote=loadPeerFile(latest);
+                        JSONObject original=loadPeerFile(baseline);
+                        JSONObject proposal=com.arcanevault.mobile.next.NativePeerSync
+                            .prepareMerge(local,remote,original);
+                        JSONObject candidate=proposal.getJSONObject("candidate");
+                        JSONObject before=local.getJSONObject("data");
+                        if(!NativePeerInventoryApply.canonicalEqual(
+                                before.getJSONArray("deckLibrary"),
+                                candidate.getJSONArray("deckLibrary")) ||
+                            !NativePeerInventoryApply.canonicalEqual(
+                                before.getJSONObject("preferredArtwork"),
+                                candidate.getJSONObject("preferredArtwork")))
+                            throw new IllegalStateException("Deck/artwork changes need Windows "+
+                                "write-back for now. Android only applies native inventory.");
+                        int count=proposal.getInt("incomingChanges");
+                        if(count==0){
+                            runOnUiThread(()->toast("No new peer inventory changes to apply."));
+                            return;
+                        }
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("Apply Windows inventory changes?")
+                            .setMessage("Incoming record changes: "+count+
+                                "\nPreserved Android-only edits: "+
+                                proposal.optInt("localChanges",0)+
+                                "\n\nThis will change physical/Arena inventory only. "+
+                                "Simultaneous edits and ambiguous deletions were rejected. "+
+                                "This manually selected baseline has not yet been authenticated "+
+                                "by paired-device checkpoints. A full inventory recovery file "+
+                                "will be saved before any write.\n\n"+
+                                "Windows will NOT change during this operation.")
+                            .setNegativeButton("Cancel",null)
+                            .setPositiveButton("Apply to Android",(dialog,which)->{
+                                workers.execute(()->{
+                                    try{
+                                        String recovery=NativePeerInventoryApply.apply(
+                                            this,durable,catalog,local,proposal);
+                                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                            .setTitle("Android inventory updated")
+                                            .setMessage("Applied "+count+" peer records. "+
+                                                "Previous inventories saved for recovery. "+
+                                                "Reopen the native Catalog and Sets to refresh.\n\n"+
+                                                "Backup: "+recovery)
+                                            .setPositiveButton("OK",null).show());
+                                    }catch(Exception error){
+                                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                            .setTitle("Peer changes not applied")
+                                            .setMessage(error.getMessage())
+                                            .setPositiveButton("OK",null).show());
+                                    }
+                                });
+                            }).show());
+                    }catch(Exception error){
+                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                            .setTitle("Peer merge rejected")
+                            .setMessage(error.getMessage()+
+                                "\n\nNo inventory, deck or artwork data was changed.")
+                            .setPositiveButton("OK",null).show());
+                    }
+                });
+            }catch(Exception error){toast("Cannot read Android sync snapshot: "+error.getMessage());}
+        });
+    }
+
     private void previewThreeWayPeerUris(Uri latest,Uri baseline) {
         if(latest==null||baseline==null)return;
         if(latest.equals(baseline)){toast("Peer and baseline must be different files");return;}
@@ -815,7 +888,12 @@ public class MainActivity extends Activity {
         } else if(request==PEER_BASE_PICK){
             Uri latest=pendingPeerComparison;
             pendingPeerComparison=null;
-            if(result==RESULT_OK && data!=null)previewThreeWayPeerUris(latest,data.getData());
+            boolean apply=pendingPeerApply;
+            pendingPeerApply=false;
+            if(result==RESULT_OK && data!=null){
+                if(apply)applyThreeWayInventoryUris(latest,data.getData());
+                else previewThreeWayPeerUris(latest,data.getData());
+            }
         } else if(request==PEER_PICK){
             if(result==RESULT_OK && data!=null)previewPeerUri(data.getData());
         } else if(request==FILE_SAVE){
