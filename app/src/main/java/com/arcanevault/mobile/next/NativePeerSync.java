@@ -121,7 +121,7 @@ public final class NativePeerSync {
         JSONArray changes=new JSONArray();
         int equal=0,conflicts=0;
         for(String group:new String[]{"cards","physicalCards","deckLibrary"}){
-            Map<String,JSONObject> before=index(group,own.getJSONObject("data").getJSONArray(group));
+            Map<String,JSONObject> before=index(group,own.getJSONArray(group));
             Map<String,JSONObject> after=index(group,data.getJSONArray(group));
             Set<String> keys=new TreeSet<>();keys.addAll(before.keySet());keys.addAll(after.keySet());
             for(String key:keys){
@@ -133,7 +133,7 @@ public final class NativePeerSync {
                     .put("key",key).put("action",action));
             }
         }
-        JSONObject before=own.getJSONObject("data").getJSONObject("preferredArtwork");
+        JSONObject before=own.getJSONObject("preferredArtwork");
         JSONObject after=data.getJSONObject("preferredArtwork");
         Set<String> keys=new TreeSet<>();
         for(java.util.Iterator<String> it=before.keys();it.hasNext();)keys.add(it.next());
