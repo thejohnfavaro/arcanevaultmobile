@@ -338,6 +338,14 @@ public class MainActivity extends Activity {
         pick.setType("application/json");
         startActivityForResult(pick,PEER_PICK);
     }
+    void refreshAfterPeerInventory() {
+        // Existing Legacy tools cache inventory in JavaScript memory; reload
+        // their current origin after a native commit so they cannot continue
+        // displaying an obsolete pre-sync snapshot.
+        if(browser!=null && appUrl!=null && browser.getUrl()!=null &&
+            browser.getUrl().startsWith(appUrl))browser.reload();
+    }
+
     void reviewAndApplyPeerInventory() {
         pendingPeerApply=true;
         selectLatestPeerForThreeWay();
@@ -426,13 +434,16 @@ public class MainActivity extends Activity {
                                     try{
                                         String recovery=NativePeerInventoryApply.apply(
                                             this,durable,catalog,local,proposal);
-                                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                        runOnUiThread(()->{
+                                            refreshAfterPeerInventory();
+                                            new android.app.AlertDialog.Builder(this)
                                             .setTitle("Android inventory updated")
                                             .setMessage("Applied "+count+" peer records. "+
                                                 "Previous inventories saved for recovery. "+
                                                 "Reopen the native Catalog and Sets to refresh.\n\n"+
                                                 "Backup: "+recovery)
-                                            .setPositiveButton("OK",null).show());
+                                            .setPositiveButton("OK",null).show();
+                                        });
                                     }catch(Exception error){
                                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                                             .setTitle("Peer changes not applied")
