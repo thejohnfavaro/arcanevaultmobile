@@ -94,7 +94,14 @@ public final class NativePeerSync {
             }
             result=key.toString();
         }
-        if(result.replace("|","").isEmpty())
+        // A key made only of empty length-prefixed fields ("0:|0:...")
+        // is not a stable printing identity and can corrupt a peer merge.
+        if(group.equals("physicalCards")&&
+            norm(row.optString("name","")).isEmpty()&&
+            norm(row.optString("scryfallId","")).isEmpty())
+            throw new IllegalArgumentException(
+                "Physical peer record needs a card name or printing ID");
+        if(result.isEmpty())
             throw new IllegalArgumentException("Peer record has no stable identity");
         return result;
     }
