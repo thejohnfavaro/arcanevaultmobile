@@ -17,6 +17,13 @@
 - Name-only physical ownership and unknown printing IDs remain **unresolved**. Do not infer set ownership or fill Set Progress from names alone.
 - The Android A1 reliability/parity scope and acceptance criteria are tracked in [issue #24](https://github.com/thejohnfavaro/arcanevaultmobile/issues/24). It prioritizes safe Windows QR/USB transfers, print identities, Set Progress, and current app data preservation.
 
+## Android v2.1.5: QR Wi-Fi peer inventory apply
+
+- Android **Data & Sync → Scan QR & apply Windows inventory** scans the one-time Windows **Share Sync to Phone (Wi-Fi)** QR and downloads the snapshot.
+- Choose the prior shared common-baseline file and confirm a conflict-free merge. The existing native inventory recovery journal protects physical/Arena copies; **no write happens during QR scanning or transfer**.
+- Windows native 0.9.97 adds **Receive & Apply Phone Sync (Wi-Fi)** so the phone can send its snapshot wirelessly for a reviewed merge on Windows.
+- QR transfer is still unencrypted trusted-LAN HTTP; Android deck/artwork edits remain excluded from Android write-back.
+
 ## Android v2.1.4: reviewed peer inventory write-back
 
 - Native Data & Sync offers **Review & apply peer inventory**: provide the latest peer snapshot and the previously common baseline, inspect conflict-free changes, then explicitly confirm.
