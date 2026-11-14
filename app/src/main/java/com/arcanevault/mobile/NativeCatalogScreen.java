@@ -199,8 +199,6 @@ final class NativeCatalogScreen {
                 VaultNativeStyle.BORDER,8));
             LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
             imageParams.rightMargin=dp(14);entry.addView(thumb,imageParams);
-            TextView placeholder=text("✦",23,true);
-            placeholder.setTextColor(VaultNativeStyle.GOLD);
             thumb.setImageDrawable(null);
             loadThumbnail(thumb,imageUrl);
             LinearLayout detail=VaultNativeStyle.column(activity);
@@ -261,37 +259,62 @@ final class NativeCatalogScreen {
     }
 
     private void showDetails(String name,String type,String oracle,String rarity,String imageUrl,int arenaQty) {
-        LinearLayout body=new LinearLayout(activity);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(16),dp(4),dp(16),dp(8));
+        LinearLayout body=VaultNativeStyle.column(activity);
+        body.setPadding(dp(16),dp(12),dp(16),dp(20));
+        body.setBackgroundColor(VaultNativeStyle.BACKGROUND);
+        TextView category=text("CARD INSPECTOR",11,true);
+        category.setTextColor(VaultNativeStyle.PRIMARY);
+        body.addView(category);
+
         ImageView art=new ImageView(activity);
+        art.setScaleType(ImageView.ScaleType.FIT_CENTER);
         art.setAdjustViewBounds(true);
-        art.setMaxHeight(dp(420));
         art.setContentDescription("Official card artwork for "+name);
-        body.addView(art,new LinearLayout.LayoutParams(-1,dp(320)));
-        TextView description=text(type+"\n\n"+oracle+"\n\nRarity: "+rarity,14,false);
-        body.addView(description);
-        body.addView(text("Arena owned: "+arenaQty+" copies (name-level inventory)",13,false));
-        Button browsePrintings=button("Browse printings & physical copies");
-        body.addView(browsePrintings);
-        browsePrintings.setOnClickListener(v -> loadPrintings(name));
+        art.setBackground(VaultNativeStyle.rounded(activity,
+            VaultNativeStyle.SURFACE,VaultNativeStyle.BORDER,12));
+        LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,dp(335));
+        imageParams.topMargin=dp(10);imageParams.bottomMargin=dp(12);
+        body.addView(art,imageParams);
+        TextView typeLabel=text(type,13,false);
+        typeLabel.setTextColor(VaultNativeStyle.SUBTEXT);
+        body.addView(typeLabel);
+        LinearLayout oraclePanel=VaultNativeStyle.column(activity);
+        oraclePanel.setPadding(dp(13),dp(10),dp(13),dp(12));
+        VaultNativeStyle.surface(activity,oraclePanel,false);
+        TextView oracleTitle=text("ORACLE TEXT",11,true);
+        oracleTitle.setTextColor(VaultNativeStyle.GOLD);
+        oraclePanel.addView(oracleTitle);
+        TextView oracleText=text(oracle.isEmpty()?"No rules text":oracle,14,false);
+        oracleText.setLineSpacing(dp(3),1f);
+        oraclePanel.addView(oracleText);
+        VaultNativeStyle.margin(body,oraclePanel,12,activity);
+        TextView rarityText=text("Rarity: "+rarity+
+            "    •    Arena copies: "+arenaQty,13,true);
+        rarityText.setTextColor(VaultNativeStyle.PRIMARY);
+        VaultNativeStyle.margin(body,rarityText,12,activity);
+        Button browsePrintings=VaultNativeStyle.button(activity,
+            "Browse printings & physical copies",true);
+        body.addView(browsePrintings,new LinearLayout.LayoutParams(-1,dp(50)));
+        browsePrintings.setOnClickListener(v->loadPrintings(name));
+
         ScrollView scroll=new ScrollView(activity);
+        scroll.setFillViewport(false);
         scroll.addView(body);
-        AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name).setView(scroll)
-            .setPositiveButton("Close",null).create();
+        AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name)
+            .setView(scroll).setPositiveButton("Close",null).create();
         dialog.show();
         if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
-        worker.execute(() -> {
+        artworkWorker.execute(() -> {
             try {
                 byte[] image=artwork.get(imageUrl);
                 Bitmap bitmap=BitmapFactory.decodeByteArray(image,0,image.length);
                 if(bitmap==null)return;
                 ui.post(() -> {
-                    if(disposed || !dialog.isShowing()){ bitmap.recycle(); return; }
+                    if(disposed||!dialog.isShowing()){bitmap.recycle();return;}
                     art.setImageBitmap(bitmap);
                 });
-            } catch(Exception ignored) {
-                // Oracle text remains readable when artwork is offline.
+            }catch(Exception ignored){
+                // Metadata and Oracle text remain fully accessible while offline.
             }
         });
     }
