@@ -458,6 +458,10 @@ final class NativeCatalogScreen {
 
     /** Official, printing-matched alternate face. Badge occupies the bottom
      * right of the artwork and never changes catalog selection or ownership. */
+    private boolean hasOfficialArt(String url) {
+        return url!=null && url.startsWith("https://cards.scryfall.io/");
+    }
+
     private FrameLayout flippableArt(String name,String front,String reverse,
             int width,int height) {
         FrameLayout container=new FrameLayout(activity);
@@ -537,9 +541,11 @@ final class NativeCatalogScreen {
             VaultNativeStyle.surface(activity,entry,false);
             String imageUrl=meta==null?"":meta.optString("image","");
             String imageBack=meta==null?"":meta.optString("imageBack","");
-            FrameLayout thumb=flippableArt(name,imageUrl,imageBack,dp(66),dp(93));
-            LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
-            imageParams.rightMargin=dp(14);entry.addView(thumb,imageParams);
+            if(hasOfficialArt(imageUrl)){
+                FrameLayout thumb=flippableArt(name,imageUrl,imageBack,dp(66),dp(93));
+                LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
+                imageParams.rightMargin=dp(14);entry.addView(thumb,imageParams);
+            }
             LinearLayout detail=VaultNativeStyle.column(activity);
             TextView nameView=text(name,16,true);
             nameView.setMaxLines(2);
@@ -596,10 +602,12 @@ final class NativeCatalogScreen {
         tile.setPadding(dp(8),dp(8),dp(8),dp(9));
         VaultNativeStyle.surface(activity,tile,false);
         String imageBack=meta==null?"":meta.optString("imageBack","");
-        FrameLayout image=flippableArt(name,imageUrl,imageBack,cardWidth-dp(16),
-            Math.round((cardWidth-dp(16))*1.4f));
-        tile.addView(image,new LinearLayout.LayoutParams(-1,
-            Math.round((cardWidth-dp(16))*1.4f)));
+        if(hasOfficialArt(imageUrl)){
+            FrameLayout image=flippableArt(name,imageUrl,imageBack,cardWidth-dp(16),
+                Math.round((cardWidth-dp(16))*1.4f));
+            tile.addView(image,new LinearLayout.LayoutParams(-1,
+                Math.round((cardWidth-dp(16))*1.4f)));
+        }
         TextView label=text(name,13,true);
         label.setMaxLines(2);
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -634,11 +642,13 @@ final class NativeCatalogScreen {
         LinearLayout card=VaultNativeStyle.row(activity);
         card.setPadding(dp(10),dp(10),dp(12),dp(10));
         VaultNativeStyle.surface(activity,card,false);
-        FrameLayout art=flippableArt(name,imageUrl,
-            printing.optString("imageBack",""),dp(66),dp(93));
-        LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
-        imageParams.rightMargin=dp(14);
-        card.addView(art,imageParams);
+        if(hasOfficialArt(imageUrl)){
+            FrameLayout art=flippableArt(name,imageUrl,
+                printing.optString("imageBack",""),dp(66),dp(93));
+            LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
+            imageParams.rightMargin=dp(14);
+            card.addView(art,imageParams);
+        }
         LinearLayout labels=VaultNativeStyle.column(activity);
         TextView title=text(name,16,true);title.setMaxLines(2);labels.addView(title);
         TextView setInfo=text(set+" #"+collector+" • "+printing.optString("setName",""),12,false);
@@ -701,6 +711,7 @@ final class NativeCatalogScreen {
     }
 
     private void addInspectorArtwork(String name,String imageUrl,String imageBack) {
+        if(!hasOfficialArt(imageUrl))return;
         FrameLayout art=flippableArt(name,imageUrl,imageBack,-1,dp(330));
         LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(330));
         params.topMargin=dp(8);params.bottomMargin=dp(8);
