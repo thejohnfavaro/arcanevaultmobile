@@ -7,7 +7,7 @@ const backend = fs.readFileSync('app/src/main/java/com/arcanevault/mobile/Catalo
 assert.match(native,/catalog\.search\(options\)/,'Use existing SQLite card search, never a duplicate WebView index');
 assert.match(native,/Executors\.newSingleThreadExecutor\(\)/,'DB reads must be off the UI thread');
 assert.match(native,/request\.incrementAndGet\(\)/,'Obsolete search results must be discarded');
-assert.match(native,/NativeCatalogScreen\(Activity activity, CatalogStore catalog, ArtworkCache artwork\)/);
+assert.match(native,/NativeCatalogScreen\(Activity activity, CatalogStore catalog, ArtworkCache artwork, SharedPreferences inventory\)/);
 assert.match(native,/artwork\.get\(imageUrl\)/,'Official art uses existing guarded Scryfall cache');
 assert.match(native,/BitmapFactory\.decodeByteArray/);
 assert.match(native,/new AlertDialog\.Builder\(activity\)/,'Native inspector replaces HTML card details');
