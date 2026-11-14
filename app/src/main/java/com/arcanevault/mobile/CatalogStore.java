@@ -346,11 +346,39 @@ final class CatalogStore extends SQLiteOpenHelper {
     }
     private static String get(Map<String,String> p,String name){return p.getOrDefault(name,"").trim();}
     /** Search literal rules text; never interpret typed % or _ as SQL wildcards. */
-    private static String oracleKeyword(Map<String,String> p) {
-        String keyword=get(p,"oracle");
-        if(keyword.length()>120)throw new IllegalArgumentException(
+    private static String[] oracleTerms(Map<String,String> p) {
+        String raw=get(p,"oracle");
+        if(raw.isEmpty())return new String[0];
+        if(raw.length()>120)throw new IllegalArgumentException(
             "Keyword search is limited to 120 characters");
-        return keyword.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");
+        String[] terms=raw.split(",",-1);
+        if(terms.length>8)throw new IllegalArgumentException(
+            "Search at most eight mechanic phrases");
+        for(int i=0;i<terms.length;i++){
+            terms[i]=terms[i].trim();
+            if(terms[i].isEmpty())throw new IllegalArgumentException(
+                "Each comma-separated mechanic must be nonempty");
+        }
+        return terms;
+    }
+    private static String escapeOracle(String phrase) {
+        return phrase.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");
+    }
+    private static void addOracleTerms(StringBuilder query,List<String> args,
+            Map<String,String> p) {
+        String[] terms=oracleTerms(p);
+        if(terms.length==0)return;
+        String mode=get(p,"oracleMatch");
+        if(!mode.isEmpty()&&!mode.equals("all")&&!mode.equals("any"))
+            throw new IllegalArgumentException("Invalid mechanic match mode");
+        String connector=mode.equals("any")?" OR ":" AND ";
+        query.append(" AND (");
+        for(int i=0;i<terms.length;i++){
+            if(i>0)query.append(connector);
+            query.append("c.oracle LIKE ? ESCAPE '\\'");
+            args.add("%"+escapeOracle(terms[i])+"%");
+        }
+        query.append(")");
     }
     JSONObject search(Map<String,String> p)throws Exception{
         String scope=get(p,"scope"),color=get(p,"colors"),role=get(p,"role"),sort=get(p,"sort"),arena=get(p,"arena");
@@ -374,10 +402,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             args.add(requestedSet);
         }
         if(!get(p,"type").isEmpty()){where.append(" AND c.type LIKE ?");args.add("%"+get(p,"type")+"%");}
-        if(!get(p,"oracle").isEmpty()){
-            where.append(" AND c.oracle LIKE ? ESCAPE '\\'");
-            args.add("%"+oracleKeyword(p)+"%");
-        }
+        addOracleTerms(where,args,p);
         if(!get(p,"rarity").isEmpty()){where.append(" AND c.rarity=?");args.add(get(p,"rarity"));}
         String mvMin=get(p,"mvMin"),mvMax=get(p,"mvMax");
         double min=mvMin.isEmpty()?0:Double.parseDouble(mvMin);
@@ -543,10 +568,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             from.append(" AND c.type LIKE ?");
             filter.add("%"+get(p,"type")+"%");
         }
-        if(!get(p,"oracle").isEmpty()){
-            from.append(" AND c.oracle LIKE ? ESCAPE '\\'");
-            filter.add("%"+oracleKeyword(p)+"%");
-        }
+        addOracleTerms(from,filter,p);
 
         String mvMin=get(p,"mvMin"),mvMax=get(p,"mvMax");
         double min=mvMin.isEmpty()?0:Double.parseDouble(mvMin);
