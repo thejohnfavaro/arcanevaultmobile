@@ -314,6 +314,13 @@ final class NativeWorkspaceScreen {
         row("PC ↔ Android peer sync",
             "Export a lossless snapshot or preview incoming changes before synchronization. "+
             "Peer preview never overwrites your data.",null);
+        row("Wi-Fi peer exchange (trusted home network)",
+            "Transfer snapshots wirelessly with a one-time link from Windows. "+
+            "Five-minute expiry; review-only and no automatic merging.",null);
+        button("Receive Windows sync over Wi-Fi",
+            ()->((MainActivity)activity).wirelessPeerReview(false));
+        button("Send phone sync over Wi-Fi",
+            ()->((MainActivity)activity).wirelessPeerReview(true));
         button("Export peer sync file",()->((MainActivity)activity).exportPeerSync());
         button("Preview Windows / Android peer file",
             ()->((MainActivity)activity).previewPeerSync());
