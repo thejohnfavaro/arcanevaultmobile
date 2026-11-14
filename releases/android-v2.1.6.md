@@ -9,6 +9,7 @@
 - Android versionName and versionCode advanced for the signed in-app updater.
 
 ## Fixed
+- Release regression checks now validate the current Android version dynamically rather than pinning an older version number.
 - Cold-launch snapshot and peer export flows no longer stop with the instruction to open Legacy tools to initialize saved decks.
 - Source read failure stops a snapshot instead of silently substituting an empty saved-deck library.
 
