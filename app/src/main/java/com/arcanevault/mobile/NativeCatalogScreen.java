@@ -526,6 +526,7 @@ final class NativeCatalogScreen {
         cardArt.setAdjustViewBounds(true);
         cardArt.setContentDescription("Official artwork for "+name+" "+printing.optString("set",""));
         layout.addView(cardArt,new LinearLayout.LayoutParams(-1,dp(330)));
+        final AlertDialog[] dialogHolder=new AlertDialog[1];
         Button edit=VaultNativeStyle.button(activity,"Edit physical copies (nonfoil)",true);
         layout.addView(edit,new LinearLayout.LayoutParams(-1,dp(48)));
         edit.setOnClickListener(v->new NativePhysicalEditor(activity,inventory,catalog)
@@ -541,7 +542,6 @@ final class NativeCatalogScreen {
         }
         ScrollView scroll=new ScrollView(activity);
         scroll.addView(layout);
-        final AlertDialog[] dialogHolder=new AlertDialog[1];
         AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name)
             .setView(scroll).setPositiveButton("Close",null).show();
         dialogHolder[0]=dialog;
