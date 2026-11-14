@@ -311,6 +311,14 @@ final class NativeWorkspaceScreen {
                     (state.optString("error","").isEmpty()?"":"\n"+state.optString("error","")));
             }catch(Exception e){info("Sync status unavailable: "+e.getMessage());}
         });
+        row("PC ↔ Android peer sync",
+            "Export a lossless snapshot or preview incoming changes before synchronization. "+
+            "Peer preview never overwrites your data.",null);
+        button("Export peer sync file",()->((MainActivity)activity).exportPeerSync());
+        button("Preview Windows / Android peer file",
+            ()->((MainActivity)activity).previewPeerSync());
+        button("Three-way compare (known shared baseline)",
+            ()->((MainActivity)activity).previewThreeWayPeerSync());
         button("Open advanced imports, QR and USB sync",legacy);
         row("Updater and security","Signed updates are opt-in. Do not dismiss Play Protect warnings without reviewing their details.",null);
         button("Check for app updates",()->new NativeAppUpdater(activity).check());
