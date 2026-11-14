@@ -151,7 +151,7 @@ public class MainActivity extends Activity {
     /** Native-first shell. Preserve legacy WebView and origin recovery. */
     private void showNativeHome() {
         nativeHomeVisible = true;
-        setContentView(NativeCompanionScreen.create(this, durable, catalog, this::showLegacyTools));
+        setContentView(NativeCompanionScreen.create(this, durable, catalog, artwork, this::showLegacyTools));
     }
 
     private void showLegacyTools() {
