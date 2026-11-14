@@ -16,7 +16,8 @@ for(const pattern of [
  /savePreferredArtwork/,
  /inspectorRequest/,
  /getWindowToken\(\)==null/,
- /loadThumbnail\(art,imageUrl\)/
+ /loadThumbnail\(art,imageUrl\)/,
+ /browseScroll\.post\(\(\)->browseScroll\.smoothScrollTo\(0,0\)\)/
 ])assert.match(source,pattern);
 const inspector=source.slice(source.indexOf('private void showDetails('),
     source.indexOf('private void showInlinePrintings('));
