@@ -1,6 +1,8 @@
 package com.arcanevault.mobile;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
+import com.arcanevault.mobile.next.NativePrintingOwnership;
 import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.Bitmap;
@@ -34,6 +36,7 @@ final class NativeCatalogScreen {
             TEXT = Color.rgb(240,244,251), MUTED = Color.rgb(171,186,205);
     private final Activity activity;
     private final CatalogStore catalog;
+    private final SharedPreferences inventory;
     private final ArtworkCache artwork;
     private final LinearLayout layout;
     private final LinearLayout results;
@@ -46,9 +49,10 @@ final class NativeCatalogScreen {
     private int page = 0;
     private volatile boolean disposed;
 
-    NativeCatalogScreen(Activity activity, CatalogStore catalog, ArtworkCache artwork) {
+    NativeCatalogScreen(Activity activity, CatalogStore catalog, ArtworkCache artwork, SharedPreferences inventory) {
         this.activity = activity;
         this.catalog = catalog;
+        this.inventory = inventory;
         this.artwork = artwork;
         layout = new LinearLayout(activity);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -177,7 +181,8 @@ final class NativeCatalogScreen {
             sub.setTextColor(MUTED);
             entry.addView(sub);
             String imageUrl=meta==null?"":meta.optString("image","");
-            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl));
+            int arenaQty=row.optInt("qty",0);
+            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,arenaQty));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
             lp.bottomMargin=dp(5);
             results.addView(entry,lp);
@@ -193,7 +198,7 @@ final class NativeCatalogScreen {
         next.setOnClickListener(v -> { page++; schedule(); });
         results.addView(pager);
     }
-    private void showDetails(String name,String type,String oracle,String rarity,String imageUrl) {
+    private void showDetails(String name,String type,String oracle,String rarity,String imageUrl,int arenaQty) {
         LinearLayout body=new LinearLayout(activity);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(16),dp(4),dp(16),dp(8));
@@ -204,6 +209,10 @@ final class NativeCatalogScreen {
         body.addView(art,new LinearLayout.LayoutParams(-1,dp(320)));
         TextView description=text(type+"\n\n"+oracle+"\n\nRarity: "+rarity,14,false);
         body.addView(description);
+        body.addView(text("Arena owned: "+arenaQty+" copies (name-level inventory)",13,false));
+        Button browsePrintings=button("Browse printings & physical copies");
+        body.addView(browsePrintings);
+        browsePrintings.setOnClickListener(v -> loadPrintings(name));
         ScrollView scroll=new ScrollView(activity);
         scroll.addView(body);
         AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name).setView(scroll)
@@ -222,6 +231,128 @@ final class NativeCatalogScreen {
             } catch(Exception ignored) {
                 // Oracle text remains readable when artwork is offline.
             }
+        });
+    }
+
+    private void loadPrintings(String name) {
+        // The authoritative native SharedPreferences inventory is read without
+        // altering anything. SQLite variants are the catalog, not a second ledger.
+        final AlertDialog loading=new AlertDialog.Builder(activity)
+            .setTitle("Printings of "+name)
+            .setMessage("Checking official printings and confirmed physical ownership…")
+            .setNegativeButton("Close",null).create();
+        loading.show();
+        worker.execute(() -> {
+            try {
+                Map<String,String> parameters=new HashMap<>();
+                parameters.put("name",name);
+                JSONObject response=catalog.variants(parameters);
+                JSONArray variants=response.optJSONArray("variants");
+                String raw=inventory.getString("vault_physicalCollectionV1","[]");
+                JSONArray physical=new JSONArray(raw==null?"[]":raw);
+                if(physical.length()>150000)throw new IllegalStateException("Physical inventory exceeds safety limit");
+                JSONObject projection=NativePrintingOwnership.inspect(name,physical,
+                    variants==null?new JSONArray():variants);
+                ui.post(() -> {
+                    if(disposed || activity.isFinishing() || !loading.isShowing())return;
+                    loading.dismiss();
+                    showPrintings(name,projection);
+                });
+            } catch(Exception error) {
+                ui.post(() -> {
+                    if(disposed || !loading.isShowing())return;
+                    loading.setMessage("Printing data unavailable: "+error.getMessage()+
+                        ". Your collection has not changed.");
+                });
+            }
+        });
+    }
+
+    private void showPrintings(String name,JSONObject projection) {
+        JSONArray rows=projection.optJSONArray("printings");
+        if(rows==null)rows=new JSONArray();
+        final JSONArray printings=rows;
+        int confirmed=projection.optInt("confirmedCopies",0);
+        int unresolved=projection.optInt("unresolvedCopies",0);
+        LinearLayout body=new LinearLayout(activity);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(12),dp(4),dp(12),dp(12));
+        String summary="Physical copies: "+projection.optInt("physicalCopies",0)
+            +" • Confirmed here: "+confirmed+" • Unresolved: "+unresolved;
+        body.addView(text(summary,14,true));
+        body.addView(text("Only matched Scryfall IDs or unique set + collector numbers count. "
+            +"Name-only cards are never assigned to an edition. "
+            +"Different finishes remain separate in your collection ledger.",12,false));
+        if(printings.length()==0)
+            body.addView(text("No official printing metadata is indexed yet. "
+                +"Refresh Scryfall catalog in Legacy tools.",13,false));
+        LinearLayout list=new LinearLayout(activity);
+        list.setOrientation(LinearLayout.VERTICAL);
+        body.addView(list);
+        final int[] visible={0};
+        Runnable more=new Runnable() {
+            @Override public void run() {
+                list.removeAllViews();
+                visible[0]=Math.min(printings.length(),visible[0]+40);
+                for(int i=0;i<visible[0];i++) {
+                    JSONObject printing=printings.optJSONObject(i);
+                    if(printing==null)continue;
+                    String set=printing.optString("set","").toUpperCase(java.util.Locale.ROOT);
+                    String collector=printing.optString("collectorNumber","");
+                    String title=set+" #"+collector+" · "+printing.optString("setName","");
+                    int copies=printing.optInt("confirmedPhysicalCopies",0);
+                    Button choice=button(title+"\n"+(copies>0?"Owned: "+copies+" confirmed":"No confirmed copies"));
+                    choice.setAllCaps(false);
+                    choice.setTextSize(12);
+                    choice.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
+                    choice.setPadding(dp(10),dp(8),dp(8),dp(8));
+                    list.addView(choice,new LinearLayout.LayoutParams(-1,dp(68)));
+                    String image=printing.optString("image","");
+                    choice.setOnClickListener(v -> showPrintingDetail(name,printing,image));
+                }
+                if(visible[0]<printings.length()) {
+                    Button next=button("Show next 40 printings");
+                    list.addView(next);
+                    next.setOnClickListener(v -> run());
+                }
+            }
+        };
+        more.run();
+        ScrollView scroll=new ScrollView(activity);
+        scroll.addView(body);
+        new AlertDialog.Builder(activity).setTitle("Choose a printing")
+            .setView(scroll).setPositiveButton("Done",null).show();
+    }
+
+    private void showPrintingDetail(String name,JSONObject printing,String imageUrl) {
+        String detail=printing.optString("setName","")
+            +" ("+printing.optString("set","").toUpperCase(java.util.Locale.ROOT)+")"
+            +" #"+printing.optString("collectorNumber","")
+            +"\nRarity: "+printing.optString("rarity","")
+            +"\nConfirmed physical copies: "+printing.optInt("confirmedPhysicalCopies",0)
+            +"\nPrinting ID: "+printing.optString("id","");
+        LinearLayout layout=new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.addView(text(detail,14,false));
+        ImageView cardArt=new ImageView(activity);
+        cardArt.setAdjustViewBounds(true);
+        cardArt.setContentDescription("Official artwork for "+name+" "+printing.optString("set",""));
+        layout.addView(cardArt,new LinearLayout.LayoutParams(-1,dp(330)));
+        ScrollView scroll=new ScrollView(activity);
+        scroll.addView(layout);
+        AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(name)
+            .setView(scroll).setPositiveButton("Close",null).show();
+        if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
+        worker.execute(() -> {
+            try {
+                byte[] bytes=artwork.get(imageUrl);
+                Bitmap bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+                if(bitmap==null)return;
+                ui.post(() -> {
+                    if(disposed || !dialog.isShowing()){bitmap.recycle();return;}
+                    cardArt.setImageBitmap(bitmap);
+                });
+            } catch(Exception ignored) { /* Text-only inspector stays available offline. */ }
         });
     }
 
