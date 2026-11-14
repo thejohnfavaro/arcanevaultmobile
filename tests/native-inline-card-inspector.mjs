@@ -15,7 +15,7 @@ for(const pattern of [
  /NativePhysicalEditor\(activity,inventory,catalog\)/,
  /savePreferredArtwork/,
  /inspectorRequest/,
- /getWindowToken\(\)==null/,
+ /target\.setImageBitmap\(bitmap\)/,
  /flippableArt/,
  /private void prefetchPageArtwork\(/,
  /pageCache\.get\(cacheKey\)/,
