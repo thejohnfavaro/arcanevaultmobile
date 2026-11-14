@@ -657,6 +657,7 @@ final class NativeCatalogScreen {
 
     /** Artwork is loaded off-thread, using the existing guarded Scryfall cache. */
     private void loadThumbnail(ImageView target,String imageUrl) {
+        target.setTag(imageUrl);
         if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
         artworkWorker.execute(() -> {
             try {
@@ -666,7 +667,7 @@ final class NativeCatalogScreen {
                 Bitmap bitmap=BitmapFactory.decodeByteArray(encoded,0,encoded.length,options);
                 if(bitmap==null)return;
                 ui.post(() -> {
-                    if(disposed || activity.isFinishing()) {
+                    if(disposed || activity.isFinishing() || !imageUrl.equals(target.getTag())) {
                         bitmap.recycle();return;
                     }
                     target.setImageBitmap(bitmap);
