@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
- android:layout_width="match_parent" android:layout_height="match_parent">
+ android:layout_width="match_parent" android:layout_height="match_parent"
+ android:background="@drawable/widget_vault_background">
  <ImageView android:id="@+id/widget_set_card"
   android:layout_width="match_parent" android:layout_height="match_parent"
-  android:scaleType="fitXY" android:contentDescription="Arcane Vault set progress"/>
+  android:scaleType="fitCenter" android:contentDescription="Arcane Vault set progress"/>
  <TextView android:id="@+id/widget_set_configure"
   android:layout_width="39dp" android:layout_height="38dp"
   android:layout_gravity="right|top" android:layout_marginRight="4dp"
