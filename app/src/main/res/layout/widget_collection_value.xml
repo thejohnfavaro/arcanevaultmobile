@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+ android:id="@+id/widget_value_root"
+ android:layout_width="match_parent" android:layout_height="match_parent"
+ android:background="@drawable/widget_vault_background"
+ android:orientation="vertical" android:padding="13dp">
+ <TextView android:id="@+id/widget_value_header"
+  android:layout_width="match_parent" android:layout_height="wrap_content"
+  android:text="◆  ARCANE VAULT  /  COLLECTION VALUE" android:textSize="11sp"
+  android:textColor="#E5BF79" android:textStyle="bold" android:maxLines="1"
+  android:ellipsize="end"/>
+ <TextView android:id="@+id/widget_value_amount"
+  android:layout_width="match_parent" android:layout_height="0dp"
+  android:layout_weight="1" android:gravity="center_vertical"
+  android:text="—" android:textSize="30sp" android:textColor="#F0F1F6"
+  android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
+ <TextView android:id="@+id/widget_value_coverage"
+  android:layout_width="match_parent" android:layout_height="wrap_content"
+  android:text="Open Arcane Vault to load estimates"
+  android:textSize="12sp" android:textColor="#B59BFC" android:maxLines="1"
+  android:ellipsize="end"/>
+ <TextView android:id="@+id/widget_value_updated"
+  android:layout_width="match_parent" android:layout_height="wrap_content"
+  android:layout_marginTop="3dp" android:text="Scryfall USD · cached quotes"
+  android:textSize="10sp" android:textColor="#9DA9BD" android:maxLines="1"
+  android:ellipsize="end"/>
+</LinearLayout>
