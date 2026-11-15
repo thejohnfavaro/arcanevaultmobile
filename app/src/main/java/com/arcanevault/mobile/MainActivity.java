@@ -840,6 +840,8 @@ public class MainActivity extends Activity {
                                         .append(preview.getInt("conflicts"))
                                         .append("\nMatching records: ")
                                         .append(preview.getInt("equal"))
+                                        .append("\n\n")
+                                        .append(com.arcanevault.mobile.next.NativePeerSync.describeGroups(preview))
                                         .append("\n\nRead-only wireless review. Nothing was applied.");
                                     for(int i=0;i<Math.min(12,changes.length());i++){
                                         JSONObject diff=changes.getJSONObject(i);
