@@ -349,6 +349,24 @@ public final class NativePeerSync {
         return (int)value;
     }
 
+    /** Human-readable dry-run domain summary, not a merge authorization. */
+    public static String describeGroups(JSONObject preview){
+        JSONObject groups=preview==null?null:preview.optJSONObject("groups");
+        if(groups==null)return "No categorized changes";
+        java.util.List<String> keys=new java.util.ArrayList<>();
+        for(java.util.Iterator<String> it=groups.keys();it.hasNext();)keys.add(it.next());
+        java.util.Collections.sort(keys);
+        java.util.List<String> lines=new java.util.ArrayList<>();
+        for(String key:keys){
+            JSONObject values=groups.optJSONObject(key);
+            if(values==null)continue;
+            lines.add(key+": "+values.optInt("added")+" new, "+
+                values.optInt("different")+" changed, "+
+                values.optInt("absent")+" absent on peer");
+        }
+        return lines.isEmpty()?"No record differences":String.join("\\n",lines);
+    }
+
     /** Overview only; never writes either local storage or SQLite. */
     public static JSONObject preview(JSONObject local,JSONObject incoming)throws Exception {
         JSONObject data=require(incoming);
