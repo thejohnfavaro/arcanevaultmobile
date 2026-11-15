@@ -847,7 +847,8 @@ function physicalRender(){
  // unidentified/unpriced inventory or proxies as if they had quotes.
  try{window.ArcaneAndroid?.publishCollectionValueWidget?.(JSON.stringify({
    value,pricedRows:priced.length,totalRows:physicalCards.length,
-   totalCopies:total,updatedAt:String(physicalPrices?.updatedAt||'')
+   totalCopies:total,hasQuotes:Object.keys(physicalPrices?.quotes||{}).length>0,
+   updatedAt:String(physicalPrices?.updatedAt||'')
  }));}catch(error){console.warn('Collection Value widget cache unavailable',error)}
  $('physicalSummary').textContent=physicalCards.length.toLocaleString()+' inventory rows · '+total.toLocaleString()+' copies · '+physicalOwnership().length+' card names · '+physicalCards.filter(avPhysicalHasIdentity).length+' identified printing rows · '+physicalMoney(value)+' estimated ('+priced.length+' priced printings)';
  $('physicalPageLabel').textContent='Page '+(physicalPage+1)+' / '+pages+' · '+list.length+' matching'+($('physicalSort').value!=='name'?' · unpriced last':'');
