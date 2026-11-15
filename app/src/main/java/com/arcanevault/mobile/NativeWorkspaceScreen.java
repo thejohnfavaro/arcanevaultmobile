@@ -389,6 +389,68 @@ final class NativeWorkspaceScreen {
             android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         lines.setText(NativeDeckDraft.formatEntries(deck.optJSONArray("entries")));
         fields.addView(lines,new LinearLayout.LayoutParams(-1,dp(260)));
+        // Add cards without typing exact names or leaving the native workspace.
+        // Only query the existing local Scryfall catalog; the selection modifies
+        // this unsaved draft, never physical or Arena ownership.
+        LinearLayout addRow=VaultNativeStyle.row(activity);
+        EditText findCard=new EditText(activity);
+        VaultNativeStyle.search(activity,findCard);
+        findCard.setSingleLine(true);
+        findCard.setHint("Find card to add");
+        addRow.addView(findCard,new LinearLayout.LayoutParams(0,dp(46),1));
+        Button addCard=VaultNativeStyle.button(activity,"Find",false);
+        LinearLayout.LayoutParams addParams=new LinearLayout.LayoutParams(dp(82),dp(46));
+        addParams.leftMargin=dp(8);
+        addRow.addView(addCard,addParams);
+        fields.addView(addRow);
+        addCard.setOnClickListener(v->{
+            String term=findCard.getText().toString().trim();
+            if(term.length()<2) {
+                info("Enter at least two characters to find a card.");return;
+            }
+            addCard.setEnabled(false);
+            executor.execute(()->{
+                try{
+                    Map<String,String> options=new HashMap<>();
+                    options.put("q",term);
+                    options.put("source","both");
+                    options.put("page","0");
+                    options.put("size","16");
+                    JSONObject result=catalog.search(options);
+                    JSONArray cards=result.optJSONArray("cards");
+                    java.util.ArrayList<String> names=new java.util.ArrayList<>();
+                    if(cards!=null)for(int i=0;i<cards.length();i++){
+                        JSONObject card=cards.optJSONObject(i);
+                        if(card==null)continue;
+                        String candidate=card.optString("name","").trim();
+                        if(!candidate.isEmpty()&&!names.contains(candidate))names.add(candidate);
+                    }
+                    ui.post(()->{
+                        addCard.setEnabled(true);
+                        if(closed||activity.isFinishing())return;
+                        if(names.isEmpty()){info("No local catalog matches for "+term);return;}
+                        new AlertDialog.Builder(activity)
+                            .setTitle("Add card to draft")
+                            .setItems(names.toArray(new String[0]),(d,which)->{
+                                String chosen=names.get(which);
+                                try{
+                                    String prior=lines.getText().toString().trim();
+                                    JSONArray parsed=NativeDeckDraft.parseEntries(
+                                        prior+(prior.isEmpty()?"":"\\n")+"1 "+chosen);
+                                    lines.setText(NativeDeckDraft.formatEntries(parsed));
+                                    findCard.setText("");
+                                }catch(Exception error){
+                                    info("Cannot add until deck text is corrected: "+error.getMessage());
+                                }
+                            })
+                            .setNegativeButton("Cancel",null).show();
+                    });
+                }catch(Exception error){
+                    ui.post(()->{addCard.setEnabled(true);
+                        if(!closed)info("Card search unavailable: "+error.getMessage());});
+                }
+            });
+        });
         ScrollView body=VaultNativeStyle.scroll(activity);
         body.addView(fields);
         AlertDialog dialog=new AlertDialog.Builder(activity)
