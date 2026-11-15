@@ -867,8 +867,8 @@ final class CatalogStore extends SQLiteOpenHelper {
         String name=null;
         try(Cursor c=db.rawQuery(
                 "SELECT MAX(setname),COUNT(DISTINCT name) FROM variants "+
-                "WHERE setcode=? COLLATE NOCASE AND (?=0 OR arena=1)",
-                new String[]{code,arena?"1":"0"})){
+                "WHERE setcode=? COLLATE NOCASE"+(arena?" AND arena=1":""),
+                new String[]{code})){
             if(c.moveToFirst()){name=c.getString(0);total=c.getInt(1);}
         }
         if(total<=0)return null;
