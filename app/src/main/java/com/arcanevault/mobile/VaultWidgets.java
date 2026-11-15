@@ -49,6 +49,27 @@ final class VaultWidgets {
             .remove("snapshot_"+id).commit();
         if(!stored)throw new IllegalStateException("Android could not save the widget selection");
     }
+    static String configuredMarket(Context context,int id){
+        return prefs(context).getString("market_"+id,"scryfall");
+    }
+    static String configuredCurrency(Context context,int id){
+        return prefs(context).getString("currency_"+id,"AUTO");
+    }
+    static String configuredPriceType(Context context,int id){
+        return prefs(context).getString("price_type_"+id,"market");
+    }
+    static boolean saveValueChoice(Context context,int id,String market,String currency,String type){
+        if(!java.util.Arrays.asList("scryfall","tcgplayer","cardkingdom","cardmarket").contains(market)
+            ||!java.util.Arrays.asList("AUTO","USD","EUR","GBP","CAD","AUD","JPY").contains(currency)
+            ||!java.util.Arrays.asList("market","low","retail").contains(type))return false;
+        return prefs(context).edit().putString("market_"+id,market)
+            .putString("currency_"+id,currency)
+            .putString("price_type_"+id,type).commit();
+    }
+    static void removeValueChoice(Context context,int id){
+        prefs(context).edit().remove("market_"+id).remove("currency_"+id)
+            .remove("price_type_"+id).apply();
+    }
     static void removeSetChoice(Context context,int id){
         prefs(context).edit().remove("code_"+id).remove("name_"+id)
             .remove("source_"+id).remove("snapshot_"+id).apply();
@@ -128,23 +149,50 @@ final class VaultWidgets {
         long copies=data.getLong("total_copies",0);
         long cents=data.getLong("value_cents",0);
         boolean hasQuotes=data.getBoolean("quotes_present",priced>0);
-        String amount=valid&&priced>0?
-            NumberFormat.getCurrencyInstance(Locale.US).format(cents/100.0):"—";
-        String coverage=!valid?"Open Arcane Vault to load saved price quotes":
-            total==0?"No physical cards inventoried":
-            !hasQuotes?"No Scryfall quotes cached · refresh prices in app":
-            priced==0?"Quotes do not match owned printings · refresh prices":
-            String.format(Locale.US,"%d / %d printings priced · %,d cards",
-                priced,total,copies);
-        if(data.getBoolean("price_refresh_active",false))
-            coverage="Refreshing Scryfall printing prices in Arcane Vault…";
         String when=data.getString("quote_updated","");
-        String subtitle="Scryfall USD · cached estimate";
-        if(valid&&!when.isEmpty()){
-            String day=when.length()>=10?when.substring(0,10):when;
-            subtitle="Scryfall USD · quotes "+day;
-        }
+        String date=when.length()>=10?when.substring(0,10):when;
+        boolean wantsFx=false;
         for(int id:ids){
+            String market=configuredMarket(context,id),currency=configuredCurrency(context,id);
+            String priceType=configuredPriceType(context,id);
+            String displayCurrency="AUTO".equals(currency)?
+                ("cardmarket".equals(market)?"EUR":"USD"):currency;
+            String marketLabel="tcgplayer".equals(market)?"TCGplayer":
+                "cardkingdom".equals(market)?"Card Kingdom":
+                "cardmarket".equals(market)?"Cardmarket":"Scryfall";
+            boolean supported="scryfall".equals(market)&&"market".equals(priceType);
+            String amount="—",coverage,subtitle;
+            if(!supported){
+                coverage="Price source not connected · choose Scryfall";
+                subtitle=marketLabel+" · "+displayCurrency+" · integration pending";
+            }else{
+                Double rate=VaultWidgetExchangeRates.rate(context,displayCurrency);
+                wantsFx|=rate==null&&!"USD".equals(displayCurrency);
+                if(valid&&priced>0&&rate!=null){
+                    Locale locale="EUR".equals(displayCurrency)?Locale.GERMANY:
+                        "GBP".equals(displayCurrency)?Locale.UK:
+                        "CAD".equals(displayCurrency)?Locale.CANADA:
+                        "AUD".equals(displayCurrency)?new Locale("en","AU"):
+                        "JPY".equals(displayCurrency)?Locale.JAPAN:Locale.US;
+                    NumberFormat format=NumberFormat.getCurrencyInstance(locale);
+                    format.setCurrency(java.util.Currency.getInstance(displayCurrency));
+                    amount=format.format((cents/100.0)*rate);
+                }
+                coverage=!valid?"Open Arcane Vault to load saved price quotes":
+                    total==0?"No physical cards inventoried":
+                    !hasQuotes?"No Scryfall quotes cached · refresh prices in app":
+                    priced==0?"Quotes do not match owned printings · refresh prices":
+                    rate==null?"Currency exchange rate unavailable · connect to refresh":
+                    String.format(Locale.US,"%d / %d printings priced · %,d cards",
+                        priced,total,copies);
+                subtitle="Scryfall "+displayCurrency+" · "+
+                    (date.isEmpty()?"cached reference": "quotes "+date);
+                if(!"USD".equals(displayCurrency))
+                    subtitle+=" · FX "+(VaultWidgetExchangeRates.date(context).isEmpty()?
+                        "pending":VaultWidgetExchangeRates.date(context));
+                if(data.getBoolean("price_refresh_active",false))
+                    coverage="Refreshing Scryfall printing prices in Arcane Vault…";
+            }
             RemoteViews rv=new RemoteViews(context.getPackageName(),
                 R.layout.widget_collection_value);
             rv.setTextViewText(R.id.widget_value_amount,amount);
@@ -152,8 +200,21 @@ final class VaultWidgets {
             rv.setTextViewText(R.id.widget_value_updated,subtitle);
             rv.setOnClickPendingIntent(R.id.widget_value_root,
                 openApp(context,id,"physical","","physical"));
+            rv.setOnClickPendingIntent(R.id.widget_value_configure,
+                configureValue(context,id));
             mgr.updateAppWidget(id,rv);
         }
+        if(wantsFx)VaultWidgetExchangeRates.refreshIfNeeded(context);
+    }
+
+    private static PendingIntent configureValue(Context context,int id){
+        Intent intent=new Intent(context,VaultValueWidgetConfigActivity.class);
+        intent.setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);
+        intent.setData(Uri.parse("arcanevault://widget/value-config/"+id));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id);
+        return PendingIntent.getActivity(context,20000+id,intent,
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
 
     static PendingIntent openApp(Context context,int id,String target,
