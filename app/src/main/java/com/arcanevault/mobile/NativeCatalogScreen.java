@@ -498,7 +498,11 @@ final class NativeCatalogScreen {
         image.setBackground(VaultNativeStyle.rounded(activity,
             VaultNativeStyle.ELEVATED,VaultNativeStyle.BORDER,8));
         container.addView(image,new FrameLayout.LayoutParams(-1,-1));
-        loadThumbnail(image,front);
+        int displayWidth=width>0?width:
+            activity.getResources().getDisplayMetrics().widthPixels-dp(44);
+        int displayHeight=height>0?height:dp(440);
+        boolean fullPreview=width<=0;
+        loadThumbnail(image,front,displayWidth,displayHeight,fullPreview);
         boolean hasBack=front.startsWith("https://cards.scryfall.io/") &&
             reverse.startsWith("https://cards.scryfall.io/") &&
             !front.equals(reverse);
@@ -515,7 +519,8 @@ final class NativeCatalogScreen {
             flip.setOnClickListener(v->{
                 showingBack[0]=!showingBack[0];
                 image.setImageDrawable(null);
-                loadThumbnail(image,showingBack[0]?reverse:front);
+                loadThumbnail(image,showingBack[0]?reverse:front,
+                    displayWidth,displayHeight,fullPreview);
                 image.setContentDescription((showingBack[0]?"Alternate":"Front")+
                     " card face for "+name);
                 flip.setContentDescription("Show "+(showingBack[0]?"front":"alternate")+
@@ -757,19 +762,21 @@ final class NativeCatalogScreen {
         results.addView(card,lp);
     }
 
-    /** Artwork is loaded off-thread, using the existing guarded Scryfall cache. */
-    private void loadThumbnail(ImageView target,String imageUrl) {
+    /** Fetch normal card art for grid tiles and large Scryfall art for
+     * expanded full-card previews. Dynamic sampling uses actual display pixels
+     * so text remains legible on high-density Android screens. */
+    private void loadThumbnail(ImageView target,String imageUrl,int width,
+            int height,boolean fullPreview) {
         target.setTag(imageUrl);
-        if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
+        if(!NativeArtworkQuality.supported(imageUrl))return;
         artworkWorker.execute(() -> {
             try {
-                byte[] encoded=artwork.get(imageUrl);
-                BitmapFactory.Options options=new BitmapFactory.Options();
-                options.inSampleSize=4;
-                Bitmap bitmap=BitmapFactory.decodeByteArray(encoded,0,encoded.length,options);
+                Bitmap bitmap=NativeArtworkQuality.load(artwork,imageUrl,
+                    width,height,fullPreview);
                 if(bitmap==null)return;
                 ui.post(() -> {
-                    if(disposed || activity.isFinishing() || !imageUrl.equals(target.getTag())) {
+                    if(disposed || activity.isFinishing() ||
+                        !imageUrl.equals(target.getTag())) {
                         bitmap.recycle();return;
                     }
                     target.setImageBitmap(bitmap);
@@ -1121,8 +1128,9 @@ final class NativeCatalogScreen {
         if(!imageUrl.startsWith("https://cards.scryfall.io/"))return;
         worker.execute(() -> {
             try {
-                byte[] bytes=artwork.get(imageUrl);
-                Bitmap bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+                Bitmap bitmap=NativeArtworkQuality.load(artwork,imageUrl,
+                    activity.getResources().getDisplayMetrics().widthPixels-dp(56),
+                    dp(400),true);
                 if(bitmap==null)return;
                 ui.post(() -> {
                     if(disposed || !dialog.isShowing()){bitmap.recycle();return;}
