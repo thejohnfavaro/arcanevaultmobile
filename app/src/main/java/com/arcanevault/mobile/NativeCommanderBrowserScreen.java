@@ -360,10 +360,8 @@ final class NativeCommanderBrowserScreen {
     private void loadRowArt(ImageView view,String url){
         images.execute(()->{
             try{
-                byte[] bytes=artwork.get(url);
-                BitmapFactory.Options options=new BitmapFactory.Options();
-                options.inSampleSize=4;
-                Bitmap thumb=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+                Bitmap thumb=NativeArtworkQuality.load(artwork,url,
+                    dp(84),dp(116),false);
                 if(thumb==null)return;
                 ui.post(()->{
                     if(closed || activity.isFinishing() ||
@@ -380,10 +378,9 @@ final class NativeCommanderBrowserScreen {
         if(!url.startsWith("https://cards.scryfall.io/"))return;
         images.execute(()->{
             try{
-                byte[] bytes=artwork.get(url);
-                BitmapFactory.Options options=new BitmapFactory.Options();
-                options.inSampleSize=2;
-                Bitmap image=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+                Bitmap image=NativeArtworkQuality.load(artwork,url,
+                    activity.getResources().getDisplayMetrics().widthPixels-dp(48),
+                    dp(460),true);
                 if(image==null)return;
                 ui.post(()->{
                     if(closed||activity.isFinishing()||version!=imageGeneration||

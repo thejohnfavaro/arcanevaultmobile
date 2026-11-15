@@ -7,7 +7,8 @@ assert.match(native,/catalog\.variants\(parameters\)/,'Printings must originate 
 assert.match(native,/inventory\.getString\("vault_physicalCollectionV1","\[\]"\)/,'Physical counts must come from authoritative native inventory');
 assert.match(native,/NativePrintingOwnership\.inspect\(name,physical,/);
 assert.match(native,/showPrintingDetail\(name,printing,image\)/);
-assert.match(native,/artwork\.get\(imageUrl\)/);
+assert.match(native,/NativeArtworkQuality\.load\(artwork,imageUrl,/,
+  'Printing previews use the shared, official high-resolution artwork cache');
 assert.match(native,/Show next 40 printings/,'Printing selection UI must page in bounded batches');
 assert.match(reconcile,/setNumberMatches\.getOrDefault\(suppliedKey,0\)==1/,'Ambiguous set collector must not match');
 assert.match(reconcile,/if\(!id\.isEmpty\(\)\)/,'Present but contradictory IDs must never fall back');

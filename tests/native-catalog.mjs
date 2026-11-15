@@ -8,8 +8,9 @@ assert.match(native,/catalog\.search\(options\)/,'Use existing SQLite card searc
 assert.match(native,/Executors\.newSingleThreadExecutor\(\)/,'DB reads must be off the UI thread');
 assert.match(native,/request\.incrementAndGet\(\)/,'Obsolete search results must be discarded');
 assert.match(native,/NativeCatalogScreen\(Activity activity, CatalogStore catalog, ArtworkCache artwork, SharedPreferences inventory\)/);
-assert.match(native,/artwork\.get\(imageUrl\)/,'Official art uses existing guarded Scryfall cache');
-assert.match(native,/BitmapFactory\.decodeByteArray/);
+assert.match(native,/NativeArtworkQuality\.load\(artwork,imageUrl,/,'Official art uses the shared high quality Scryfall loader');
+assert.match(fs.readFileSync('app/src/main/java/com/arcanevault/mobile/NativeArtworkQuality.java','utf8'),
+  /BitmapFactory\.decodeByteArray/,'Shared loader decodes bounded official image bytes');
 assert.match(native,/new AlertDialog\.Builder\(activity\)/,'Native inspector replaces HTML card details');
 assert.match(native,/options\.put\("size","40"\)/,'Bounded native catalog page size');
 assert.match(shell,/new NativeCatalogScreen\(activity, catalog, artwork, prefs\)/);

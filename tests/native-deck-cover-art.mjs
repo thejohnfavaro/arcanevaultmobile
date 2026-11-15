@@ -33,10 +33,10 @@ assert.match(workspace,/coverWorkers=Executors\.newFixedThreadPool\(2\)/,
   'Cover fetch concurrency must be bounded');
 assert.match(workspace,/return size\(\)>32;/,
   'Decoded cover memory cache must be bounded');
-assert.match(workspace,/options\.inSampleSize=4/,
-  'Decode small thumbnails rather than full-resolution card images');
-assert.match(workspace,/artwork\.get\(url\)/,
-  'Use the existing shared Scryfall download/cache implementation');
+assert.match(workspace,/NativeArtworkQuality\.load\(artwork,url,/,
+  'Deck covers use adaptive sampling instead of forced quarter-resolution');
+assert.match(read('app/src/main/java/com/arcanevault/mobile/NativeArtworkQuality.java'),/cache\.get\(url\)/,
+  'Adaptive decoding uses the existing Scryfall download/cache implementation');
 assert.match(workspace,/pageGeneration==deckPageGeneration/,
   'Stale cover updates must not replace content after navigation');
 assert.match(workspace,/coverWorkers\.shutdownNow\(\)/,

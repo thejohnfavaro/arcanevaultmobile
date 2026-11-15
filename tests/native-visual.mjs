@@ -18,7 +18,8 @@ assert.match(shell,/VaultNativeStyle\.surface/,'Dashboard and collection rows us
 assert.match(catalog,/FrameLayout thumb=flippableArt/,'Cards retain official artwork with optional flip control');
 assert.match(catalog,/loadThumbnail/);
 assert.match(catalog,/artworkWorker\.execute/,'Artwork decoding must not block SQLite search or the UI');
-assert.match(catalog,/options\.inSampleSize=4/,'Thumbnails should be sampled to save memory');
+assert.match(catalog,/NativeArtworkQuality\.load\(artwork,imageUrl,/,
+  'Thumbnails use adaptive display-pixel decoding, not a fixed 1/4 bitmap');
 assert.match(catalog,/VaultNativeStyle\.search/,'Native search fields must use the dark theme');
 assert.match(catalog,/ORACLE TEXT/,'Card inspector must have readable rules text');
 assert.match(catalog,/View printings & edit physical ownership/,'Printing inspection is preserved');
