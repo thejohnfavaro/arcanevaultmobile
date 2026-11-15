@@ -40,8 +40,8 @@ assert.match(setLayout,/widget_set_configure/);
 assert.match(workspace,/VaultSetProgressCard\.render\(activity,set,source,/);
 assert.match(store,/VaultSetProgressCard\.render\(context,selected,configuredSource\(context,id\)/);
 assert.match(config,/VaultSetProgressCard\.render\(this,card,source,/);
-assert.match(progress,/Math\.min\(600,widthPx\)/,
- 'Bitmaps must be under binder size limits');
+assert.match(progress,/Math\.min\(1f,Math\.min\(600f\/targetW,240f\/targetH\)\)/,
+ 'Bitmaps must stay under binder limits while keeping the image aspect ratio');
 assert.match(progress,/boolean measured=set!=null&&set\.has\("total"\)&&total>0/,
  'Absent catalog must not be reported as 0%');
 assert.match(progress,/CATALOG NOT AVAILABLE/);
