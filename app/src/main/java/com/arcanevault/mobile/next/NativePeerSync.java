@@ -364,7 +364,11 @@ public final class NativePeerSync {
                 values.optInt("different")+" changed, "+
                 values.optInt("absent")+" absent on peer");
         }
-        return lines.isEmpty()?"No record differences":String.join("\\n",lines);
+        return (lines.isEmpty()?"No record differences":String.join("\\n",lines))+
+            "\\nPeer quantity difference: +"+
+            preview.optLong("peerMoreCopies",0)+" / −"+
+            preview.optLong("peerFewerCopies",0)+
+            " copies (preview only; nothing applied)";
     }
 
     /** Overview only; never writes either local storage or SQLite. */
