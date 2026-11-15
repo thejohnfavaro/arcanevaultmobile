@@ -48,7 +48,12 @@ final class VaultSetValues {
                 if(priced>0&&cents>0&&!prior.contains("baseline_"+code))
                     changes.putLong("baseline_"+code,cents);
             }
-            changes.putString("sets",complete.toString())
+            String fresh=complete.toString();
+            if(fresh.equals(prior.getString("sets","")) &&
+                updated.equals(prior.getString("updatedAt","")) &&
+                hasQuotes==prior.getBoolean("hasQuotes",false))
+                return true;
+            changes.putString("sets",fresh)
                 .putString("updatedAt",updated)
                 .putBoolean("hasQuotes",hasQuotes);
             if(!changes.commit())return false;
