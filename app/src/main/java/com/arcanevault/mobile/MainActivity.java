@@ -239,8 +239,10 @@ public class MainActivity extends Activity {
                 "const decks=JSON.parse(raw);"+
                 "const expected=JSON.parse("+before+");"+
                 "const revised=JSON.parse("+after+");"+
+                "const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?"+
+                "Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v);"+
                 "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
-                "if(index<0||JSON.stringify(Object.keys(decks[index]).sort().map(k=>[k,decks[index][k]]))!==JSON.stringify(Object.keys(expected).sort().map(k=>[k,expected[k]])))"+
+                "if(index<0||JSON.stringify(stable(decks[index]))!==JSON.stringify(stable(expected)))"+
                     "return JSON.stringify({ok:false,error:'Saved deck changed since opening. Reopen it.'});"+
                 "return JSON.stringify({ok:true,original:raw});"+
                 "}catch(e){return JSON.stringify({ok:false,error:String(e)})}})()";
@@ -268,8 +270,10 @@ public class MainActivity extends Activity {
                         "const key='vault_libraryV3';const decks=JSON.parse(localStorage.getItem(key)||'[]');"+
                         "const expected=JSON.parse("+before+");"+
                         "const revised=JSON.parse("+after+");"+
-                        "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
-                        "if(index<0||JSON.stringify(Object.keys(decks[index]).sort().map(k=>[k,decks[index][k]]))!==JSON.stringify(Object.keys(expected).sort().map(k=>[k,expected[k]])))"+
+                        "const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==='object'?"+
+                "Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v);"+
+                "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
+                        "if(index<0||JSON.stringify(stable(decks[index]))!==JSON.stringify(stable(expected)))"+
                             "return JSON.stringify({ok:false,error:'Concurrent edit detected'});"+
                         "const prior=decks[index];const revisions=Array.isArray(prior.revisions)?prior.revisions.slice():[];"+
                         "revisions.push({name:prior.name,commander:prior.commander,entries:prior.entries,"+
