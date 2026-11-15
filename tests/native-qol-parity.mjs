@@ -54,6 +54,7 @@ assert.match(cardScreen,/quickAdd\.setOnClickListener\(v->showInlinePrintings/);
 assert.match(cardScreen,/new NativePhysicalEditor\(activity,inventory,catalog\)/);
 assert.match(cardScreen,/View printings & edit physical ownership/);
 
-assert.match(gradle,/versionCode 82/);
-assert.match(gradle,/versionName '2\.1\.26'/);
+assert.ok(Number(gradle.match(/versionCode (\d+)/)?.[1])>=82,
+  'Quality-of-life features must not regress to an older release');
+assert.match(gradle,/versionName '2\.1\.\d+'/);
 console.log('PASS: five native QOL features, read-only analytics, same shortlist authority and safe import/physical edit flow');
