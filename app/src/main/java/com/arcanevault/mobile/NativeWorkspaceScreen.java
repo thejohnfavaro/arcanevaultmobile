@@ -451,6 +451,7 @@ final class NativeWorkspaceScreen {
             String art=catalog.cachedRepresentativeSetArt(code,source);
             if(!art.isEmpty())set.put("artUrl",art);
         }catch(Exception ignored){}
+        VaultSetValues.decorate(activity,set,source);
         ImageView tile=new ImageView(activity);
         tile.setScaleType(ImageView.ScaleType.FIT_CENTER);
         final int width=activity.getResources().getDisplayMetrics().widthPixels-dp(36);
@@ -560,6 +561,8 @@ final class NativeWorkspaceScreen {
         // set's ownership query takes time. Never leave a blank detail pane.
         content.removeAllViews();
         button("← Back to sets",()->setProgress(setQuery,0));
+        if("physical".equals(source))
+            row("OWNED SET VALUE",VaultSetValues.detail(activity,set),null);
         row("Loading "+title+"…","Reading the local set index. Your collection is unchanged.",null);
         setDetailsWorker.execute(()->{
             try {
@@ -577,6 +580,8 @@ final class NativeWorkspaceScreen {
                     if(closed||activity.isFinishing()||request!=setRequestId)return;
                     content.removeAllViews();
                     button("← Back to sets",()->setProgress(setQuery,0));
+                    if("physical".equals(source))
+                        row("OWNED SET VALUE",VaultSetValues.detail(activity,set),null);
                     CheckBox ownedOnly=new CheckBox(activity);
                     ownedOnly.setText(source.equals("physical")?
                         "Hide unowned printings":"Hide unowned Arena cards");
