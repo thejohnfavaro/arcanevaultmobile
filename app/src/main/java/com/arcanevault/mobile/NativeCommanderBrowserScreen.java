@@ -125,13 +125,12 @@ final class NativeCommanderBrowserScreen {
         addRow(filterPanel,VaultNativeStyle.label(activity,
             "EXACT COLOR IDENTITY",11,VaultNativeStyle.SUBTEXT,true));
         LinearLayout colorRow=VaultNativeStyle.row(activity);
-        java.util.Map<String,Button> colorButtons=new java.util.LinkedHashMap<>();
+        java.util.Map<String,NativeManaFilterButton> colorButtons=new java.util.LinkedHashMap<>();
         for(String symbol:new String[]{"W","U","B","R","G","C"}){
-            Button choice=VaultNativeStyle.button(activity,symbol,false);
+            NativeManaFilterButton choice=new NativeManaFilterButton(activity,artwork,symbol);
             colorButtons.put(symbol,choice);
             colorRow.addView(choice,new LinearLayout.LayoutParams(0,dp(40),1));
-            choice.setContentDescription(("C".equals(symbol)?"Colorless":symbol)+
-                " commander color identity");
+            // Shared accessible official mana icon toggles match Card Catalog.
             choice.setOnClickListener(v->{
                 if("C".equals(symbol))colors="C".equals(colors)?"":"C";
                 else{
@@ -142,21 +141,21 @@ final class NativeCommanderBrowserScreen {
                             next.append(c);
                     colors=next.toString();
                 }
-                for(java.util.Map.Entry<String,Button> entry:colorButtons.entrySet()){
+                for(java.util.Map.Entry<String,NativeManaFilterButton> entry:colorButtons.entrySet()){
                     boolean selected=entry.getKey().equals("C")?
                         "C".equals(colors):colors.contains(entry.getKey());
-                    entry.getValue().setAlpha(selected?1f:0.55f);
+                    entry.getValue().setSelectedMana(selected);
                 }
                 page=0;load();
             });
-            choice.setAlpha(0.55f);
+            choice.setSelectedMana(false);
         }
         addRow(filterPanel,colorRow);
         Button clear=VaultNativeStyle.button(activity,"Clear commander filters",false);
         addRow(filterPanel,clear);
         clear.setOnClickListener(v->{
             colors="";owned="";page=0;
-            for(Button button:colorButtons.values())button.setAlpha(0.55f);
+            for(NativeManaFilterButton button:colorButtons.values())button.setSelectedMana(false);
             for(int n=0;n<ownership.getChildCount();n++){
                 Button button=(Button)ownership.getChildAt(n);
                 button.setEnabled(n!=0);
