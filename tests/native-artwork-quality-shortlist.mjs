@@ -41,7 +41,7 @@ assert.match(shortlist,/new ShortlistArtTarget\(image,url,/);
 assert.match(shortlist,/target.view.getGlobalVisibleRect\(visible\)/);
 assert.match(shortlist,/workspaceScroll.post\(this::loadVisibleShortlistArt\)/);
 assert.match(shortlist,/shortlistArtInFlight.size\(\)>=6/);
-assert.match(shortlist,/return size\(\)>36/);
+assert.match(shortlist,/return size\(\)>20/);
 assert.match(shortlist,/tile.setOnClickListener\(v->openShortlistPreview\(card\)\)/);
 assert.match(shortlist,/large.setScaleType\(ImageView.ScaleType.FIT_CENTER\)/);
 assert.match(shortlist,/setNativeShortlist\(name,false/);
