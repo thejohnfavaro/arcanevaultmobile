@@ -80,7 +80,7 @@ final class NativeDeckFit {
             JSONObject deck=decks.optJSONObject(i);
             if(deck!=null)source.add(deck);
         }
-        source.sort(Comparator.comparingInt(deck->{
+        source.sort(Comparator.<JSONObject>comparingInt(deck->{
             Result result=check(deck,physical,arenaCards);
             return result.required==0?Integer.MAX_VALUE:result.missingCopies();
         }).thenComparing(deck->deck.optString("name","")));
