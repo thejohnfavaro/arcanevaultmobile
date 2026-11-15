@@ -23,6 +23,11 @@
   android:layout_weight="1" android:gravity="center_vertical"
   android:text="—" android:textSize="30sp" android:textColor="#F0F1F6"
   android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
+ <TextView android:id="@+id/widget_value_change"
+  android:layout_width="match_parent" android:layout_height="wrap_content"
+  android:text="Change pending · first tracked value"
+  android:textColor="#9FADC3" android:textSize="13sp"
+  android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
  <TextView android:id="@+id/widget_value_coverage"
   android:layout_width="match_parent" android:layout_height="wrap_content"
   android:text="Open Arcane Vault to load estimates"
