@@ -77,7 +77,7 @@ final class NativeCatalogScreen {
     private String manaValueMin="",manaValueMax="";
     private String exactColorIdentity="";
     private boolean advancedOpen=false;
-    private boolean artGrid=false;
+    private boolean artGrid=true;
     private Button viewModeButton;
     private LinearLayout advancedFilters;
     private Button advancedButton;
@@ -180,7 +180,7 @@ final class NativeCatalogScreen {
             page=0;updateCollectionFilters();schedule();
         });
         LinearLayout toolRow=VaultNativeStyle.row(activity);
-        viewModeButton=VaultNativeStyle.button(activity,"Card Art",false);
+        viewModeButton=VaultNativeStyle.button(activity,"Detailed List",false);
         toolRow.addView(viewModeButton,new LinearLayout.LayoutParams(0,dp(42),1));
         viewModeButton.setOnClickListener(v->{
             artGrid=!artGrid;
@@ -525,7 +525,7 @@ final class NativeCatalogScreen {
         GridLayout gallery=null;
         if(artGrid&&!printingMode){
             gallery=new GridLayout(activity);
-            gallery.setColumnCount(2);
+            gallery.setColumnCount(catalogColumns());
             gallery.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
             results.addView(gallery,new LinearLayout.LayoutParams(-1,-2));
         }
@@ -593,7 +593,14 @@ final class NativeCatalogScreen {
             browseScroll.post(()->browseScroll.smoothScrollTo(0,0)); });
         results.addView(pager);
     }
-    /** A compact, 2-column card-art browser with the same inspect action as
+    /** At least two visible card tiles on a phone; three on larger displays. */
+    private int catalogColumns() {
+        float usableDp=activity.getResources().getDisplayMetrics().widthPixels /
+            activity.getResources().getDisplayMetrics().density - 48f;
+        return usableDp >= 510f ? 3 : 2;
+    }
+
+    /** A responsive card-art browser with the same inspect action as
      * detailed rows. Images come only from the existing guarded cache. */
     private void renderArtworkTile(GridLayout gallery,JSONObject row,int index) {
         JSONObject meta=row.optJSONObject("meta");
@@ -604,7 +611,8 @@ final class NativeCatalogScreen {
         String rarity=meta==null?"":meta.optString("rarity","");
         int arenaQty=row.optInt("arenaQty",0),physicalQty=row.optInt("physicalQty",0);
         int screenWidth=activity.getResources().getDisplayMetrics().widthPixels;
-        int cardWidth=Math.max(dp(120),(screenWidth-dp(72))/2);
+        int columns=catalogColumns();
+        int cardWidth=Math.max(dp(110),(screenWidth-dp(48)-columns*dp(6))/columns);
         LinearLayout tile=VaultNativeStyle.column(activity);
         tile.setPadding(dp(8),dp(8),dp(8),dp(9));
         VaultNativeStyle.surface(activity,tile,false);
@@ -632,8 +640,9 @@ final class NativeCatalogScreen {
         GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
         cell.width=cardWidth;
         cell.height=-2;
-        cell.rowSpec=GridLayout.spec(index/2);
-        cell.columnSpec=GridLayout.spec(index%2);
+        int columns=catalogColumns();
+        cell.rowSpec=GridLayout.spec(index/columns);
+        cell.columnSpec=GridLayout.spec(index%columns);
         cell.setMargins(dp(3),dp(3),dp(3),dp(3));
         gallery.addView(tile,cell);
     }
