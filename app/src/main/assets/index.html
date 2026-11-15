@@ -842,6 +842,13 @@ function physicalRender(){
  const size=40,pages=Math.max(1,Math.ceil(list.length/size));physicalPage=Math.max(0,Math.min(physicalPage,pages-1));
  const total=physicalCards.reduce((n,c)=>n+c.qty,0),priced=physicalCards.filter(c=>physicalPrice(c)!==null);
  const value=priced.reduce((n,c)=>n+physicalPrice(c)*c.qty,0);
+ // Publish only a derived, cached Scryfall quote estimate. Never make
+ // a request when the launcher widget is redrawn and never price
+ // unidentified/unpriced inventory or proxies as if they had quotes.
+ try{window.ArcaneAndroid?.publishCollectionValueWidget?.(JSON.stringify({
+   value,pricedRows:priced.length,totalRows:physicalCards.length,
+   totalCopies:total,updatedAt:String(physicalPrices?.updatedAt||'')
+ }));}catch(error){console.warn('Collection Value widget cache unavailable',error)}
  $('physicalSummary').textContent=physicalCards.length.toLocaleString()+' inventory rows · '+total.toLocaleString()+' copies · '+physicalOwnership().length+' card names · '+physicalCards.filter(avPhysicalHasIdentity).length+' identified printing rows · '+physicalMoney(value)+' estimated ('+priced.length+' priced printings)';
  $('physicalPageLabel').textContent='Page '+(physicalPage+1)+' / '+pages+' · '+list.length+' matching'+($('physicalSort').value!=='name'?' · unpriced last':'');
  $('physicalPrev').disabled=physicalPage===0;$('physicalNext').disabled=physicalPage===pages-1;
