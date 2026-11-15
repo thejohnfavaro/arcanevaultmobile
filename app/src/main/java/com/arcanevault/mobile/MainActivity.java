@@ -255,6 +255,7 @@ public class MainActivity extends Activity {
                   saved.quotes:{};
                 let value=0,pricedRows=0,totalRows=0,totalCopies=0;
                 const setValues=Object.create(null);
+                const ranked=[],missing=[];
                 for(const c of inventory){
                   if(!c||typeof c.name!=='string'||!c.name.trim())continue;
                   const qty=Number(c.qty);
@@ -274,8 +275,18 @@ public class MainActivity extends Activity {
                       price>0&&price<10000000){
                     pricedRows++;value+=price*qty;
                     if(setRow){setRow.pricedRows++;setRow.value+=price*qty;}
+                    ranked.push({name:c.name,set:c.set||'',finish:c.finish||'nonfoil',
+                      value:price*qty});
+                  }else if(missing.length<50){
+                    missing.push(String(c.name||'')+' · '+String(c.set||'').toUpperCase()+
+                      ' #'+String(c.number||'')+' · no verified price quote');
                   }
                 }
+                ranked.sort((a,b)=>b.value-a.value);
+                window.ArcaneAndroid?.publishCollectionAnalytics?.(JSON.stringify({
+                  top:ranked.slice(0,50),unpriced:missing,
+                  pricedRows,totalRows
+                }));
                 const hasQuotes=Object.keys(quotes).length>0;
                 const setPayload=JSON.stringify({sets:Object.values(setValues),
                   updatedAt:String(saved.updatedAt||''),hasQuotes});
@@ -1895,6 +1906,9 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public boolean publishSetValueSnapshots(String payload){
             return VaultSetValues.save(MainActivity.this,payload);
+        }
+        @JavascriptInterface public boolean publishCollectionAnalytics(String payload){
+            return VaultCollectionInsights.save(MainActivity.this,payload);
         }
         @JavascriptInterface public void widgetPriceRefreshEnded(){
             runOnUiThread(()->{
