@@ -17,7 +17,7 @@ for(const text of ['Search deck, commander, format, or tags',
 assert.match(workspace,/deckCoverRow\(deck,total,deckPageGeneration\)/);
 assert.match(workspace,/deck\.optBoolean\("favorite",false\)/);
 assert.match(workspace,/matches\.sort\(order\.thenComparing/);
-assert.match(workspace,/deck\.optString\("updated",""\)/);
+assert.match(workspace,/b\.optString\("updated",""\)\.compareTo\(a\.optString\("updated",""\)\)/);
 assert.match(workspace,/workspaceScroll\.post\(this::loadVisibleDeckCovers\)/);
 assert.match(catalog,/JSONObject deckInsights\(String commander,JSONArray entries\)/);
 assert.match(catalog,/SELECT type,mv FROM cards WHERE name=\? COLLATE NOCASE LIMIT 1/);
