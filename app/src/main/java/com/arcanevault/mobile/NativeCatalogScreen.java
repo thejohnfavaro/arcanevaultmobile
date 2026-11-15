@@ -863,8 +863,7 @@ final class NativeCatalogScreen {
                     shortlisted[0]=add;
                     star.setText(add?"★ Remove from Shortlist":"☆ Add to Shortlist");
                 }else{
-                    new AlertDialog.Builder(activity).setTitle("Shortlist")
-                        .setMessage(message).setPositiveButton("OK",null).show();
+                    status.setText("Shortlist not updated: "+message);
                 }
             });
         });
