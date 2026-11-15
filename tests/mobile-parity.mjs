@@ -299,7 +299,8 @@ assert.match(html,/if\(ready\.busy\)\{/,'Set Progress must not query an actively
 assert.match(html,/if\(status\.stalled\)throw Error/,'Unified Sync must explain truly stalled imports');
 
 assert.match(backend,/SQLiteDatabase db=null;\s*try\{\s*\/\/ Even if opening SQLite fails/);
-assert.match(backend,/syncing\.set\(false\);\s*if\("Ready"\.equals\(phase\)\)\s*VaultWidgets\.refreshSets\(application\);\s*\}/,'Catalog worker must always clear busy flag before refreshing launcher Set Progress');
+assert.match(backend,/syncing\.set\(false\);/,'Catalog worker must always clear its busy flag');
+assert.match(backend,/if\("Ready"\.equals\(phase\)\)\s*VaultWidgets\.refreshSets\(application\);/,'Successful catalog sync refreshes Set Progress widgets');
 assert.match(backend,/Catalog staging cleanup failed/);
 
 
