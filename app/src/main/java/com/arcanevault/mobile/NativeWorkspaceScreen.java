@@ -88,6 +88,8 @@ final class NativeWorkspaceScreen {
     private ArrayList<JSONObject> shortlistCards=new ArrayList<>();
     private String shortlistQuery="";
     private int shortlistPage=0;
+    private int shortlistRestoreScrollY=0;
+    private boolean shortlistNeedsScrollRestore=false;
     private static final int SHORTLIST_PAGE_SIZE=48;
     private final ArrayList<ShortlistArtTarget> shortlistArtTargets=new ArrayList<>();
     private final Set<String> shortlistArtInFlight=new HashSet<>();
@@ -1098,6 +1100,8 @@ final class NativeWorkspaceScreen {
     }
 
     private void openShortlistPreview(JSONObject card){
+        shortlistRestoreScrollY=workspaceScroll.getScrollY();
+        shortlistNeedsScrollRestore=true;
         screenState="shortlist-preview";
         final int generation=++deckPageGeneration;
         shortlistArtTargets.clear();
@@ -1418,7 +1422,13 @@ final class NativeWorkspaceScreen {
         }
         if(paging.getChildCount()>0)
             VaultNativeStyle.margin(shortlistPanel,paging,10,activity);
-        workspaceScroll.post(this::loadVisibleShortlistArt);
+        workspaceScroll.post(()->{
+            if(shortlistNeedsScrollRestore){
+                shortlistNeedsScrollRestore=false;
+                workspaceScroll.scrollTo(0,shortlistRestoreScrollY);
+            }
+            loadVisibleShortlistArt();
+        });
     }
 
     private void dataSync(){
