@@ -19,6 +19,7 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -45,6 +46,9 @@ final class NativeCompanionScreen {
     private final NativeWorkspaceScreen.DeckLoader deckLoader;
     private final NativeWorkspaceScreen.DeckSaver deckSaver;
     private String scope="home", query="";
+    private final ArrayDeque<String> navigationHistory=new ArrayDeque<>();
+    private boolean restoringHistory=false;
+    private boolean closed=false;
     private int visibleCount=PAGE_SIZE;
     private List<CardRow> physical=Collections.emptyList(),arena=Collections.emptyList();
     private int readGeneration;
@@ -104,6 +108,50 @@ final class NativeCompanionScreen {
             NativeWorkspaceScreen.DeckSaver deckSaver) {
         return new NativeCompanionScreen(activity,prefs,catalog,artwork,openLegacy,deckLoader,deckSaver).root;
     }
+    /** Owned by MainActivity while its native view is visible.
+     * Keeping the controller lets Android system Back pop the correct page. */
+    static NativeCompanionScreen createController(Activity activity,SharedPreferences prefs,
+            CatalogStore catalog,ArtworkCache artwork,Runnable openLegacy,
+            NativeWorkspaceScreen.DeckLoader deckLoader,
+            NativeWorkspaceScreen.DeckSaver deckSaver) {
+        return new NativeCompanionScreen(activity,prefs,catalog,artwork,openLegacy,
+            deckLoader,deckSaver);
+    }
+    View view(){return root;}
+    void close(){
+        if(closed)return;
+        closed=true;
+        readGeneration++;
+        closeCatalog();
+        navigationHistory.clear();
+    }
+
+    boolean onBack(){
+        if(closed)return false;
+        if(nativeCatalog!=null&&nativeCatalog.onBack())return true;
+        if(commanderBrowser!=null&&commanderBrowser.onBack())return true;
+        if(workspace!=null&&workspace.onBack())return true;
+        if(!navigationHistory.isEmpty()){
+            String previous=navigationHistory.removeLast();
+            restoringHistory=true;
+            try{show(previous);}
+            finally{restoringHistory=false;}
+            return true;
+        }
+        if(!"home".equals(scope)){
+            restoringHistory=true;
+            try{show("home");}
+            finally{restoringHistory=false;}
+            return true;
+        }
+        return false; // Only the native Home root is allowed to exit.
+    }
+
+    private void remember(String current){
+        if(navigationHistory.size()>=32)navigationHistory.removeFirst();
+        navigationHistory.addLast(current);
+    }
+
     private int dp(float n){return VaultNativeStyle.dp(activity,n);}
     private LinearLayout column(){return VaultNativeStyle.column(activity);}
     private TextView text(String s,int size,int color,boolean bold){
@@ -200,6 +248,7 @@ final class NativeCompanionScreen {
      * used only as a read-only saved-deck filter, never a deck mutation. */
     private void showDecksForCommander(String commanderName){
         if(commanderName==null||commanderName.trim().isEmpty())return;
+        if(!"decks".equals(scope))remember(scope);
         closeCatalog();
         scope="decks";query="";visibleCount=PAGE_SIZE;
         drawTabs();
@@ -212,6 +261,9 @@ final class NativeCompanionScreen {
     }
 
     private void show(String next){
+        if(closed)return;
+        if(workspace!=null && workspace.confirmLeave(()->show(next)))return;
+        if(!next.equals(scope)&&!restoringHistory)remember(scope);
         closeCatalog();
         scope=next;
         query="";visibleCount=PAGE_SIZE;
