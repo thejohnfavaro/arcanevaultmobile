@@ -380,6 +380,29 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         query.append(")");
     }
+    /** Resolve cover art for a saved deck's exact commander name.
+     * This is a read-only illustration lookup, NOT an ownership or printing
+     * assertion. Do not use a partial name match (a different commander could
+     * otherwise appear on the wrong deck box). */
+    String commanderCoverUrl(String commanderName) throws Exception {
+        if(commanderName==null)return "";
+        String name=commanderName.trim();
+        if(name.isEmpty()||name.length()>250)return "";
+        SQLiteDatabase db=getReadableDatabase();
+        for(String sql:new String[]{
+                "SELECT image FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
+                "SELECT image FROM variants WHERE name=? COLLATE NOCASE "+
+                    "AND image<>'' ORDER BY digital ASC, release DESC LIMIT 1"}) {
+            try(Cursor cursor=db.rawQuery(sql,new String[]{name})) {
+                if(!cursor.moveToFirst())continue;
+                String url=cursor.getString(0);
+                if(url!=null&&url.startsWith("https://cards.scryfall.io/"))
+                    return url;
+            }
+        }
+        return "";
+    }
+
     JSONObject search(Map<String,String> p)throws Exception{
         String scope=get(p,"scope"),color=get(p,"colors"),role=get(p,"role"),sort=get(p,"sort"),arena=get(p,"arena");
         // Legacy web callers omit source: keep Arena semantics for compatibility.
