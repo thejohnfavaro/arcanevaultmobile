@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(p,'utf8');
+const widget=read('app/src/main/java/com/arcanevault/mobile/VaultKeywordTokens.java');
+const catalog=read('app/src/main/java/com/arcanevault/mobile/NativeCatalogScreen.java');
+assert.match(widget,/Connive/);
+assert.match(widget,/Replicate/);
+assert.match(widget,/Banding/);
+assert.match(widget,/text\.endsWith\(" "\)/,'Space completes suggested mechanics');
+assert.match(widget,/input\.setOnEditorActionListener/,'IME acceptance');
+assert.match(widget,/KEYCODE_DEL/,'Backspace removes last completed selection');
+assert.match(widget,/String\.join\(",",all\)/,'Existing comma separated search preserved');
+assert.match(widget,/selected\.remove\(token\)/,'Removable chips');
+assert.match(widget,/startsWith\(prefix\.toLowerCase/,'Case-insensitive prefix completion');
+assert.match(catalog,/new VaultKeywordTokens\(activity,value->/);
+assert.match(catalog,/oracleFilter=value;page=0;schedule\(\)/);
+console.log('PASS: Android keyword token autocomplete, deletion, comma search contract');
