@@ -19,6 +19,7 @@ import java.util.zip.GZIPInputStream;
 
 /** On-device searchable Scryfall printing catalog. No network service beyond Scryfall. */
 final class CatalogStore extends SQLiteOpenHelper {
+    private final Context application;
     private final AtomicBoolean syncing=new AtomicBoolean(false);
     private volatile String phase="Not downloaded", error="", updatedAt=null;
     private volatile long imported=0;
@@ -29,6 +30,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     private volatile long lastProgressAtMs=0L, downloadedBytes=0L, expectedBytes=0L;
     CatalogStore(Context context) {
         super(context,"arcane_catalog.db",null,3);
+        application=context.getApplicationContext();
         SQLiteDatabase db=getWritableDatabase();
         total=count(db,"cards");
         indexedPrintings=count(db,"variants");
@@ -162,6 +164,11 @@ final class CatalogStore extends SQLiteOpenHelper {
                 db.execSQL("DROP INDEX IF EXISTS variants_stage_unique");}}
             catch(Exception cleanup){Log.w("ArcaneVault","Catalog staging cleanup failed",cleanup);}
             syncing.set(false);
+            // A completed full catalog sync can resolve previously unknown
+            // launcher sets immediately, without waiting for the next
+            // periodic Android home-screen redraw.
+            if("Ready".equals(phase))
+                VaultWidgets.refreshSets(application);
         }
     }
     private static String readSmall(InputStream in,int max)throws Exception {ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>max)throw new IOException("Manifest too large");}return out.toString("UTF-8");}
