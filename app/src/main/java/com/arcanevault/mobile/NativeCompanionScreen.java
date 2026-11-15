@@ -52,6 +52,9 @@ final class NativeCompanionScreen {
     private int visibleCount=PAGE_SIZE;
     private List<CardRow> physical=Collections.emptyList(),arena=Collections.emptyList();
     private int readGeneration;
+    private final java.util.concurrent.ExecutorService auditWorker=
+        java.util.concurrent.Executors.newSingleThreadExecutor();
+    private int auditGeneration;
     private String pendingSetFromWidget="";
 
     private static final class CardRow {
@@ -123,6 +126,8 @@ final class NativeCompanionScreen {
         if(closed)return;
         closed=true;
         readGeneration++;
+        auditGeneration++;
+        auditWorker.shutdownNow();
         closeCatalog();
         navigationHistory.clear();
     }
@@ -457,6 +462,22 @@ final class NativeCompanionScreen {
             pane.addView(text(group[1].isEmpty()?"No verified results yet.":group[1],
                 12,VaultNativeStyle.TEXT,false));
         }
+        View separation=new View(activity);
+        pane.addView(separation,new LinearLayout.LayoutParams(-1,dp(11)));
+        pane.addView(text("DATA INTEGRITY",11,VaultNativeStyle.GOLD,true));
+        TextView health=text("Checking stored inventory without modifying it…",
+            12,VaultNativeStyle.SUBTEXT,false);
+        pane.addView(health);
+        final int audit=++auditGeneration;
+        auditWorker.execute(()->{
+            String result;
+            try{result=VaultCollectionAudit.inspect(prefs).summary();}
+            catch(Exception error){result="Audit unavailable: "+error.getMessage();}
+            final String display=result;
+            ui.post(()->{
+                if(!closed&&audit==auditGeneration)health.setText(display);
+            });
+        });
         VaultNativeStyle.margin(target,pane,12,activity);
     }
 
