@@ -141,6 +141,7 @@ public class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view,String url) {
                 if(appUrl==null || !appUrl.equals(url))return;
                 peerDataPageReady=true;
+                refreshCollectionValueWidget();
                 if(pendingPeerData.isEmpty())return;
                 List<PeerDataCallback> ready=new ArrayList<>(pendingPeerData);
                 pendingPeerData.clear();
@@ -231,6 +232,57 @@ public class MainActivity extends Activity {
         NativeSystemInsets.apply(this,nativeRoot);
         setContentView(nativeRoot);
         deliverWidgetNavigation();
+        refreshCollectionValueWidget();
+    }
+
+    /** Read the authoritative native physical inventory and the existing
+     * WebView Scryfall price cache on page readiness. No widget redraw starts
+     * pricing work or saves a second ownership ledger. */
+    void refreshCollectionValueWidget(){
+        if(browser==null||!peerDataPageReady||appUrl==null||
+                !appUrl.equals(browser.getUrl()))return;
+        browser.evaluateJavascript("""
+            (function(){
+              try{
+                const raw=window.ArcaneAndroid?.readCollection?.('physicalCollectionV1');
+                if(raw===null||raw===undefined)return 'inventory-unavailable';
+                const inventory=JSON.parse(raw);
+                if(!Array.isArray(inventory)||inventory.length>150000)
+                  return 'invalid-inventory';
+                const saved=JSON.parse(localStorage.getItem('vault_physicalPriceQuotesV1')||
+                  '{"quotes":{},"updatedAt":""}');
+                const quotes=saved&&typeof saved.quotes==='object'&&saved.quotes?
+                  saved.quotes:{};
+                let value=0,pricedRows=0,totalRows=0,totalCopies=0;
+                for(const c of inventory){
+                  if(!c||typeof c.name!=='string'||!c.name.trim())continue;
+                  const qty=Number(c.qty);
+                  if(!Number.isInteger(qty)||qty<=0||qty>99999)continue;
+                  totalRows++;totalCopies+=qty;
+                  const norm=x=>String(x||'').trim().toLowerCase();
+                  const key=[c.name,c.set,c.number,c.finish||'nonfoil',
+                    c.language,c.condition,c.location].map(norm).join('|');
+                  const exact=key+'|'+norm(c.scryfallId);
+                  const rawUsd=(quotes[exact]||quotes[key])?.usd;
+                  const price=Number(rawUsd);
+                  if(rawUsd!=null&&rawUsd!==''&&Number.isFinite(price)&&
+                      price>0&&price<10000000){
+                    pricedRows++;value+=price*qty;
+                  }
+                }
+                const hasQuotes=Object.keys(quotes).length>0;
+                return window.ArcaneAndroid?.publishCollectionValueWidget?.(
+                  JSON.stringify({value,pricedRows,totalRows,totalCopies,
+                    hasQuotes,updatedAt:String(saved.updatedAt||'')}))?
+                    'published':'publish-failed';
+              }catch(error){return 'quote-cache-unavailable'}
+            })()
+            """, result->{
+                if(result==null||(!result.contains("published") &&
+                    !result.contains("inventory-unavailable")))
+                    android.util.Log.w("ArcaneVault",
+                        "Could not initialize Collection Value widget: "+result);
+            });
     }
 
     private void deliverWidgetNavigation(){
@@ -1778,8 +1830,10 @@ public class MainActivity extends Activity {
             // inventories. Use commit() so a failed write is not reported as saved.
             boolean saved=durable.edit().putString("vault_"+key,json).commit();
             if(saved){
-                if("physicalCollectionV1".equals(key))
+                if("physicalCollectionV1".equals(key)){
                     VaultWidgets.invalidateValue(MainActivity.this);
+                    runOnUiThread(MainActivity.this::refreshCollectionValueWidget);
+                }
                 VaultWidgets.refreshSets(MainActivity.this);
             }
             return saved;

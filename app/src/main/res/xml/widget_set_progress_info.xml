@@ -3,6 +3,7 @@
  android:minWidth="225dp" android:minHeight="128dp"
  android:minResizeWidth="180dp" android:minResizeHeight="108dp"
  android:targetCellWidth="3" android:targetCellHeight="2"
+ android:description="@string/widget_set_progress_description"
  android:initialLayout="@layout/widget_set_progress"
  android:configure="com.arcanevault.mobile.VaultSetWidgetConfigActivity"
  android:widgetFeatures="reconfigurable"

@@ -87,7 +87,7 @@ public final class VaultSetWidgetConfigActivity extends Activity {
         content.addView(sourcePicker,new LinearLayout.LayoutParams(-1,dp(49)));
         EditText input=new EditText(this);
         VaultNativeStyle.search(this,input);
-        input.setHint("Search sets by name or code");
+        input.setHint("Search a set name or enter its code (e.g. BLB)");
         LinearLayout.LayoutParams inputParams=new LinearLayout.LayoutParams(-1,dp(49));
         inputParams.topMargin=dp(12);
         content.addView(input,inputParams);
@@ -104,7 +104,7 @@ public final class VaultSetWidgetConfigActivity extends Activity {
         status.setPadding(0,dp(9),0,dp(9));
         content.addView(status);
         preview=new ImageView(this);
-        preview.setScaleType(ImageView.ScaleType.FIT_XY);
+        preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
         content.addView(preview,new LinearLayout.LayoutParams(-1,dp(176)));
         save=VaultNativeStyle.button(this,"Add Set Progress widget",true);
         save.setEnabled(false);
@@ -192,22 +192,59 @@ public final class VaultSetWidgetConfigActivity extends Activity {
                 pos=i;break;
             }
         if(!visibleSets.isEmpty())setPicker.setSelection(pos);
+        else setPicker.setSelection(-1);
         updatePreview();
+    }
+    /** A user can configure a known set code even before the large local
+     * Scryfall index finishes syncing. Never assign invented completion counts. */
+    private JSONObject chosenSet(){
+        int selected=setPicker.getSelectedItemPosition();
+        if(!visibleSets.isEmpty()&&selected>=0&&selected<visibleSets.size())
+            return visibleSets.get(selected);
+        String code=search.trim().toLowerCase(Locale.ROOT);
+        if(!code.matches("[a-z0-9]{2,5}"))return null;
+        JSONObject provisional=new JSONObject();
+        try{
+            provisional.put("name",code.toUpperCase(Locale.ROOT));
+            provisional.put("code",code);
+        }catch(Exception ignored){}
+        return provisional;
     }
     private void updatePreview(){
         if(preview==null||save==null)return;
-        int selected=setPicker.getSelectedItemPosition();
-        boolean valid=selected>=0&&selected<visibleSets.size();
+        JSONObject choice=chosenSet();
+        boolean valid=choice!=null;
         save.setEnabled(valid);
-        JSONObject set=valid?visibleSets.get(selected):null;
-        preview.setImageBitmap(VaultSetProgressCard.render(this,set,source,
-            dp(430),dp(176)));
+        if(valid){
+            String code=choice.optString("code","").toUpperCase(Locale.ROOT);
+            save.setText("Add Set Progress widget · "+code);
+            if(visibleSets.isEmpty())
+                status.setText("Track "+code+" now. Counts will appear after the local "+
+                    "catalog has been synced; unknown progress is not shown as 0%.");
+        }else{
+            save.setText("Choose a set to add widget");
+            if(visibleSets.isEmpty()&&!search.isEmpty())
+                status.setText("No set matches. Enter an official 2–5 character "+
+                    "set code (e.g. BLB) or sync the catalog to search by name.");
+        }
+        int screenWidth=getResources().getDisplayMetrics().widthPixels;
+        preview.setImageBitmap(VaultSetProgressCard.render(this,choice,source,
+            Math.max(dp(230),screenWidth-dp(40)),dp(176)));
     }
     private void saveSelection(){
-        int idx=setPicker.getSelectedItemPosition();
-        if(idx<0||idx>=visibleSets.size())return;
-        JSONObject set=visibleSets.get(idx);
+        JSONObject set=chosenSet();
+        if(set==null){
+            status.setText("Choose a listed set or enter its official set code "+
+                "(2–5 letters/digits) before adding a widget.");
+            return;
+        }
         String code=set.optString("code",""),name=set.optString("name","");
+        if(!code.matches("[A-Za-z0-9]{2,12}")){
+            status.setText("Invalid set code. Nothing was saved.");
+            return;
+        }
+        save.setEnabled(false);
+        status.setText("Saving "+name+" widget…");
         try{
             VaultWidgets.saveSetChoice(this,widgetId,code,name,source);
             AppWidgetManager manager=AppWidgetManager.getInstance(this);
@@ -220,7 +257,8 @@ public final class VaultSetWidgetConfigActivity extends Activity {
             setResult(RESULT_OK,result);
             finish();
         }catch(Exception error){
-            status.setText("Could not save this set: "+error.getMessage());
+            save.setEnabled(true);
+            status.setText("Could not add this widget: "+error.getMessage());
         }
     }
     private int dp(float n){return VaultNativeStyle.dp(this,n);}

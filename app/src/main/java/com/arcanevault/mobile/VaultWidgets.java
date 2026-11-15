@@ -43,9 +43,11 @@ final class VaultWidgets {
         if(!code.matches("[A-Za-z0-9]{2,12}") ||
                 (!"physical".equals(source)&&!"arena".equals(source)))
             throw new IllegalArgumentException("Invalid widget set selection");
-        prefs(context).edit().putString("code_"+id,code.toLowerCase(Locale.ROOT))
+        boolean stored=prefs(context).edit()
+            .putString("code_"+id,code.toLowerCase(Locale.ROOT))
             .putString("name_"+id,name).putString("source_"+id,source)
-            .remove("snapshot_"+id).apply();
+            .remove("snapshot_"+id).commit();
+        if(!stored)throw new IllegalStateException("Android could not save the widget selection");
     }
     static void removeSetChoice(Context context,int id){
         prefs(context).edit().remove("code_"+id).remove("name_"+id)
@@ -63,6 +65,7 @@ final class VaultWidgets {
             int priced=v.getInt("pricedRows"),total=v.getInt("totalRows");
             long copies=v.getLong("totalCopies");
             String at=v.optString("updatedAt","");
+            boolean hasQuotes=v.optBoolean("hasQuotes",priced>0);
             if(!Double.isFinite(usd)||usd<0||usd>10_000_000_000.0||
                 total<0||total>250000||priced<0||priced>total||
                 copies<0||copies>10_000_000||at.length()>80)return false;
@@ -70,7 +73,9 @@ final class VaultWidgets {
                 .putLong("value_cents",Math.round(usd*100))
                 .putInt("priced_rows",priced).putInt("total_rows",total)
                 .putLong("total_copies",copies).putString("quote_updated",at)
-                .putBoolean("value_valid",true).apply();
+                .putBoolean("quotes_present",hasQuotes)
+                .putBoolean("value_valid",true).commit();
+            if(!prefs(context).getBoolean("value_valid",false))return false;
             refreshValue(context);
             return true;
         }catch(Exception error){return false;}
@@ -90,11 +95,13 @@ final class VaultWidgets {
         int priced=data.getInt("priced_rows",0),total=data.getInt("total_rows",0);
         long copies=data.getLong("total_copies",0);
         long cents=data.getLong("value_cents",0);
+        boolean hasQuotes=data.getBoolean("quotes_present",priced>0);
         String amount=valid&&priced>0?
             NumberFormat.getCurrencyInstance(Locale.US).format(cents/100.0):"—";
-        String coverage=!valid?"Open app to refresh valuation":
+        String coverage=!valid?"Open Arcane Vault to load saved price quotes":
             total==0?"No physical cards inventoried":
-            priced==0?"No priced printings yet":
+            !hasQuotes?"No Scryfall quotes cached · refresh prices in app":
+            priced==0?"Quotes do not match owned printings · refresh prices":
             String.format(Locale.US,"%d / %d printings priced · %,d cards",
                 priced,total,copies);
         String when=data.getString("quote_updated","");
