@@ -79,7 +79,7 @@ assert.match(collections,/JSONObject sets\(Map<String,String> p\)/);
 
 // Both taps use precise Android destinations; background/launcher actions
 // must never import, sync, or overwrite user collection data.
-assert.match(store,/TARGET,"/); // Android Intent extra must identify destination
+assert.match(store,/intent\.putExtra\(TARGET,target\)/); // Android Intent extra must identify destination
 assert.match(store,/PendingIntent\.getActivity/);
 assert.match(shell,/openWidgetDestination\(String destination,String set,String source\)/);
 assert.match(shell,/if\(workspace!=null\)workspace\.openWidgetSet\(set,requested\)/);
