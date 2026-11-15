@@ -17,6 +17,16 @@ import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Rect;
+import android.view.Gravity;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Set;
 import java.util.List;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -36,11 +46,22 @@ final class NativeWorkspaceScreen {
     private final Activity activity;
     private final SharedPreferences prefs;
     private final CatalogStore catalog;
+    private final ArtworkCache artwork;
     private final Runnable legacy;
     private final DeckLoader decks;
     private final DeckSaver deckSaver;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
+    private final ExecutorService coverWorkers=Executors.newFixedThreadPool(2);
+    private final ArrayList<DeckCoverTarget> deckCoverTargets=new ArrayList<>();
+    private final Set<String> coverInFlight=new HashSet<>();
+    private final Set<String> coverUnavailable=new HashSet<>();
+    private final LinkedHashMap<String,Bitmap> coverBitmaps=new LinkedHashMap<String,Bitmap>(40,0.75f,true){
+        @Override protected boolean removeEldestEntry(Map.Entry<String,Bitmap> eldest){
+            return size()>32;
+        }
+    };
+    private final ScrollView workspaceScroll;
     private final LinearLayout root;
     private final LinearLayout content;
     private final TextView status;
@@ -61,8 +82,8 @@ final class NativeWorkspaceScreen {
     private static final String PREF_SET_HIDE_UNOWNED="native_set_hide_unowned_v1";
 
     private NativeWorkspaceScreen(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            Runnable legacy,DeckLoader decks,DeckSaver deckSaver,String section,String initialCommander){
-        this.activity=activity;this.prefs=prefs;this.catalog=catalog;
+            ArtworkCache artwork,Runnable legacy,DeckLoader decks,DeckSaver deckSaver,String section,String initialCommander){
+        this.activity=activity;this.prefs=prefs;this.catalog=catalog;this.artwork=artwork;
         this.deckCommanderFilter=initialCommander==null?"":initialCommander.trim();
         this.legacy=legacy;this.decks=decks;this.deckSaver=deckSaver;
         root=VaultNativeStyle.column(activity);
@@ -74,6 +95,8 @@ final class NativeWorkspaceScreen {
         status.setPadding(0,dp(9),0,dp(11));
         root.addView(status);
         ScrollView scroll=VaultNativeStyle.scroll(activity);
+        workspaceScroll=scroll;
+        workspaceScroll.setOnScrollChangeListener((view,x,y,oldX,oldY)->loadVisibleDeckCovers());
         content=VaultNativeStyle.column(activity);
         scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -166,15 +189,15 @@ final class NativeWorkspaceScreen {
         else dataSync();
     }
     static NativeWorkspaceScreen create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            Runnable legacy,DeckLoader decks,DeckSaver saver,String section){
-        return create(activity,prefs,catalog,legacy,decks,saver,section,"");
+            ArtworkCache artwork,Runnable legacy,DeckLoader decks,DeckSaver saver,String section){
+        return create(activity,prefs,catalog,artwork,legacy,decks,saver,section,"");
     }
     static NativeWorkspaceScreen create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            Runnable legacy,DeckLoader decks,DeckSaver saver,String section,String initialCommander){
-        return new NativeWorkspaceScreen(activity,prefs,catalog,legacy,decks,saver,section,initialCommander);
+            ArtworkCache artwork,Runnable legacy,DeckLoader decks,DeckSaver saver,String section,String initialCommander){
+        return new NativeWorkspaceScreen(activity,prefs,catalog,artwork,legacy,decks,saver,section,initialCommander);
     }
     View view(){return root;}
-    void close(){closed=true;executor.shutdownNow();}
+    void close(){closed=true;executor.shutdownNow();coverWorkers.shutdownNow();deckCoverTargets.clear();coverInFlight.clear();}
     private int dp(float x){return VaultNativeStyle.dp(activity,x);}
     private void row(String title,String detail,Runnable action){
         LinearLayout entry=VaultNativeStyle.column(activity);
