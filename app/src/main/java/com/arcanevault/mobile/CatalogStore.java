@@ -1141,21 +1141,30 @@ final class CatalogStore extends SQLiteOpenHelper {
                 if(c.moveToFirst())owned=c.getInt(0);
             }
         }else{
-            // Same confirmed identity rules as printingCte(), scoped by set
-            // first so widget updates do not evaluate every set on the phone.
-            try(Cursor c=db.rawQuery(
-                    "SELECT COUNT(DISTINCT v.name) FROM variants v "+
-                    "JOIN physical_printings p ON p.qty>0 AND ("+
-                    "(p.print_id!='' AND v.print_id=p.print_id COLLATE NOCASE) OR "+
-                    "(p.setcode!='' AND p.collector!='' AND "+
-                    "v.collector=p.collector COLLATE NOCASE AND "+
-                    "(v.setcode=p.setcode COLLATE NOCASE OR "+
-                    "v.setname=p.setcode COLLATE NOCASE) AND "+
-                    "(p.print_id='' OR NOT EXISTS ("+
-                    "SELECT 1 FROM variants vi WHERE "+
-                    "vi.print_id=p.print_id COLLATE NOCASE)))) "+
-                    "WHERE v.setcode=? COLLATE NOCASE",
-                    new String[]{code})){
+            // Resolve only owned IDs in the requested set. Split ID and
+            // set/collector fallbacks so an OR join cannot scan all variants.
+            String ownedSql="SELECT COUNT(DISTINCT matched.name) FROM ("+
+                "SELECT v.name FROM physical_printings p "+
+                "JOIN variants v ON v.print_id=p.print_id COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.print_id!='' AND v.setcode=? COLLATE NOCASE "+
+                "UNION "+
+                "SELECT v.name FROM physical_printings p "+
+                "JOIN variants v ON v.setcode=? COLLATE NOCASE "+
+                "AND v.collector=p.collector COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
+                "AND p.setcode=v.setcode COLLATE NOCASE "+
+                "AND (p.print_id='' OR NOT EXISTS "+
+                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE)) "+
+                "UNION "+
+                "SELECT v.name FROM physical_printings p "+
+                "JOIN variants v ON v.setcode=? COLLATE NOCASE "+
+                "AND v.collector=p.collector COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
+                "AND p.setcode=v.setname COLLATE NOCASE "+
+                "AND (p.print_id='' OR NOT EXISTS "+
+                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE))"+
+                ") matched";
+            try(Cursor c=db.rawQuery(ownedSql,new String[]{code,code,code})){
                 if(c.moveToFirst())owned=c.getInt(0);
             }
         }
