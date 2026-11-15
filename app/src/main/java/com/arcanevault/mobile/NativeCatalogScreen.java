@@ -832,8 +832,50 @@ final class NativeCatalogScreen {
         oraclePanel.addView(rules);
         VaultNativeStyle.margin(inspectorContent,oraclePanel,10,activity);
 
+        // A native star edits the SAME vault_favorites list used by Legacy
+        // tools and Windows backups; never invent a parallel bookmark store.
+        final int shownRequest=inspectorRequest;
+        Button star=VaultNativeStyle.button(activity,"☆ Add to Shortlist",false);
+        inspectorContent.addView(star,new LinearLayout.LayoutParams(-1,dp(46)));
+        final boolean[] shortlisted={false};
+        star.setEnabled(false);
+        ((MainActivity)activity).loadNativeShortlist(favorites->{
+            if(disposed||activity.isFinishing()||shownRequest!=inspectorRequest)return;
+            if(favorites==null){
+                star.setText("Shortlist unavailable until data is ready");
+                return;
+            }
+            for(int i=0;i<favorites.length();i++){
+                if(name.equalsIgnoreCase(favorites.optString(i,""))){
+                    shortlisted[0]=true;break;
+                }
+            }
+            star.setText(shortlisted[0]?"★ Remove from Shortlist":"☆ Add to Shortlist");
+            star.setEnabled(true);
+        });
+        star.setOnClickListener(v->{
+            boolean add=!shortlisted[0];
+            star.setEnabled(false);
+            ((MainActivity)activity).setNativeShortlist(name,add,(ok,message)->{
+                if(disposed||activity.isFinishing()||shownRequest!=inspectorRequest)return;
+                star.setEnabled(true);
+                if(ok){
+                    shortlisted[0]=add;
+                    star.setText(add?"★ Remove from Shortlist":"☆ Add to Shortlist");
+                }else{
+                    new AlertDialog.Builder(activity).setTitle("Shortlist")
+                        .setMessage(message).setPositiveButton("OK",null).show();
+                }
+            });
+        });
+        Button quickAdd=VaultNativeStyle.button(activity,
+            "＋ Add to Physical Collection",true);
+        inspectorContent.addView(quickAdd,new LinearLayout.LayoutParams(-1,dp(48)));
+        quickAdd.setOnClickListener(v->showInlinePrintings(name,
+            ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty)));
+
         Button browsePrintings=VaultNativeStyle.button(activity,
-            "View printings & edit physical ownership",true);
+            "Browse printings & manage physical copies",false);
         inspectorContent.addView(browsePrintings,new LinearLayout.LayoutParams(-1,dp(48)));
         browsePrintings.setOnClickListener(v->showInlinePrintings(name,
             ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty)));
