@@ -348,6 +348,130 @@ final class NativeWorkspaceScreen {
         });
     }
 
+    /** Card-art deck boxes share the existing local catalog and bounded
+     * Scryfall artwork cache. The cover represents the commander, not a
+     * verified owned printing or a change to saved deck data. */
+    private static final class DeckCoverTarget {
+        final ImageView image;
+        final String commander;
+        boolean loaded;
+        DeckCoverTarget(ImageView image,String commander){
+            this.image=image;this.commander=commander;
+        }
+    }
+
+    private void deckCoverRow(JSONObject deck,int count,int generation){
+        String name=deck.optString("name","Untitled deck");
+        String commander=deck.optString("commander","").trim();
+        String format=deck.optString("format","").trim();
+        if(format.isEmpty())format=commander.isEmpty()?"Saved Deck":"Commander";
+        String folder=deck.optString("folder","Unfiled");
+        LinearLayout entry=VaultNativeStyle.row(activity);
+        entry.setPadding(dp(10),dp(10),dp(12),dp(10));
+        VaultNativeStyle.surface(activity,entry,false);
+        entry.setClickable(true);
+        entry.setFocusable(true);
+        entry.setContentDescription(name+", commander "+
+            (commander.isEmpty()?"not specified":commander)+", "+count+
+            " cards. Open saved deck");
+
+        // Same deck-box proportions and bottom format ribbon as Windows.
+        FrameLayout cover=new FrameLayout(activity);
+        cover.setBackground(VaultNativeStyle.rounded(activity,
+            VaultNativeStyle.ELEVATED,VaultNativeStyle.BORDER,9));
+        cover.setClipToOutline(true);
+        cover.setClipChildren(true);
+        TextView placeholder=VaultNativeStyle.label(activity,"✦",35,
+            VaultNativeStyle.PRIMARY,true);
+        placeholder.setGravity(Gravity.CENTER);
+        cover.addView(placeholder,new FrameLayout.LayoutParams(-1,-1));
+        ImageView art=new ImageView(activity);
+        art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        art.setContentDescription("Illustrative commander card artwork for "+
+            (commander.isEmpty()?name:commander)+", not proof of owned printing");
+        cover.addView(art,new FrameLayout.LayoutParams(-1,-1));
+        TextView ribbon=VaultNativeStyle.label(activity,format,10,Color.WHITE,true);
+        ribbon.setGravity(Gravity.CENTER);
+        ribbon.setMaxLines(1);
+        ribbon.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        ribbon.setBackgroundColor(Color.argb(218,13,17,26));
+        FrameLayout.LayoutParams ribbonParams=new FrameLayout.LayoutParams(
+            -1,dp(25),Gravity.BOTTOM);
+        cover.addView(ribbon,ribbonParams);
+        LinearLayout.LayoutParams coverParams=new LinearLayout.LayoutParams(dp(94),dp(128));
+        coverParams.rightMargin=dp(13);
+        entry.addView(cover,coverParams);
+
+        LinearLayout details=VaultNativeStyle.column(activity);
+        TextView title=VaultNativeStyle.label(activity,name,17,VaultNativeStyle.TEXT,true);
+        title.setMaxLines(2);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        details.addView(title);
+        TextView leader=VaultNativeStyle.label(activity,
+            commander.isEmpty()?"Commander not specified":commander,12,
+            VaultNativeStyle.PRIMARY,false);
+        leader.setPadding(0,dp(6),0,dp(5));
+        leader.setMaxLines(2);
+        leader.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        details.addView(leader);
+        TextView summary=VaultNativeStyle.label(activity,count+" cards · "+folder,
+            11,VaultNativeStyle.SUBTEXT,false);
+        summary.setMaxLines(2);
+        details.addView(summary);
+        entry.addView(details,new LinearLayout.LayoutParams(0,-2,1));
+        entry.setOnClickListener(v->showDeck(deck));
+        VaultNativeStyle.margin(content,entry,9,activity);
+        if(!commander.isEmpty())
+            deckCoverTargets.add(new DeckCoverTarget(art,commander));
+    }
+
+    /** Only request covers whose ImageView is actually inside the scrolling
+     * viewport. No 300-image prefetch when a large deck library opens.
+     * This must run on the UI thread. */
+    private void loadVisibleDeckCovers(){
+        if(closed||activity.isFinishing()||deckCoverTargets.isEmpty())return;
+        final int pageGeneration=deckPageGeneration;
+        Rect visible=new Rect();
+        for(DeckCoverTarget target:deckCoverTargets){
+            if(target.loaded || !target.image.isAttachedToWindow() ||
+                    !target.image.getGlobalVisibleRect(visible) ||
+                    visible.isEmpty())continue;
+            Bitmap cached=coverBitmaps.get(target.commander);
+            if(cached!=null){
+                target.image.setImageBitmap(cached);
+                target.loaded=true;
+                continue;
+            }
+            if(coverUnavailable.contains(target.commander) ||
+                    coverInFlight.contains(target.commander))continue;
+            if(coverInFlight.size()>=8)break;
+            String commander=target.commander;
+            coverInFlight.add(commander);
+            coverWorkers.execute(()->{
+                Bitmap decoded=null;
+                try {
+                    String url=catalog.commanderCoverUrl(commander);
+                    if(!url.isEmpty()){
+                        byte[] bytes=artwork.get(url);
+                        BitmapFactory.Options options=new BitmapFactory.Options();
+                        options.inSampleSize=4;
+                        decoded=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+                    }
+                } catch(Exception ignored) {
+                    // Offline or unknown commander: keep the deck-box fallback.
+                }
+                final Bitmap result=decoded;
+                ui.post(()->{
+                    coverInFlight.remove(commander);
+                    if(result!=null)coverBitmaps.put(commander,result);
+                    else coverUnavailable.add(commander);
+                    if(!closed&&pageGeneration==deckPageGeneration)
+                        loadVisibleDeckCovers();
+                });
+            });
+        }
+    }
+
     private void deckLibrary(){
         final int pageGeneration=++deckPageGeneration;
         status.setText("Reading saved deck library from the existing app…");
