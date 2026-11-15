@@ -254,12 +254,17 @@ public class MainActivity extends Activity {
                 const quotes=saved&&typeof saved.quotes==='object'&&saved.quotes?
                   saved.quotes:{};
                 let value=0,pricedRows=0,totalRows=0,totalCopies=0;
+                const setValues=Object.create(null);
                 for(const c of inventory){
                   if(!c||typeof c.name!=='string'||!c.name.trim())continue;
                   const qty=Number(c.qty);
                   if(!Number.isInteger(qty)||qty<=0||qty>99999)continue;
                   totalRows++;totalCopies+=qty;
                   const norm=x=>String(x||'').trim().toLowerCase();
+                  const setCode=norm(c.set);
+                  const setRow=/^[a-z0-9]{2,12}$/.test(setCode)?
+                    (setValues[setCode]??={code:setCode,value:0,pricedRows:0,totalRows:0}):null;
+                  if(setRow)setRow.totalRows++;
                   const key=[c.name,c.set,c.number,c.finish||'nonfoil',
                     c.language,c.condition,c.location].map(norm).join('|');
                   const exact=key+'|'+norm(c.scryfallId);
@@ -268,9 +273,15 @@ public class MainActivity extends Activity {
                   if(rawUsd!=null&&rawUsd!==''&&Number.isFinite(price)&&
                       price>0&&price<10000000){
                     pricedRows++;value+=price*qty;
+                    if(setRow){setRow.pricedRows++;setRow.value+=price*qty;}
                   }
                 }
                 const hasQuotes=Object.keys(quotes).length>0;
+                const setPayload=JSON.stringify({sets:Object.values(setValues),
+                  updatedAt:String(saved.updatedAt||''),hasQuotes});
+                // Same authoritative physical inventory and exact-printing
+                // Scryfall quotes as the full collection valuation.
+                window.ArcaneAndroid?.publishSetValueSnapshots?.(setPayload);
                 return window.ArcaneAndroid?.publishCollectionValueWidget?.(
                   JSON.stringify({value,pricedRows,totalRows,totalCopies,
                     hasQuotes,updatedAt:String(saved.updatedAt||'')}))?
@@ -1881,6 +1892,9 @@ public class MainActivity extends Activity {
          * authoritative inventory and exact-printing Scryfall quote cache. */
         @JavascriptInterface public boolean publishCollectionValueWidget(String payload){
             return VaultWidgets.saveValueSnapshot(MainActivity.this,payload);
+        }
+        @JavascriptInterface public boolean publishSetValueSnapshots(String payload){
+            return VaultSetValues.save(MainActivity.this,payload);
         }
         @JavascriptInterface public void widgetPriceRefreshEnded(){
             runOnUiThread(()->{
