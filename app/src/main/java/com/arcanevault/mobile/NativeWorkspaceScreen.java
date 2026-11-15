@@ -63,6 +63,7 @@ final class NativeWorkspaceScreen {
     private final ArrayList<DeckCoverTarget> deckCoverTargets=new ArrayList<>();
     private final Set<String> coverInFlight=new HashSet<>();
     private final Set<String> coverUnavailable=new HashSet<>();
+    private final Set<String> setArtInFlight=new HashSet<>();
     private final LinkedHashMap<String,Bitmap> coverBitmaps=new LinkedHashMap<String,Bitmap>(40,0.75f,true){
         @Override protected boolean removeEldestEntry(Map.Entry<String,Bitmap> eldest){
             return size()>32;
@@ -243,6 +244,7 @@ final class NativeWorkspaceScreen {
         coverWorkers.shutdownNow();
         deckCoverTargets.clear();
         coverInFlight.clear();
+        setArtInFlight.clear();
         shortlistArtTargets.clear();
         shortlistArtInFlight.clear();
     }
@@ -420,12 +422,70 @@ final class NativeWorkspaceScreen {
             if(!query.isEmpty()&&!name.toLowerCase(java.util.Locale.ROOT).contains(query)
                 &&!code.toLowerCase(java.util.Locale.ROOT).contains(query))continue;
             shown++;
-            row(name+" · "+code.toUpperCase(java.util.Locale.ROOT),
-                "Set directory · owned progress pending local index",
-                ()->showSet(code,name,0));
+            JSONObject card=new JSONObject();
+            try{
+                card.put("code",code).put("name",name);
+                // Deliberately omit 'total' while the index is pending.
+                // Never claim unknown ownership is 0% completion.
+            }catch(Exception ignored){}
+            addSetProgressCard(card,source,setRequestId);
         }
         if(shown==0)row("No cached set names match",
             "Clear the search or open Data & Sync to refresh the catalog.",null);
+    }
+
+    /** Exactly the same visual set-card in cached and first-load modes:
+     * cached art, official set icon, owned/total and completion when measured.
+     * Background image warmup runs outside the UI thread. */
+    private void addSetProgressCard(JSONObject set,String source,int request){
+        String code=set.optString("code","");
+        String name=set.optString("name",code);
+        if(code.isEmpty())return;
+        try{
+            String art=catalog.cachedRepresentativeSetArt(code,source);
+            if(!art.isEmpty())set.put("artUrl",art);
+        }catch(Exception ignored){}
+        ImageView tile=new ImageView(activity);
+        tile.setScaleType(ImageView.ScaleType.FIT_XY);
+        final int width=activity.getResources().getDisplayMetrics().widthPixels-dp(52);
+        tile.setImageBitmap(VaultSetProgressCard.render(activity,set,source,width,dp(176)));
+        tile.setFocusable(true);
+        tile.setClickable(true);
+        tile.setContentDescription(name+" · "+
+            (set.has("total")?set.optInt("owned",0)+" of "+set.optInt("total",0):
+                "completion pending") +" · open set details");
+        tile.setOnClickListener(v->showSet(code,name,0));
+        LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(-1,dp(161));
+        layout.bottomMargin=dp(9);
+        content.addView(tile,layout);
+        // Resolve only cards visible in this page. No image fetch blocks the
+        // overview or navigation, and later re-entry uses the on-disk cache.
+        if(!set.optString("artUrl","").isEmpty() &&
+            new ArtworkCache(activity).getCached(
+                VaultSetArtwork.cropUrl(set.optString("artUrl","")))==null){
+            // Metadata is cached but the cropped image can still be missing.
+        }
+        final String key=source+":"+code.toLowerCase(java.util.Locale.ROOT);
+        if(!setArtInFlight.add(key))return;
+        coverWorkers.execute(()->{
+            try{
+                String art=catalog.resolveAndCacheSetArt(code,source);
+                if(!art.isEmpty())VaultSetArtwork.prefetch(activity,art,code);
+                else VaultSetArtwork.prefetch(activity,"",code);
+                ui.post(()->{
+                    if(closed||request!=setRequestId || !tile.isAttachedToWindow())return;
+                    try{
+                        if(!art.isEmpty())set.put("artUrl",art);
+                        tile.setImageBitmap(VaultSetProgressCard.render(
+                            activity,set,source,width,dp(176)));
+                    }catch(Exception ignored){}
+                });
+            }catch(Exception error){
+                android.util.Log.w("ArcaneVault","Set artwork unavailable: "+code,error);
+            }finally{
+                ui.post(()->setArtInFlight.remove(key));
+            }
+        });
     }
 
     /** Render only local data. No SQL is executed from the UI thread. */
@@ -459,21 +519,7 @@ final class NativeWorkspaceScreen {
             String code=set.optString("code","");
             String name=set.optString("name","Unknown set");
             int owned=set.optInt("owned",0),total=set.optInt("total",0);
-            // Card renderer reads only existing disk artwork. No network or
-            // catalog lookups may block drawing this cached progress snapshot.
-            ImageView tile=new ImageView(activity);
-            tile.setScaleType(ImageView.ScaleType.FIT_XY);
-            tile.setImageBitmap(VaultSetProgressCard.render(activity,set,source,
-                activity.getResources().getDisplayMetrics().widthPixels-dp(52),
-                dp(176)));
-            tile.setFocusable(true);
-            tile.setClickable(true);
-            tile.setContentDescription(name+" · "+owned+" of "+total+
-                " · open set details");
-            tile.setOnClickListener(v->showSet(code,name,0));
-            LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(-1,dp(161));
-            layout.bottomMargin=dp(9);
-            content.addView(tile,layout);
+            addSetProgressCard(set,source,request);
             if(refreshing.contains(code.toLowerCase(java.util.Locale.ROOT))){
                 TextView progress=VaultNativeStyle.label(activity,
                     "Updating "+name+" progress… · previous value shown",
