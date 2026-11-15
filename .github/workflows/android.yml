@@ -73,6 +73,7 @@ jobs:
           node tests/native-system-back.mjs
           node tests/native-home-widgets.mjs
           node tests/native-set-card-visual-parity.mjs
+          node tests/native-set-collection-value.mjs
           node tests/native-widget-repair.mjs
           node tests/native-widget-real-data.mjs
           node tests/native-keyword-token-autocomplete.mjs
