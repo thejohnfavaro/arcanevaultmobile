@@ -25,6 +25,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.GridLayout;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
@@ -73,6 +74,11 @@ final class NativeWorkspaceScreen {
     private volatile boolean closed;
     private int page=0;
     private String syncSection="devices";
+    private final ArrayDeque<String> syncHistory=new ArrayDeque<>();
+    private String screenState="";
+    private JSONObject editingDeck;
+    private EditText editorName,editorMainboard;
+    private String editorOriginalName="",editorOriginalMainboard="";
     private String deckCommanderFilter="";
     private JSONArray deckSnapshot=new JSONArray();
     private LinearLayout deckListPanel;
@@ -234,6 +240,61 @@ final class NativeWorkspaceScreen {
         shortlistArtTargets.clear();
         shortlistArtInFlight.clear();
     }
+    /** Handle one native workspace layer at a time. Never silently lose a
+     * saved-deck draft; the same guard applies to bottom/tab navigation. */
+    boolean onBack(){
+        if(closed)return false;
+        switch(screenState){
+            case "deck-edit":
+                requestLeaveEditor(()->showDeck(editingDeck));
+                return true;
+            case "deck-details":
+                deckLibrary();
+                return true;
+            case "shortlist-preview":
+                shortlist();
+                return true;
+            case "set-details":
+                setProgress(setQuery,0);
+                return true;
+            case "sync":
+                if(!syncHistory.isEmpty()){
+                    syncSection=syncHistory.removeLast();
+                    dataSync();
+                    return true;
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private boolean editorChanged(){
+        return "deck-edit".equals(screenState) && editorName!=null &&
+            editorMainboard!=null &&
+            (!editorOriginalName.equals(editorName.getText().toString()) ||
+             !editorOriginalMainboard.equals(editorMainboard.getText().toString()));
+    }
+
+    /** Return true when an asynchronous leave confirmation owns navigation. */
+    boolean confirmLeave(Runnable afterConfirmation){
+        if(!editorChanged())return false;
+        requestLeaveEditor(afterConfirmation);
+        return true;
+    }
+
+    private void requestLeaveEditor(Runnable next){
+        if(!editorChanged()){next.run();return;}
+        new AlertDialog.Builder(activity)
+            .setTitle("Discard unsaved deck changes?")
+            .setMessage("Your edited deck name and mainboard have not been saved. "+
+                "Keep editing, or discard this unsaved draft and go back.")
+            .setNegativeButton("Keep editing",null)
+            .setPositiveButton("Discard draft",(dialog,which)->{
+                if(!closed && "deck-edit".equals(screenState))next.run();
+            }).show();
+    }
+
     private int dp(float x){return VaultNativeStyle.dp(activity,x);}
     private void row(String title,String detail,Runnable action){
         LinearLayout entry=VaultNativeStyle.column(activity);
@@ -268,6 +329,7 @@ final class NativeWorkspaceScreen {
         return b;
     }
     private void setProgress(String filter,int pageNumber){
+        screenState="set-overview";
         page=pageNumber;
         setQuery=filter;
         final int request=++setRequestId;
@@ -329,6 +391,7 @@ final class NativeWorkspaceScreen {
         });
     }
     private void showSet(String set,String title,int pageNumber){
+        screenState="set-details";
         final int request=++setRequestId;
         final String source=setSource;
         final boolean hideUnowned=hideUnownedSetSlots;
@@ -574,6 +637,8 @@ final class NativeWorkspaceScreen {
     }
 
     private void deckLibrary(){
+        screenState="deck-library";
+        editingDeck=null;editorName=null;editorMainboard=null;
         final int pageGeneration=++deckPageGeneration;
         deckCoverTargets.clear();
         status.setText("Reading saved deck library from the existing app…");
@@ -691,13 +756,14 @@ final class NativeWorkspaceScreen {
         }));
     }
     private void editDeck(JSONObject deck){
+        screenState="deck-edit";editingDeck=deck;
         final int pageGeneration=++deckPageGeneration;
         deckCoverTargets.clear();
         // Stay in the same Decks workspace: the content area, rather than
         // another modal, owns the name, mainboard, search and save controls.
         content.removeAllViews();
         status.setText("Editing "+deck.optString("name","saved deck")+" · unsaved changes");
-        button("← Back to deck (discard changes)",()->showDeck(deck));
+        button("← Back to deck",this::onBack);
         LinearLayout fields=VaultNativeStyle.column(activity);
         fields.setPadding(dp(16),dp(8),dp(16),dp(8));
         TextView commander=VaultNativeStyle.label(activity,
@@ -735,6 +801,9 @@ final class NativeWorkspaceScreen {
             android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE |
             android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         lines.setText(NativeDeckDraft.formatEntries(deck.optJSONArray("entries")));
+        editorName=name;editorMainboard=lines;
+        editorOriginalName=name.getText().toString();
+        editorOriginalMainboard=lines.getText().toString();
         fields.addView(lines,new LinearLayout.LayoutParams(-1,dp(260)));
         // Add cards without typing exact names or leaving the native workspace.
         // Only query the existing local Scryfall catalog; the selection modifies
@@ -853,7 +922,7 @@ final class NativeWorkspaceScreen {
         actions.addView(discard,actionLeft);
         actions.addView(review,new LinearLayout.LayoutParams(0,dp(49),1));
         VaultNativeStyle.margin(content,actions,14,activity);
-        discard.setOnClickListener(v->showDeck(deck));
+        discard.setOnClickListener(v->onBack());
         review.setOnClickListener(v->{
             try {
                 JSONObject revised=NativeDeckDraft.revised(deck,
@@ -889,6 +958,8 @@ final class NativeWorkspaceScreen {
     }
 
     private void showDeck(JSONObject deck){
+        screenState="deck-details";
+        editingDeck=null;editorName=null;editorMainboard=null;
         final int pageGeneration=++deckPageGeneration;
         deckCoverTargets.clear();
         status.setText("Reviewing "+deck.optString("name","saved deck")+"…");
@@ -1021,6 +1092,7 @@ final class NativeWorkspaceScreen {
     }
 
     private void openShortlistPreview(JSONObject card){
+        screenState="shortlist-preview";
         final int generation=++deckPageGeneration;
         shortlistArtTargets.clear();
         content.removeAllViews();
@@ -1147,6 +1219,7 @@ final class NativeWorkspaceScreen {
     }
 
     private void shortlist(){
+        screenState="shortlist";
         final int generation=++deckPageGeneration;
         deckCoverTargets.clear();
         shortlistArtTargets.clear();
@@ -1343,6 +1416,7 @@ final class NativeWorkspaceScreen {
     }
 
     private void dataSync(){
+        screenState="sync";
         content.removeAllViews();
         status.setText("Windows ↔ Android · review before applying changes");
         LinearLayout categories=VaultNativeStyle.row(activity);
@@ -1356,7 +1430,13 @@ final class NativeWorkspaceScreen {
             LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,dp(45));
             params.rightMargin=dp(7);
             categories.addView(tab,params);
-            tab.setOnClickListener(v->{syncSection=target;dataSync();});
+            tab.setOnClickListener(v->{
+                if(syncSection.equals(target))return;
+                if(syncHistory.size()>=24)syncHistory.removeFirst();
+                syncHistory.addLast(syncSection);
+                syncSection=target;
+                dataSync();
+            });
         }
         categoriesScroll.addView(categories);
         content.addView(categoriesScroll);
