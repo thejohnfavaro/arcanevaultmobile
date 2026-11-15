@@ -308,6 +308,10 @@ final class CatalogStore extends SQLiteOpenHelper {
     void ownership(JSONObject input)throws Exception{
         JSONArray cards=input.getJSONArray("cards");if(cards.length()>150000)throw new IllegalArgumentException("Too many ownership entries");
         String fingerprint=inventoryFingerprint(cards);
+        // Repeated native-WebView sync projections should not rewrite the
+        // entire ownership table or contend with Set Progress reads.
+        if(fingerprint.equals(setCache().getString("fingerprint_arena","")))
+            return;
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("ownership",null,null);
             for(int i=0;i<cards.length();i++){JSONObject c=cards.optJSONObject(i);if(c==null)continue;String name=c.optString("name","");int qty=c.optInt("qty",0);if(name.isEmpty()||name.length()>300||qty<=0)continue;ContentValues v=new ContentValues();v.put("name",name);v.put("qty",qty);db.insertWithOnConflict("ownership",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
             db.setTransactionSuccessful();
@@ -322,6 +326,8 @@ final class CatalogStore extends SQLiteOpenHelper {
         JSONArray rows=input.getJSONArray("cards");
         if(rows.length()>150000)throw new IllegalArgumentException("Too many physical inventory entries");
         String fingerprint=inventoryFingerprint(rows);
+        if(fingerprint.equals(setCache().getString("fingerprint_physical","")))
+            return;
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
             // An aggregate-only recovery snapshot may arrive after this database
