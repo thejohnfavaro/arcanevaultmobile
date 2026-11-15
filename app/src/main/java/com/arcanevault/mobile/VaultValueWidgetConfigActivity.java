@@ -16,7 +16,7 @@ import android.widget.TextView;
 public final class VaultValueWidgetConfigActivity extends Activity {
     private int widgetId=AppWidgetManager.INVALID_APPWIDGET_ID;
     private static final String[] MARKET_LABELS={
-        "Scryfall · cached reference","TCGplayer · integration pending",
+        "Scryfall · cached reference","TCGplayer · Scryfall market estimate",
         "Card Kingdom · integration pending","Cardmarket · integration pending"};
     private static final String[] CURRENCY_LABELS={
         "Automatic (market currency)","USD · US dollar","EUR · euro",
@@ -48,8 +48,8 @@ public final class VaultValueWidgetConfigActivity extends Activity {
             VaultNativeStyle.TEXT,true));
         TextView explanation=VaultNativeStyle.label(this,
             "Choose this widget's market and currency independently of other widgets. "+
-            "Only Scryfall reference quotes are connected currently; other "+
-            "markets will show unavailable instead of an incorrect value.",
+            "TCGplayer Market uses the same dated Scryfall USD market reference. "+
+            "Card Kingdom and Cardmarket are not connected yet.",
             13,VaultNativeStyle.SUBTEXT,false);
         explanation.setPadding(0,dp(10),0,dp(18));
         body.addView(explanation);
