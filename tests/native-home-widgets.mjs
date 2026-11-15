@@ -4,6 +4,8 @@ const r=p=>fs.readFileSync(p,'utf8');
 const manifest=r('app/src/main/AndroidManifest.xml');
 const store=r('app/src/main/java/com/arcanevault/mobile/VaultWidgets.java');
 const progress=r('app/src/main/java/com/arcanevault/mobile/VaultSetProgressCard.java');
+const art=r('app/src/main/java/com/arcanevault/mobile/VaultSetArtwork.java');
+const imageCache=r('app/src/main/java/com/arcanevault/mobile/ArtworkCache.java');
 const config=r('app/src/main/java/com/arcanevault/mobile/VaultSetWidgetConfigActivity.java');
 const value=r('app/src/main/java/com/arcanevault/mobile/VaultCollectionValueWidget.java');
 const set=r('app/src/main/java/com/arcanevault/mobile/VaultSetProgressWidget.java');
@@ -45,6 +47,20 @@ assert.match(progress,/boolean measured=set!=null&&set\.has\("total"\)&&total>0/
 assert.match(progress,/CATALOG NOT AVAILABLE/);
 assert.match(progress,/VERIFIED PHYSICAL PRINTINGS/);
 assert.match(progress,/ARENA CARD NAMES/);
+assert.match(progress,/canvas\.drawBitmap\(backdrop,crop,dest,paint\)/,
+  'Cards display representative set art as a cropped background');
+assert.match(progress,/canvas\.drawBitmap\(icon,null,/,
+  'Cards display official set icon when cached');
+assert.match(progress,/0xF3101523/,'Art retains readable Windows-style dark overlay');
+assert.match(art,/https:\/\/svgs\.scryfall\.io\/sets\//);
+assert.match(art,/\/art_crop\//);
+assert.match(art,/getCached\(/,'Launcher art and set symbol must read disk-only cache');
+assert.match(imageCache,/byte\[\] getCached\(String raw\)/);
+assert.match(store,/representativeSetArt\(code,"arena"\.equals\(source\)\)/);
+assert.match(store,/prefetchSelectedSet\(Context context,int widgetId\)/);
+assert.match(config,/VaultWidgets\.prefetchSelectedSet\(this,widgetId\)/);
+assert.match(workspace,/catalog\.representativeSetArt\(/);
+
 
 // Multiple independently configured Set Progress widgets.
 assert.match(config,/new Spinner\(this\)/);
