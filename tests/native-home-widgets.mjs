@@ -100,7 +100,7 @@ assert.match(store,/PendingIntent\.getActivity/);
 assert.match(shell,/openWidgetDestination\(String destination,String set,String source\)/);
 assert.match(shell,/if\(workspace!=null\)workspace\.openWidgetSet\(set,requested\)/);
 assert.match(workspace,/void openWidgetSet\(String code,String source\)/);
-assert.match(workspace,/showSet\(code,display,0\)/);
+assert.match(workspace,/showSet\(code,code\.toUpperCase\(java\.util\.Locale\.ROOT\),0\)/);
 assert.match(activity,/deliverWidgetNavigation\(\)/);
 assert.match(activity,/WIDGET_OPEN/);
 assert.match(activity,/onNewIntent\(Intent intent\)/);
