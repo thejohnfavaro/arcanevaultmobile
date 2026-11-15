@@ -52,6 +52,7 @@ final class NativeCompanionScreen {
     private int visibleCount=PAGE_SIZE;
     private List<CardRow> physical=Collections.emptyList(),arena=Collections.emptyList();
     private int readGeneration;
+    private String pendingSetFromWidget="";
 
     private static final class CardRow {
         final String name;final int qty;
@@ -272,8 +273,9 @@ final class NativeCompanionScreen {
                 !set.matches("[A-Za-z0-9]{2,12}"))return;
         String requested="arena".equals(source)?"arena":"physical";
         prefs.edit().putString("native_set_source_v1",requested).apply();
-        show("sets");
-        if(workspace!=null)workspace.openWidgetSet(set,requested);
+        pendingSetFromWidget=set;
+        try{show("sets");}
+        finally{pendingSetFromWidget="";}
     }
 
     private void show(String next){
@@ -288,7 +290,8 @@ final class NativeCompanionScreen {
         stage.removeAllViews();
         if(scope.equals("sets")||scope.equals("decks")||scope.equals("shortlist")||scope.equals("data & sync")){
             workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,deckLoader,
-                deckSaver,scope.equals("data & sync")?"data":scope);
+                deckSaver,scope.equals("data & sync")?"data":scope,
+                scope.equals("sets")?pendingSetFromWidget:"");
             stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
                 scope.equals("decks")?"Saved deck library":
