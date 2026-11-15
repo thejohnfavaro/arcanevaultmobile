@@ -869,6 +869,25 @@ function physicalRender(){
      hasQuotes:Object.keys(physicalPrices?.quotes||{}).length>0
    }));
  }catch(error){console.warn('Set Value cache unavailable',error)}
+ // Publish bounded, read-only rankings after each exact-printing quote refresh.
+ try{
+   const top=[],unpriced=[];
+   for(const c of physicalCards){
+     if(!c||!Number.isInteger(c.qty)||c.qty<=0)continue;
+     const quote=physicalPrice(c);
+     if(quote!==null && Number.isFinite(quote) && quote>0)
+       top.push({name:c.name,set:c.set||'',finish:c.finish||'nonfoil',
+         value:quote*c.qty});
+     else if(unpriced.length<50)
+       unpriced.push(String(c.name||'')+' · '+String(c.set||'').toUpperCase()+
+         ' #'+String(c.number||'')+' · no verified price quote');
+   }
+   top.sort((a,b)=>b.value-a.value);
+   window.ArcaneAndroid?.publishCollectionAnalytics?.(JSON.stringify({
+     top:top.slice(0,50),unpriced,pricedRows:priced.length,
+     totalRows:physicalCards.length
+   }));
+ }catch(error){console.warn('Collection insights unavailable',error)}
  $('physicalSummary').textContent=physicalCards.length.toLocaleString()+' inventory rows · '+total.toLocaleString()+' copies · '+physicalOwnership().length+' card names · '+physicalCards.filter(avPhysicalHasIdentity).length+' identified printing rows · '+physicalMoney(value)+' estimated ('+priced.length+' priced printings)';
  $('physicalPageLabel').textContent='Page '+(physicalPage+1)+' / '+pages+' · '+list.length+' matching'+($('physicalSort').value!=='name'?' · unpriced last':'');
  $('physicalPrev').disabled=physicalPage===0;$('physicalNext').disabled=physicalPage===pages-1;
