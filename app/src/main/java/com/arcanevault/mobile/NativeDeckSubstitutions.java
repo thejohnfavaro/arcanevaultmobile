@@ -146,6 +146,34 @@ final class NativeDeckSubstitutions {
         }
         return cards;
     }
+
+    /** Returns only revised unsaved editor text; caller performs separate save. */
+    static String applyToText(String original,Plan plan) throws Exception {
+        JSONArray rows=NativeDeckDraft.parseEntries(original);
+        Map<String,Integer> counts=draft(rows);
+        int before=0;for(int n:counts.values())before=Math.addExact(before,n);
+        for(Swap swap:plan.swaps){
+            String from=norm(swap.source),to=norm(swap.target);
+            if(counts.getOrDefault(from,0)<1)
+                throw new IllegalArgumentException("Source copy no longer in draft: "+from);
+            counts.put(from,counts.get(from)-1);
+            counts.put(to,Math.addExact(counts.getOrDefault(to,0),1));
+        }
+        JSONArray revised=new JSONArray();
+        int after=0;
+        List<String> keys=new ArrayList<>(counts.keySet());
+        Collections.sort(keys);
+        for(String key:keys){
+            int qty=counts.get(key);
+            if(qty<=0)continue;
+            after=Math.addExact(after,qty);
+            JSONObject entry=new JSONObject();
+            entry.put("name",key);entry.put("qty",qty);
+            revised.put(entry);
+        }
+        if(before!=after)throw new IllegalArgumentException("Substitution changed card count");
+        return NativeDeckDraft.formatEntries(revised);
+    }
     static Plan analyze(CatalogStore store,JSONObject deck,String mainboard,
                         JSONArray physical,JSONArray arenaCards) throws Exception {
         if(store==null||deck==null)throw new IllegalArgumentException("Missing deck/catalog");
@@ -162,7 +190,7 @@ final class NativeDeckSubstitutions {
         needed.addAll(counts.keySet());needed.add(commander);
         Map<String,Card> meta=profiles(store.getReadableDatabase(),needed);
         Card leader=meta.get(commander);
-        if(leader==null||leader.colors==null||leader.colors.isEmpty())
+        if(leader==null||leader.colors==null)
             throw new IllegalArgumentException("Commander color identity is unavailable; sync card metadata");
         int colors=colorBits(leader.colors);
         Plan plan=new Plan();
