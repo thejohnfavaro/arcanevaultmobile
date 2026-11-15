@@ -160,10 +160,10 @@ final class VaultWidgets {
             String marketLabel="tcgplayer".equals(market)?"TCGplayer":
                 "cardkingdom".equals(market)?"Card Kingdom":
                 "cardmarket".equals(market)?"Cardmarket":"Scryfall";
-            boolean supported="scryfall".equals(market)&&"market".equals(priceType);
+            boolean supported=("scryfall".equals(market)||"tcgplayer".equals(market))&&"market".equals(priceType);
             String amount="—",coverage,subtitle;
             if(!supported){
-                coverage="Price source not connected · choose Scryfall";
+                coverage="Market/price type not yet available · choose Market";
                 subtitle=marketLabel+" · "+displayCurrency+" · integration pending";
             }else{
                 Double rate=VaultWidgetExchangeRates.rate(context,displayCurrency);
@@ -185,9 +185,9 @@ final class VaultWidgets {
                     rate==null?"Currency exchange rate unavailable · connect to refresh":
                     String.format(Locale.US,"%d / %d printings priced · %,d cards",
                         priced,total,copies);
-                subtitle="USD".equals(displayCurrency)&&date.isEmpty()? 
+                subtitle="USD".equals(displayCurrency)&&date.isEmpty()&&"scryfall".equals(market)?
                     "Scryfall USD · cached estimate":
-                    "Scryfall "+displayCurrency+" · "+
+                    ("tcgplayer".equals(market)?"TCGplayer via Scryfall ":"Scryfall ")+displayCurrency+" · "+
                     (date.isEmpty()?"cached reference": "quotes "+date);
                 if(!"USD".equals(displayCurrency))
                     subtitle+=" · FX "+(VaultWidgetExchangeRates.date(context).isEmpty()?
