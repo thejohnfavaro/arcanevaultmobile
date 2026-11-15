@@ -31,11 +31,14 @@ import java.util.concurrent.Executors;
 final class NativeWorkspaceScreen {
     interface DeckLoader { void fetch(DeckCallback callback); }
     interface DeckCallback { void accept(String json); }
+    interface DeckSaver { void save(JSONObject original, JSONObject revised, DeckSaveCallback callback); }
+    interface DeckSaveCallback { void accept(boolean success, String message); }
     private final Activity activity;
     private final SharedPreferences prefs;
     private final CatalogStore catalog;
     private final Runnable legacy;
     private final DeckLoader decks;
+    private final DeckSaver deckSaver;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final LinearLayout root;
@@ -57,10 +60,10 @@ final class NativeWorkspaceScreen {
     private static final String PREF_SET_HIDE_UNOWNED="native_set_hide_unowned_v1";
 
     private NativeWorkspaceScreen(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            Runnable legacy,DeckLoader decks,String section,String initialCommander){
+            Runnable legacy,DeckLoader decks,DeckSaver deckSaver,String section,String initialCommander){
         this.activity=activity;this.prefs=prefs;this.catalog=catalog;
         this.deckCommanderFilter=initialCommander==null?"":initialCommander.trim();
-        this.legacy=legacy;this.decks=decks;
+        this.legacy=legacy;this.decks=decks;this.deckSaver=deckSaver;
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(18),dp(14),dp(18),dp(14));
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
@@ -162,12 +165,12 @@ final class NativeWorkspaceScreen {
         else dataSync();
     }
     static NativeWorkspaceScreen create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            Runnable legacy,DeckLoader decks,String section){
-        return create(activity,prefs,catalog,legacy,decks,section,"");
+            Runnable legacy,DeckLoader decks,DeckSaver saver,String section){
+        return create(activity,prefs,catalog,legacy,decks,saver,section,"");
     }
     static NativeWorkspaceScreen create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            Runnable legacy,DeckLoader decks,String section,String initialCommander){
-        return new NativeWorkspaceScreen(activity,prefs,catalog,legacy,decks,section,initialCommander);
+            Runnable legacy,DeckLoader decks,DeckSaver saver,String section,String initialCommander){
+        return new NativeWorkspaceScreen(activity,prefs,catalog,legacy,decks,saver,section,initialCommander);
     }
     View view(){return root;}
     void close(){closed=true;executor.shutdownNow();}
@@ -353,13 +356,77 @@ final class NativeWorkspaceScreen {
                     row("No saved decks for this commander",
                         "You can open the existing editor to build a deck. No deck was created automatically.",
                         null);
-                button("Open deck editing tools",legacy);
+                button("Open legacy deck editing tools",legacy);
             }catch(Exception e){
                 status.setText("Could not load deck library: "+e.getMessage());
                 button("Open Legacy deck library",legacy);
             }
         }));
     }
+    private void editDeck(JSONObject deck){
+        LinearLayout fields=VaultNativeStyle.column(activity);
+        fields.setPadding(dp(16),dp(8),dp(16),dp(8));
+        TextView commander=VaultNativeStyle.label(activity,
+            "Commander: "+deck.optString("commander","")+" (unchanged)",13,
+            VaultNativeStyle.SUBTEXT,false);
+        fields.addView(commander);
+        EditText name=new EditText(activity);
+        name.setSingleLine(true);
+        name.setText(deck.optString("name","Untitled deck"));
+        name.setHint("Deck name");
+        fields.addView(name);
+        TextView hint=VaultNativeStyle.label(activity,
+            "Edit the mainboard: one entry per line, e.g. 2 Sol Ring. "+
+            "This changes your saved deck, not physical or Arena ownership.",12,
+            VaultNativeStyle.SUBTEXT,false);
+        fields.addView(hint);
+        EditText lines=new EditText(activity);
+        lines.setGravity(android.view.Gravity.TOP);
+        lines.setMinLines(8);
+        lines.setMaxLines(16);
+        lines.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+            android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE |
+            android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        lines.setText(NativeDeckDraft.formatEntries(deck.optJSONArray("entries")));
+        fields.addView(lines,new LinearLayout.LayoutParams(-1,dp(260)));
+        ScrollView body=VaultNativeStyle.scroll(activity);
+        body.addView(fields);
+        AlertDialog dialog=new AlertDialog.Builder(activity)
+            .setTitle("Edit saved deck")
+            .setView(body)
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Review changes",null)
+            .create();
+        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(b->{
+                try{
+                    JSONObject revised=NativeDeckDraft.revised(deck,
+                        name.getText().toString(),lines.getText().toString());
+                    JSONArray entries=revised.getJSONArray("entries");
+                    int count=1;
+                    for(int i=0;i<entries.length();i++)
+                        count+=entries.getJSONObject(i).getInt("qty");
+                    String confirmation="Save "+revised.getString("name")+
+                        " with "+count+" total cards (including commander)?"+
+                        "\\n\\nA local recovery copy will be kept. "+
+                        "The current deck must still match the version you opened.";
+                    new AlertDialog.Builder(activity).setTitle("Confirm deck edit")
+                        .setMessage(confirmation)
+                        .setNegativeButton("Back",null)
+                        .setPositiveButton("Save", (d,w)->{
+                            deckSaver.save(deck,revised,(ok,message)->ui.post(()->{
+                                if(closed||activity.isFinishing())return;
+                                info(message);
+                                if(ok){dialog.dismiss();deckLibrary();}
+                            }));
+                        }).show();
+                }catch(Exception error){
+                    info("Deck not changed: "+error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
     private void showDeck(JSONObject deck){
         executor.execute(()->{
             try{
@@ -401,7 +468,7 @@ final class NativeWorkspaceScreen {
                         .setTitle(deck.optString("name","Untitled deck")+
                             (missingCount>0?" · "+missingCount+" missing":" · owned"))
                         .setView(scroll).setPositiveButton("Close",null)
-                        .setNeutralButton("Edit in Legacy", (d,w)->legacy.run()).show();
+                        .setNeutralButton("Edit natively", (d,w)->editDeck(deck)).show();
                 });
             }catch(Exception e){ui.post(()->info("Deck details unavailable: "+e.getMessage()));}
         });
