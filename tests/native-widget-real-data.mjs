@@ -35,7 +35,7 @@ assert.match(catalog,/JSONArray indexedSetNames\(\)/);
 assert.match(catalog,/JSONObject indexedSetProgress\(String setCode,String source\)/);
 assert.match(catalog,/if\(total<=0\)return null/);
 assert.match(catalog,/COUNT\(DISTINCT v\.name\).*FROM variants v/s);
-assert.match(catalog,/JOIN physical_printings p ON p\.qty>0/);
+assert.match(catalog,/JOIN variants v ON v\.print_id=p\.print_id COLLATE NOCASE/,'Exact printing identity uses index-friendly join');
 assert.match(catalog,/v\.setcode=\? COLLATE NOCASE/);
 assert.match(catalog,/JOIN ownership o ON o\.name=v\.name COLLATE NOCASE AND o\.qty>0/);
 assert.match(widget,/JSONObject row=catalog\.indexedSetProgress\(code,source\)/);
