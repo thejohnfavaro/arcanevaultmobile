@@ -1148,6 +1148,7 @@ final class NativeWorkspaceScreen {
     private void shortlist(){
         final int generation=++deckPageGeneration;
         deckCoverTargets.clear();
+        shortlistArtTargets.clear();
         content.removeAllViews();
         status.setText("Reading saved card names…");
         ((MainActivity)activity).loadNativeShortlist(names->{
@@ -1188,7 +1189,7 @@ final class NativeWorkspaceScreen {
             search.addTextChangedListener(new TextWatcher(){
                 public void beforeTextChanged(CharSequence x,int a,int b,int c){}
                 public void onTextChanged(CharSequence x,int a,int b,int c){
-                    shortlistQuery=x.toString();renderShortlist();
+                    shortlistQuery=x.toString();shortlistPage=0;renderShortlist();
                 }
                 public void afterTextChanged(Editable x){}
             });
@@ -1214,46 +1215,129 @@ final class NativeWorkspaceScreen {
         });
     }
 
+    /** Image-first Shortlist gallery, matching Card Catalog's compact grid.
+     * Search/pagination are bounded so long shortlists never construct thousands
+     * of ImageViews or launch off-screen network fetches. */
     private void renderShortlist(){
         if(shortlistPanel==null)return;
         shortlistPanel.removeAllViews();
+        shortlistArtTargets.clear();
         String term=shortlistQuery.trim().toLowerCase(java.util.Locale.ROOT);
-        int visible=0;
+        ArrayList<JSONObject> filtered=new ArrayList<>();
         for(JSONObject card:shortlistCards){
+            if(card==null)continue;
             String name=card.optString("name","");
-            if(!name.toLowerCase(java.util.Locale.ROOT).contains(term))continue;
-            visible++;
-            LinearLayout line=VaultNativeStyle.row(activity);
-            line.setPadding(dp(11),dp(10),dp(11),dp(10));
-            VaultNativeStyle.surface(activity,line,false);
-            LinearLayout detail=VaultNativeStyle.column(activity);
-            detail.addView(VaultNativeStyle.label(activity,name,15,VaultNativeStyle.TEXT,true));
-            String owned=card.optBoolean("known",false)?
+            if(name.toLowerCase(java.util.Locale.ROOT).contains(term))
+                filtered.add(card);
+        }
+        if(filtered.isEmpty()){
+            rowTo(shortlistPanel,shortlistCards.isEmpty()?
+                "Nothing bookmarked yet":"No matching cards",
+                "Use the star on Card Catalog details to save cards.");
+            return;
+        }
+        int lastPage=(filtered.size()-1)/SHORTLIST_PAGE_SIZE;
+        shortlistPage=Math.max(0,Math.min(shortlistPage,lastPage));
+        int first=shortlistPage*SHORTLIST_PAGE_SIZE;
+        int last=Math.min(filtered.size(),first+SHORTLIST_PAGE_SIZE);
+        TextView pageLabel=VaultNativeStyle.label(activity,
+            filtered.size()+" cards · showing "+(first+1)+"–"+last+
+            " · tap artwork to preview",12,VaultNativeStyle.SUBTEXT,false);
+        VaultNativeStyle.margin(shortlistPanel,pageLabel,6,activity);
+
+        int screenWidth=activity.getResources().getDisplayMetrics().widthPixels;
+        float density=activity.getResources().getDisplayMetrics().density;
+        float widthDp=screenWidth/density;
+        int columns=widthDp>=760?4:widthDp>=560?3:2;
+        int tileWidth=Math.max(dp(116),
+            (screenWidth-dp(42)-dp(8)*columns)/columns);
+        int imageHeight=Math.round((tileWidth-dp(12))*1.40f);
+        GridLayout gallery=new GridLayout(activity);
+        gallery.setColumnCount(columns);
+        for(int i=first;i<last;i++){
+            JSONObject card=filtered.get(i);
+            String name=card.optString("name","Unknown card");
+            String url=card.optString("image","");
+            LinearLayout tile=VaultNativeStyle.column(activity);
+            tile.setPadding(dp(6),dp(6),dp(6),dp(8));
+            VaultNativeStyle.surface(activity,tile,false);
+            tile.setClickable(true);
+            tile.setFocusable(true);
+            tile.setContentDescription("Preview full card "+name);
+            FrameLayout artFrame=new FrameLayout(activity);
+            artFrame.setBackground(VaultNativeStyle.rounded(activity,
+                VaultNativeStyle.ELEVATED,VaultNativeStyle.BORDER,9));
+            TextView fallback=VaultNativeStyle.label(activity,
+                NativeArtworkQuality.supported(url)?"✦":"Artwork unavailable",
+                13,VaultNativeStyle.PRIMARY,true);
+            fallback.setGravity(Gravity.CENTER);
+            artFrame.addView(fallback,new FrameLayout.LayoutParams(-1,-1));
+            if(NativeArtworkQuality.supported(url)){
+                ImageView image=new ImageView(activity);
+                image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                image.setContentDescription("Full card art for "+name);
+                artFrame.addView(image,new FrameLayout.LayoutParams(-1,-1));
+                shortlistArtTargets.add(new ShortlistArtTarget(image,url,
+                    tileWidth-dp(12),imageHeight));
+            }
+            tile.addView(artFrame,new LinearLayout.LayoutParams(-1,imageHeight));
+            TextView heading=VaultNativeStyle.label(activity,name,13,
+                VaultNativeStyle.TEXT,true);
+            heading.setMaxLines(2);
+            heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tile.addView(heading);
+            String counts=card.optBoolean("known",false)?
                 "Physical ×"+card.optInt("physical",0)+" · Arena ×"+
-                card.optInt("arena",0):
-                "Not found in local catalog — ownership unverified";
-            detail.addView(VaultNativeStyle.label(activity,owned,11,
-                VaultNativeStyle.SUBTEXT,false));
-            line.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
-            Button remove=VaultNativeStyle.button(activity,"★",false);
+                    card.optInt("arena",0):
+                "Ownership unverified";
+            TextView info=VaultNativeStyle.label(activity,counts,10,
+                VaultNativeStyle.SUBTEXT,false);
+            info.setMaxLines(2);
+            tile.addView(info);
+            Button remove=VaultNativeStyle.button(activity,"★ Saved · Remove",false);
+            remove.setAllCaps(false);
+            remove.setTextSize(11);
             remove.setContentDescription("Remove "+name+" from Shortlist");
-            LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(dp(48),dp(44));
-            size.leftMargin=dp(8);
-            line.addView(remove,size);
+            tile.addView(remove,new LinearLayout.LayoutParams(-1,dp(42)));
             remove.setOnClickListener(v->{
                 remove.setEnabled(false);
                 ((MainActivity)activity).setNativeShortlist(name,false,(ok,message)->{
-                    if(!closed && !activity.isFinishing()){
+                    if(!closed&&!activity.isFinishing()){
                         if(ok)shortlist();
                         else{remove.setEnabled(true);info(message);}
                     }
                 });
             });
-            VaultNativeStyle.margin(shortlistPanel,line,6,activity);
+            tile.setOnClickListener(v->openShortlistPreview(card));
+            GridLayout.LayoutParams placement=new GridLayout.LayoutParams();
+            placement.width=tileWidth;
+            placement.height=-2;
+            placement.rowSpec=GridLayout.spec((i-first)/columns);
+            placement.columnSpec=GridLayout.spec((i-first)%columns);
+            placement.setMargins(dp(2),dp(2),dp(2),dp(4));
+            gallery.addView(tile,placement);
         }
-        if(visible==0)
-            rowTo(shortlistPanel,shortlistCards.isEmpty()?"Nothing bookmarked yet":"No matches",
-                "Use the star on Card Catalog details to save cards.");
+        shortlistPanel.addView(gallery);
+        LinearLayout paging=VaultNativeStyle.row(activity);
+        if(shortlistPage>0){
+            Button previous=VaultNativeStyle.button(activity,"← Previous",false);
+            paging.addView(previous,new LinearLayout.LayoutParams(0,dp(44),1));
+            previous.setOnClickListener(v->{
+                shortlistPage--;renderShortlist();
+                workspaceScroll.smoothScrollTo(0,0);
+            });
+        }
+        if(shortlistPage<lastPage){
+            Button next=VaultNativeStyle.button(activity,"Next →",false);
+            paging.addView(next,new LinearLayout.LayoutParams(0,dp(44),1));
+            next.setOnClickListener(v->{
+                shortlistPage++;renderShortlist();
+                workspaceScroll.smoothScrollTo(0,0);
+            });
+        }
+        if(paging.getChildCount()>0)
+            VaultNativeStyle.margin(shortlistPanel,paging,10,activity);
+        workspaceScroll.post(this::loadVisibleShortlistArt);
     }
 
     private void dataSync(){
