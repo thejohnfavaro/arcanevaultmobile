@@ -17,7 +17,8 @@ assert.match(shell,/new NativeCatalogScreen\(activity, catalog, artwork, prefs\)
 assert.match(shell,/destinations=\{"home","catalog","collection","decks","sync"\}/);
 assert.match(shell,/addSecondaryTab\("EDH Lab","edh lab"\)/);
 assert.match(shell,/addSecondaryTab\("Data & Sync","data & sync"\)/);
-assert.match(activity,/NativeCompanionScreen\.create\(this, durable, catalog, artwork,/);
+assert.match(activity,/NativeCompanionScreen\.createController\(this, durable, catalog, artwork,/,
+  'Native catalog lives in the retained page-navigation controller');
 assert.match(backend,/JSONObject search\(Map<String,String> p\)/);
 assert.match(native,/KEYWORD \/ RULES TEXT/,'Mechanic filter should be visible in advanced Card Catalog filters');
 assert.match(native,/options\.put\("oracle",selectedOracle\)/,'Pass typed mechanics to SQL query and cache key');
