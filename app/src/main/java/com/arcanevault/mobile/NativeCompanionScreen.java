@@ -123,18 +123,34 @@ final class NativeCompanionScreen {
         tabs.removeAllViews();
         final String active=primaryScope();
         final String[] destinations={"home","catalog","collection","decks","sync"};
-        final String[] labels={"⌂  Home","▤  Catalog","▣  Collection","▧  Decks","⇄  Sync"};
+        final String[] labels={"Home","Catalog","Collection","Decks","Sync"};
+        final String[] symbols={"⌂","▤","▣","♜","⇄"};
         for(int i=0;i<destinations.length;i++){
             final String destination=destinations[i];
             boolean selected=destination.equals(active);
-            Button action=button(labels[i],selected);
-            action.setTextSize(11);
-            action.setContentDescription(destination+" workspace");
-            action.setMinHeight(dp(48));
+            LinearLayout item=VaultNativeStyle.column(activity);
+            item.setGravity(Gravity.CENTER);
+            item.setFocusable(true);
+            item.setClickable(true);
+            item.setContentDescription(labels[i]+" workspace"+
+                (selected?", selected":""));
+            item.setBackground(VaultNativeStyle.rounded(activity,
+                selected?VaultNativeStyle.ELEVATED:VaultNativeStyle.SURFACE,
+                selected?VaultNativeStyle.PRIMARY:Color.TRANSPARENT,10));
+            TextView symbol=text(symbols[i],19,
+                selected?VaultNativeStyle.PRIMARY:VaultNativeStyle.SUBTEXT,true);
+            symbol.setGravity(Gravity.CENTER);
+            item.addView(symbol,new LinearLayout.LayoutParams(-1,dp(24)));
+            TextView label=text(labels[i],10,
+                selected?VaultNativeStyle.TEXT:VaultNativeStyle.SUBTEXT,selected);
+            label.setGravity(Gravity.CENTER);
+            label.setMaxLines(1);
+            label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            item.addView(label,new LinearLayout.LayoutParams(-1,dp(18)));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(51),1);
             lp.setMargins(dp(2),0,dp(2),0);
-            tabs.addView(action,lp);
-            action.setOnClickListener(v->show(
+            tabs.addView(item,lp);
+            item.setOnClickListener(v->show(
                 destination.equals("collection")?"physical":
                 destination.equals("sync")?"data & sync":destination));
         }
