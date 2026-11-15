@@ -924,6 +924,37 @@ final class NativeWorkspaceScreen {
                     }
                 });
                 renderDeckList();
+                button("Find decks closest to buildable",()->{
+                    final int current=deckPageGeneration;
+                    status.setText("Checking saved decks against recorded ownership…");
+                    executor.execute(()->{
+                        try{
+                            JSONArray physical=new JSONArray(prefs.getString(
+                                "vault_physicalCollectionV1","[]"));
+                            JSONArray arena=new JSONArray(prefs.getString("vault_cards","[]"));
+                            List<String> ranked=NativeDeckFit.rank(
+                                deckSnapshot,physical,arena);
+                            ui.post(()->{
+                                if(closed||current!=deckPageGeneration)return;
+                                status.setText("Deck coverage review ready");
+                                new AlertDialog.Builder(activity)
+                                    .setTitle("Closest to buildable")
+                                    .setMessage(ranked.isEmpty()?
+                                        "No readable saved decks found.":
+                                        String.join("\n\n",ranked)+
+                                        "\n\nCandidates are ranked by missing owned copies, "+
+                                        "not by power or format legality.")
+                                    .setPositiveButton("Close",null).show();
+                            });
+                        }catch(Exception error){
+                            ui.post(()->{
+                                if(!closed&&current==deckPageGeneration)
+                                    status.setText("Deck review unavailable: "+
+                                        error.getMessage());
+                            });
+                        }
+                    });
+                });
                 button("Open legacy deck editing tools",legacy);
             }catch(Exception e){
                 status.setText("Could not load deck library: "+e.getMessage());
@@ -1142,7 +1173,11 @@ final class NativeWorkspaceScreen {
         executor.execute(()->{
             try{
                 Map<String,Integer> owned=new HashMap<>();
-                for(String key:new String[]{"vault_physicalCollectionV1","vault_cards"}){
+                // Never combine Arena and physical copies when evaluating
+                // whether a saved deck is buildable in one inventory.
+                String inventoryPool=NativeDeckFit.arenaFormat(
+                    deck.optString("format",""))?"vault_cards":"vault_physicalCollectionV1";
+                for(String key:new String[]{inventoryPool}){
                     JSONArray cards=new JSONArray(prefs.getString(key,"[]"));
                     if(cards.length()>150000)
                         throw new IllegalStateException("Inventory safety limit exceeded");
@@ -1155,7 +1190,7 @@ final class NativeWorkspaceScreen {
                 }
                 JSONArray entries=deck.optJSONArray("entries");
                 java.util.ArrayList<String[]> cards=new java.util.ArrayList<>();
-                int missing=0, total=1;
+                int missing=0, total=0;
                 if(entries!=null)for(int i=0;i<entries.length();i++){
                     JSONObject entry=entries.optJSONObject(i);
                     if(entry==null)continue;
@@ -1168,21 +1203,28 @@ final class NativeWorkspaceScreen {
                         need>0?"Missing "+need+" · recorded copies "+have:
                             "Owned · recorded copies "+have});
                 }
+                NativeDeckFit.Result fit=NativeDeckFit.check(deck,
+                    new JSONArray(prefs.getString("vault_physicalCollectionV1","[]")),
+                    new JSONArray(prefs.getString("vault_cards","[]")));
                 JSONObject insights=null;
                 try{insights=catalog.deckInsights(deck.optString("commander",""),entries);}
                 catch(Exception ignored){ /* Catalog may be syncing; show existing deck unchanged. */ }
                 final JSONObject report=insights;
-                int missingCount=missing,totalCount=total;
+                int missingCount=fit.missingCopies(),totalCount=fit.required;
                 ui.post(()->{
                     if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
                     content.removeAllViews();
                     status.setText(totalCount+" cards · "+missingCount+
-                        " not covered by recorded physical/Arena inventory");
+                        " not covered by "+(fit.arena?"Arena":"physical")+" inventory");
                     button("← Back to Deck Library",this::deckLibrary);
                     TextView title=VaultNativeStyle.label(activity,
                         deck.optString("name","Untitled deck"),22,VaultNativeStyle.TEXT,true);
                     VaultNativeStyle.margin(content,title,8,activity);
                     row("COMMANDER",deck.optString("commander",""),null);
+                    row("BUILDABILITY",fit.summary(),null);
+                    if(!fit.missing.isEmpty())
+                        row("MISSING OWNED COPIES",String.join(", ",
+                            fit.missing.subList(0,Math.min(12,fit.missing.size()))),null);
                     TextView note=VaultNativeStyle.label(activity,
                         "Recorded ownership is informational. Unowned cards stay in the deck; "+
                         "no collection quantities or printings are changed.",12,
