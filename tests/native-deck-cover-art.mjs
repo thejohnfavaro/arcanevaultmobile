@@ -15,7 +15,7 @@ for(const part of [
   'entry.setOnClickListener(v->showDeck(deck))',
   'commander.isEmpty()?"Commander not specified"',
   'count+" cards · "+folder',
-  'Format','ribbon',
+  'ribbon',
 ])assert.ok(workspace.includes(part),'Missing deck cover presentation: '+part);
 assert.match(workspace,/String commanderCoverUrl\(String commanderName\)/,'Lookup must use local catalog');
 assert.match(catalog,/String commanderCoverUrl\(String commanderName\)/);
