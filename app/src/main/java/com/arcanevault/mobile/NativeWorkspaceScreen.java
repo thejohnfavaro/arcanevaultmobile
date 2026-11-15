@@ -327,7 +327,7 @@ final class NativeWorkspaceScreen {
             try{
                 JSONArray library=new JSONArray(json);
                 String selectedCommander=deckCommanderFilter;
-                status.setText(library.length()+" saved decks · read-only"+
+                status.setText(library.length()+" saved decks · native workspace"+
                     (selectedCommander.isEmpty()?"":" · Commander: "+selectedCommander));
                 if(!selectedCommander.isEmpty()){
                     button("Show all saved decks",()->{
@@ -364,6 +364,11 @@ final class NativeWorkspaceScreen {
         }));
     }
     private void editDeck(JSONObject deck){
+        // Stay in the same Decks workspace: the content area, rather than
+        // another modal, owns the name, mainboard, search and save controls.
+        content.removeAllViews();
+        status.setText("Editing "+deck.optString("name","saved deck")+" · unsaved changes");
+        button("← Back to deck (discard changes)",()->showDeck(deck));
         LinearLayout fields=VaultNativeStyle.column(activity);
         fields.setPadding(dp(16),dp(8),dp(16),dp(8));
         TextView commander=VaultNativeStyle.label(activity,
@@ -451,88 +456,107 @@ final class NativeWorkspaceScreen {
                 }
             });
         });
-        ScrollView body=VaultNativeStyle.scroll(activity);
-        body.addView(fields);
-        AlertDialog dialog=new AlertDialog.Builder(activity)
-            .setTitle("Edit saved deck")
-            .setView(body)
-            .setNegativeButton("Cancel",null)
-            .setPositiveButton("Review changes",null)
-            .create();
-        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            .setOnClickListener(b->{
-                try{
-                    JSONObject revised=NativeDeckDraft.revised(deck,
-                        name.getText().toString(),lines.getText().toString());
-                    JSONArray entries=revised.getJSONArray("entries");
-                    int count=1;
-                    for(int i=0;i<entries.length();i++)
-                        count+=entries.getJSONObject(i).getInt("qty");
-                    String confirmation="Save "+revised.getString("name")+
-                        " with "+count+" total cards (including commander)?"+
-                        "\\n\\nA local recovery copy will be kept. "+
-                        "The current deck must still match the version you opened.";
-                    new AlertDialog.Builder(activity).setTitle("Confirm deck edit")
-                        .setMessage(confirmation)
-                        .setNegativeButton("Back",null)
-                        .setPositiveButton("Save", (d,w)->{
-                            deckSaver.save(deck,revised,(ok,message)->ui.post(()->{
-                                if(closed||activity.isFinishing())return;
+        content.addView(fields);
+        LinearLayout actions=VaultNativeStyle.row(activity);
+        Button discard=VaultNativeStyle.button(activity,"Discard",false);
+        Button review=VaultNativeStyle.button(activity,"Review & Save",true);
+        LinearLayout.LayoutParams actionLeft=new LinearLayout.LayoutParams(0,dp(49),1);
+        actionLeft.rightMargin=dp(8);
+        actions.addView(discard,actionLeft);
+        actions.addView(review,new LinearLayout.LayoutParams(0,dp(49),1));
+        VaultNativeStyle.margin(content,actions,14,activity);
+        discard.setOnClickListener(v->showDeck(deck));
+        review.setOnClickListener(v->{
+            try {
+                JSONObject revised=NativeDeckDraft.revised(deck,
+                    name.getText().toString(),lines.getText().toString());
+                JSONArray entries=revised.getJSONArray("entries");
+                int count=1;
+                for(int i=0;i<entries.length();i++)
+                    count+=entries.getJSONObject(i).getInt("qty");
+                String confirmation="Save "+revised.getString("name")+
+                    " with "+count+" total cards (including commander)?"+
+                    "\\n\\nA private recovery copy will be kept. "+
+                    "The original deck must still match the version you opened.";
+                new AlertDialog.Builder(activity).setTitle("Confirm deck edit")
+                    .setMessage(confirmation)
+                    .setNegativeButton("Back",null)
+                    .setPositiveButton("Save",(d,w)->{
+                        review.setEnabled(false);
+                        deckSaver.save(deck,revised,(ok,message)->ui.post(()->{
+                            if(closed||activity.isFinishing())return;
+                            if(ok){
+                                status.setText("Saved · "+revised.optString("name","Deck"));
+                                deckLibrary();
+                            } else {
+                                review.setEnabled(true);
                                 info(message);
-                                if(ok){dialog.dismiss();deckLibrary();}
-                            }));
-                        }).show();
-                }catch(Exception error){
-                    info("Deck not changed: "+error.getMessage());
-                }
-            }));
-        dialog.show();
+                            }
+                        }));
+                    }).show();
+            }catch(Exception error){
+                info("Deck not changed: "+error.getMessage());
+            }
+        });
     }
 
     private void showDeck(JSONObject deck){
+        status.setText("Reviewing "+deck.optString("name","saved deck")+"…");
         executor.execute(()->{
             try{
                 Map<String,Integer> owned=new HashMap<>();
                 for(String key:new String[]{"vault_physicalCollectionV1","vault_cards"}){
                     JSONArray cards=new JSONArray(prefs.getString(key,"[]"));
-                    if(cards.length()>150000)throw new IllegalStateException("Inventory safety limit exceeded");
+                    if(cards.length()>150000)
+                        throw new IllegalStateException("Inventory safety limit exceeded");
                     for(int i=0;i<cards.length();i++){
                         JSONObject card=cards.optJSONObject(i);if(card==null)continue;
                         String name=card.optString("name","").toLowerCase(java.util.Locale.ROOT);
-                        owned.put(name,owned.getOrDefault(name,0)+Math.max(0,card.optInt("qty",0)));
+                        owned.put(name,owned.getOrDefault(name,0)+
+                            Math.max(0,card.optInt("qty",0)));
                     }
                 }
                 JSONArray entries=deck.optJSONArray("entries");
-                StringBuilder list=new StringBuilder("Commander: "+
-                    deck.optString("commander","")+
-                    "\nCombined physical/Arena ownership · read-only\n\n");
-                int missing=0;
+                java.util.ArrayList<String[]> cards=new java.util.ArrayList<>();
+                int missing=0, total=1;
                 if(entries!=null)for(int i=0;i<entries.length();i++){
-                    JSONObject e=entries.optJSONObject(i);
-                    if(e==null)continue;
-                    String name=e.optString("name","");
-                    int qty=Math.max(0,e.optInt("qty",0));
+                    JSONObject entry=entries.optJSONObject(i);
+                    if(entry==null)continue;
+                    String name=entry.optString("name","");
+                    int qty=Math.max(0,entry.optInt("qty",0));
                     int have=owned.getOrDefault(name.toLowerCase(java.util.Locale.ROOT),0);
                     int need=Math.max(0,qty-have);
-                    missing+=need;
-                    list.append(qty).append(" × ").append(name);
-                    if(need>0)list.append("  · missing ").append(need);
-                    list.append("\n");
+                    missing+=need;total+=qty;
+                    cards.add(new String[]{qty+" × "+name,
+                        need>0?"Missing "+need+" · recorded copies "+have:
+                            "Owned · recorded copies "+have});
                 }
-                int missingCount=missing;
+                int missingCount=missing,totalCount=total;
                 ui.post(()->{
                     if(closed||activity.isFinishing())return;
-                    TextView text=VaultNativeStyle.label(activity,list.toString(),14,
-                        VaultNativeStyle.TEXT,false);
-                    text.setPadding(dp(18),dp(12),dp(18),dp(12));
-                    ScrollView scroll=VaultNativeStyle.scroll(activity);scroll.addView(text);
-                    new AlertDialog.Builder(activity)
-                        .setTitle(deck.optString("name","Untitled deck")+
-                            (missingCount>0?" · "+missingCount+" missing":" · owned"))
-                        .setView(scroll).setPositiveButton("Close",null)
-                        .setNeutralButton("Edit natively", (d,w)->editDeck(deck)).show();
+                    content.removeAllViews();
+                    status.setText(totalCount+" cards · "+missingCount+
+                        " not covered by recorded physical/Arena inventory");
+                    button("← Back to Deck Library",this::deckLibrary);
+                    TextView title=VaultNativeStyle.label(activity,
+                        deck.optString("name","Untitled deck"),22,VaultNativeStyle.TEXT,true);
+                    VaultNativeStyle.margin(content,title,8,activity);
+                    row("COMMANDER",deck.optString("commander",""),null);
+                    TextView note=VaultNativeStyle.label(activity,
+                        "Recorded ownership is informational. Unowned cards stay in the deck; "+
+                        "no collection quantities or printings are changed.",12,
+                        VaultNativeStyle.SUBTEXT,false);
+                    VaultNativeStyle.margin(content,note,12,activity);
+                    button("Edit this deck",()->editDeck(deck));
+                    TextView mainboard=VaultNativeStyle.label(activity,
+                        "MAINBOARD  ·  "+cards.size()+" card names",12,
+                        VaultNativeStyle.GOLD,true);
+                    VaultNativeStyle.margin(content,mainboard,10,activity);
+                    for(String[] card:cards)row(card[0],card[1],null);
                 });
-            }catch(Exception e){ui.post(()->info("Deck details unavailable: "+e.getMessage()));}
+            }catch(Exception e){
+                ui.post(()->{if(!closed)info("Deck details unavailable: "+e.getMessage());});
+            }
         });
     }
 
