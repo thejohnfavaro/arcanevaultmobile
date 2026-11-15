@@ -452,9 +452,9 @@ final class NativeWorkspaceScreen {
             if(!art.isEmpty())set.put("artUrl",art);
         }catch(Exception ignored){}
         ImageView tile=new ImageView(activity);
-        tile.setScaleType(ImageView.ScaleType.FIT_XY);
-        final int width=activity.getResources().getDisplayMetrics().widthPixels-dp(52);
-        tile.setImageBitmap(VaultSetProgressCard.render(activity,set,source,width,dp(176)));
+        tile.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        final int width=activity.getResources().getDisplayMetrics().widthPixels-dp(36);
+        tile.setImageBitmap(VaultSetProgressCard.render(activity,set,source,width,dp(161)));
         tile.setFocusable(true);
         tile.setClickable(true);
         tile.setContentDescription(name+" · "+
@@ -499,7 +499,7 @@ final class NativeWorkspaceScreen {
         // attached yet; the image view retains the bitmap when attached.
         if(tile.getParent()==null)return;
         tile.setImageBitmap(VaultSetProgressCard.render(
-            activity,set,source,width,dp(176)));
+            activity,set,source,width,dp(161)));
     }
 
     /** Render only local data. No SQL is executed from the UI thread. */
