@@ -9,7 +9,11 @@ const store=read('app/src/main/java/com/arcanevault/mobile/CatalogStore.java');
 const inspector=read('app/src/main/java/com/arcanevault/mobile/NativeCatalogScreen.java');
 const provider=read('app/src/main/java/com/arcanevault/mobile/NativeBackupProvider.java');
 const manifest=read('app/src/main/AndroidManifest.xml');
-for(const name of ['Sets','Decks','Data & Sync'])assert.ok(shell.includes('"'+name+'"'),'Missing native navigation: '+name);
+for(const label of ['"Sets"','"Deck Library"','"Data & Sync"'])
+ assert.ok(shell.includes(label),'Missing contextual workspace destination: '+label);
+assert.match(shell,/new String\[\]\{"home","catalog","collection","decks","sync"\}/);
+assert.match(screens,/content.removeAllViews\(\)/,'Deck editor replaces workspace content rather than opening a full edit dialog');
+assert.match(screens,/button\("Edit this deck"/,'Saved decks expose inline editing');
 assert.match(shell,/NativeWorkspaceScreen\.create/);
 assert.match(screens,/catalog\.sets\(p\)/,'Read actual physical Set Progress data');
 assert.match(screens,/catalog\.setPrintings\(args\)/,'Browse set-specific actual printings');
