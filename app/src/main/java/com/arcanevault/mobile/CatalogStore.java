@@ -1178,6 +1178,26 @@ final class CatalogStore extends SQLiteOpenHelper {
 
     /** Representative official image for set tiles, never the set logo.
      * A set widget uses this only as an art background. */
+    /** Artwork metadata survives set-progress cache invalidation. No SQLite
+     * work is needed to paint a previously visited tile. */
+    String cachedRepresentativeSetArt(String setCode,String source){
+        if(setCode==null||!setCode.matches("[A-Za-z0-9]{2,12}"))return "";
+        return setCache().getString("art_"+source+"_"+
+            setCode.toLowerCase(Locale.ROOT),"");
+    }
+    /** Called only from an artwork worker; never the UI thread. */
+    String resolveAndCacheSetArt(String setCode,String source)throws Exception{
+        String cached=cachedRepresentativeSetArt(setCode,source);
+        if(!cached.isEmpty())return cached;
+        String found=representativeSetArt(setCode,"arena".equals(source));
+        if(found!=null&&!found.isEmpty()){
+            setCache().edit().putString("art_"+source+"_"+
+                setCode.toLowerCase(Locale.ROOT),found).apply();
+            return found;
+        }
+        return "";
+    }
+
     String representativeSetArt(String setCode,boolean arena)throws Exception{
         if(setCode==null||!setCode.matches("[A-Za-z0-9]{2,12}"))
             return "";
