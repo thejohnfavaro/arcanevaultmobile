@@ -351,6 +351,7 @@ final class NativeWorkspaceScreen {
         showSet(code,code.toUpperCase(java.util.Locale.ROOT),0);
     }
 
+    /** The UI never waits for the indexer before showing a cached page. */
     private void setProgress(String filter,int pageNumber){
         screenState="set-overview";
         page=pageNumber;
@@ -359,92 +360,118 @@ final class NativeWorkspaceScreen {
         final String source=setSource;
         final String order=setSort;
         final boolean hide=hideEmptySets;
-        status.setText("Reading "+source+" set progress…");
+        JSONObject cached=catalog.cachedSetOverview(source,filter);
+        if(cached!=null){
+            renderSetProgress(cached,request,source,filter,pageNumber,order,hide,true);
+            return;
+        }
+
+        // No previous completed snapshot. Populate a *non-valued* set
+        // directory immediately from disk while we index in the worker.
+        content.removeAllViews();
+        JSONArray directory=VaultSetDirectory.cached(activity);
+        renderCachedSetNames(directory,filter,source);
+        status.setText("Preparing "+source+" progress · set names available while indexing…");
         executor.execute(()->{
             try{
-                Map<String,String> p=new HashMap<>();
-                p.put("source",source);
-                p.put("arena",source.equals("arena")?"arena":"");
-                p.put("q",filter);
-                JSONObject result=catalog.indexedSetOverview(source,filter);
-                JSONArray sets=result.optJSONArray("sets");
-                if(sets==null)sets=new JSONArray();
-                List<JSONObject> filtered=NativeSetProgressFilters.select(sets,hide,order);
-                int allSets=sets.length();
-                boolean emptyOwnershipOnly=filtered.isEmpty() && allSets>0 && hide;
-                if(emptyOwnershipOnly)
-                    filtered=NativeSetProgressFilters.select(sets,false,order);
-                final List<JSONObject> visibleSets=filtered;
-                final boolean showOwnershipHint=emptyOwnershipOnly;
-                int first=pageNumber*40;
-                // Artwork is optional: listing progress cannot be blocked by a slow
-                // art query or an absent printing image. Warm only visible tiles.
-                for(int i=first;i<Math.min(visibleSets.size(),first+12);i++){
-                    JSONObject tile=visibleSets.get(i);
-                    try{
-                        String image=catalog.representativeSetArt(
-                            tile.optString("code",""),"arena".equals(source));
-                        if(!image.isEmpty())tile.put("artUrl",image);
-                    }catch(Exception ignored){ /* Progress must still render. */ }
-                }
+                JSONObject result=catalog.indexedSetOverview(source,"");
                 ui.post(()->{
-                    if(closed||activity.isFinishing()||request!=setRequestId)return;
-                    content.removeAllViews();
-                    TextView hint=VaultNativeStyle.label(activity,
-                        source.equals("physical")?
-                        "Verified physical editions only. Name-only ownership cannot establish a set.":
-                        "Arena tracks owned card names in Arena-available sets, not exact printings.",
-                        12,VaultNativeStyle.SUBTEXT,false);
-                    VaultNativeStyle.margin(content,hint,10,activity);
-                    if(showOwnershipHint)
-                        row("No verified ownership found in this scope",
-                            "Showing all indexed sets so you can still browse. Sync exact "+
-                            "physical printing IDs to populate your owned progress.",null);
-                    if(visibleSets.isEmpty())
-                        row(allSets==0?"Set catalog unavailable or empty":"No sets match these filters",
-                            allSets==0?"Open Data & Sync and refresh the Scryfall catalog. "+
-                                "Your collection has not been cleared.":
-                                "Try showing empty sets, changing collection, or clearing search.",null);
-                    int start=pageNumber*40;
-                    for(int i=start;i<Math.min(visibleSets.size(),start+40);i++){
-                        JSONObject set=visibleSets.get(i);
-                        String code=set.optString("code","");
-                        String name=set.optString("name","Unknown set");
-                        int owned=set.optInt("owned",0);
-                        int total=set.optInt("total",0);
-                        String release=set.optString("releaseDate","");
-                        // The same card renderer powers both this workspace
-                        // and the selected-set Android launcher widget.
-                        android.widget.ImageView tile=new android.widget.ImageView(activity);
-                        tile.setScaleType(android.widget.ImageView.ScaleType.FIT_XY);
-                        tile.setImageBitmap(VaultSetProgressCard.render(activity,set,source,
-                            activity.getResources().getDisplayMetrics().widthPixels-dp(52),
-                            dp(176)));
-                        tile.setFocusable(true);
-                        tile.setClickable(true);
-                        tile.setContentDescription(name+" · "+owned+" of "+total+
-                            (source.equals("physical")?" verified printings":" Arena card names")+
-                            " · open set details");
-                        tile.setOnClickListener(v->showSet(code,name,0));
-                        LinearLayout.LayoutParams tileLayout=new LinearLayout.LayoutParams(-1,dp(161));
-                        tileLayout.bottomMargin=dp(9);
-                        content.addView(tile,tileLayout);
-                    }
-                    if(start+40<visibleSets.size())
-                        button("Next sets ("+(start+40)+" / "+visibleSets.size()+")",
-                            ()->setProgress(filter,pageNumber+1));
-                    if(start>0)button("Previous sets",()->setProgress(filter,pageNumber-1));
-                    status.setText(visibleSets.size()+" shown / "+allSets+" sets · "+
-                        NativeSetProgressFilters.title(order));
+                    if(closed||request!=setRequestId||activity.isFinishing())return;
+                    JSONObject requested=catalog.cachedSetOverview(source,filter);
+                    renderSetProgress(requested==null?result:requested,
+                        request,source,filter,pageNumber,order,hide,false);
                 });
             }catch(Exception error){
                 ui.post(()->{
-                    if(!closed&&request==setRequestId)
-                        status.setText("Set progress unavailable: "+error.getMessage());
+                    if(closed||request!=setRequestId)return;
+                    status.setText("Set progress unavailable; saved set names remain accessible");
+                    android.util.Log.w("ArcaneVault","Set Progress snapshot failed",error);
                 });
             }
         });
     }
+
+    private void renderCachedSetNames(JSONArray directory,String filter,String source){
+        if(directory==null||directory.length()==0){
+            row("Preparing set index…",
+                "No cached directory yet. Set names will appear after indexing; "+
+                "your saved inventory remains unchanged.",null);
+            return;
+        }
+        String query=filter==null?"":filter.trim().toLowerCase(java.util.Locale.ROOT);
+        int shown=0;
+        for(int i=0;i<directory.length()&&shown<40;i++){
+            JSONObject set=directory.optJSONObject(i);
+            if(set==null)continue;
+            String code=set.optString("code","");
+            String name=set.optString("name",code);
+            if(!code.matches("[a-z0-9]{2,12}"))continue;
+            if(!query.isEmpty()&&!name.toLowerCase(java.util.Locale.ROOT).contains(query)
+                &&!code.toLowerCase(java.util.Locale.ROOT).contains(query))continue;
+            shown++;
+            row(name+" · "+code.toUpperCase(java.util.Locale.ROOT),
+                "Set directory · owned progress pending local index",
+                ()->showSet(code,name,0));
+        }
+        if(shown==0)row("No cached set names match",
+            "Clear the search or open Data & Sync to refresh the catalog.",null);
+    }
+
+    /** Render only local data. No SQL is executed from the UI thread. */
+    private void renderSetProgress(JSONObject result,int request,String source,
+            String filter,int pageNumber,String order,boolean hide,boolean cached){
+        if(closed||activity.isFinishing()||request!=setRequestId)return;
+        JSONArray sets=result.optJSONArray("sets");
+        if(sets==null)sets=new JSONArray();
+        List<JSONObject> filtered=NativeSetProgressFilters.select(sets,hide,order);
+        int allSets=sets.length();
+        boolean missingOwned=filtered.isEmpty()&&allSets>0&&hide;
+        if(missingOwned)filtered=NativeSetProgressFilters.select(sets,false,order);
+        content.removeAllViews();
+        TextView hint=VaultNativeStyle.label(activity,
+            "arena".equals(source)?
+                "Arena ownership is tracked by card name, not verified physical edition.":
+                "Physical progress uses confirmed printing identities.",
+            12,VaultNativeStyle.SUBTEXT,false);
+        VaultNativeStyle.margin(content,hint,10,activity);
+        if(missingOwned)
+            row("No verified owned sets found",
+                "Showing indexed sets without claiming unverified ownership.",null);
+        if(filtered.isEmpty())
+            row("No sets match this view",
+                "Clear the search, change the collection, or sync the set catalog.",null);
+        int start=pageNumber*40;
+        int last=Math.min(filtered.size(),start+40);
+        for(int i=start;i<last;i++){
+            JSONObject set=filtered.get(i);
+            String code=set.optString("code","");
+            String name=set.optString("name","Unknown set");
+            int owned=set.optInt("owned",0),total=set.optInt("total",0);
+            // Card renderer reads only existing disk artwork. No network or
+            // catalog lookups may block drawing this cached progress snapshot.
+            ImageView tile=new ImageView(activity);
+            tile.setScaleType(ImageView.ScaleType.FIT_XY);
+            tile.setImageBitmap(VaultSetProgressCard.render(activity,set,source,
+                activity.getResources().getDisplayMetrics().widthPixels-dp(52),
+                dp(176)));
+            tile.setFocusable(true);
+            tile.setClickable(true);
+            tile.setContentDescription(name+" · "+owned+" of "+total+
+                " · open set details");
+            tile.setOnClickListener(v->showSet(code,name,0));
+            LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(-1,dp(161));
+            layout.bottomMargin=dp(9);
+            content.addView(tile,layout);
+        }
+        if(last<filtered.size())
+            button("Next sets ("+last+" / "+filtered.size()+")",
+                ()->setProgress(filter,pageNumber+1));
+        if(start>0)button("Previous sets",()->setProgress(filter,pageNumber-1));
+        status.setText(filtered.size()+" shown / "+allSets+" sets · "+
+            NativeSetProgressFilters.title(order)+
+            (cached?" · saved snapshot":" · snapshot ready"));
+    }
+
     private void showSet(String set,String title,int pageNumber){
         screenState="set-details";
         final int request=++setRequestId;
