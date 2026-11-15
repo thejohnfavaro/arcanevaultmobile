@@ -27,6 +27,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.Comparator;
+import android.content.ClipboardManager;
+import android.content.ClipData;
+import android.content.Context;
 import java.util.List;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -69,6 +73,10 @@ final class NativeWorkspaceScreen {
     private int page=0;
     private String syncSection="devices";
     private String deckCommanderFilter="";
+    private JSONArray deckSnapshot=new JSONArray();
+    private LinearLayout deckListPanel;
+    private String deckSearch="",deckSort="updated",deckFolder="";
+    private boolean deckFavoritesOnly=false;
     private int deckPageGeneration;
     private int setRequestId=0;
     private String setQuery="";
@@ -89,7 +97,8 @@ final class NativeWorkspaceScreen {
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(18),dp(14),dp(18),dp(14));
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
-        String title=section.equals("sets")?"Set Progress":section.equals("decks")?"Deck Library":"Data & Sync";
+        String title=section.equals("sets")?"Set Progress":section.equals("decks")?"Deck Library":
+            section.equals("shortlist")?"My Shortlist":"Data & Sync";
         root.addView(VaultNativeStyle.label(activity,title,24,VaultNativeStyle.TEXT,true));
         status=VaultNativeStyle.label(activity,"Loading local data…",12,VaultNativeStyle.SUBTEXT,false);
         status.setPadding(0,dp(9),0,dp(11));
@@ -186,6 +195,7 @@ final class NativeWorkspaceScreen {
             setProgress("",0);
         }
         else if(section.equals("decks"))deckLibrary();
+        else if(section.equals("shortlist"))shortlist();
         else dataSync();
     }
     static NativeWorkspaceScreen create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
@@ -420,7 +430,7 @@ final class NativeWorkspaceScreen {
         details.addView(summary);
         entry.addView(details,new LinearLayout.LayoutParams(0,-2,1));
         entry.setOnClickListener(v->showDeck(deck));
-        VaultNativeStyle.margin(content,entry,9,activity);
+        VaultNativeStyle.margin(deckListPanel,entry,9,activity);
         if(!commander.isEmpty())
             deckCoverTargets.add(new DeckCoverTarget(art,commander));
     }
@@ -472,6 +482,60 @@ final class NativeWorkspaceScreen {
         }
     }
 
+    private void renderDeckList(){
+        if(deckListPanel==null)return;
+        deckListPanel.removeAllViews();
+        deckCoverTargets.clear();
+        ArrayList<JSONObject> matches=new ArrayList<>();
+        String term=deckSearch.trim().toLowerCase(java.util.Locale.ROOT);
+        for(int i=0;i<deckSnapshot.length()&&i<5000;i++){
+            JSONObject deck=deckSnapshot.optJSONObject(i);if(deck==null)continue;
+            String commander=deck.optString("commander","").trim();
+            if(!deckCommanderFilter.isEmpty() &&
+                    !deckCommanderFilter.equalsIgnoreCase(commander))continue;
+            if(deckFavoritesOnly&&!deck.optBoolean("favorite",false))continue;
+            String folder=deck.optString("folder","Unfiled");
+            if(folder.isEmpty())folder="Unfiled";
+            if(!deckFolder.isEmpty()&&!deckFolder.equalsIgnoreCase(folder))continue;
+            String haystack=(deck.optString("name","")+" "+commander+" "+folder+
+                " "+deck.optString("format","")+" "+deck.optJSONArray("tags")).toLowerCase(java.util.Locale.ROOT);
+            if(!term.isEmpty()&&!haystack.contains(term))continue;
+            matches.add(deck);
+        }
+        Comparator<JSONObject> order=deckSort.equals("name")?
+            Comparator.comparing(x->x.optString("name","").toLowerCase(java.util.Locale.ROOT)):
+            deckSort.equals("commander")?
+            Comparator.comparing(x->x.optString("commander","").toLowerCase(java.util.Locale.ROOT)):
+            (a,b)->b.optString("updated","").compareTo(a.optString("updated",""));
+        matches.sort(order.thenComparing(x->x.optString("id","")));
+        status.setText(matches.size()+" matching decks · "+
+            deckSnapshot.length()+" saved total");
+        int limit=Math.min(matches.size(),300);
+        for(int i=0;i<limit;i++){
+            JSONObject deck=matches.get(i);
+            JSONArray entries=deck.optJSONArray("entries");
+            int total=deck.optString("commander","").trim().isEmpty()?0:1;
+            if(entries!=null)for(int n=0;n<entries.length();n++){
+                JSONObject card=entries.optJSONObject(n);
+                if(card!=null)total+=Math.max(0,card.optInt("qty",0));
+            }
+            deckCoverRow(deck,total,deckPageGeneration);
+        }
+        if(matches.isEmpty())
+            rowTo(deckListPanel,"No matching decks",
+                "Try another search, folder or favorite filter.");
+        else if(matches.size()>limit)
+            rowTo(deckListPanel,"Showing first "+limit+" decks",
+                "Narrow your search to find the others.");
+        workspaceScroll.post(this::loadVisibleDeckCovers);
+    }
+
+    private void rowTo(LinearLayout parent,String title,String detail){
+        TextView text=VaultNativeStyle.label(activity,title+"\n"+detail,13,
+            VaultNativeStyle.SUBTEXT,false);
+        VaultNativeStyle.margin(parent,text,9,activity);
+    }
+
     private void deckLibrary(){
         final int pageGeneration=++deckPageGeneration;
         deckCoverTargets.clear();
@@ -480,35 +544,84 @@ final class NativeWorkspaceScreen {
             if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
             content.removeAllViews();
             try{
-                JSONArray library=new JSONArray(json);
-                String selectedCommander=deckCommanderFilter;
-                status.setText(library.length()+" saved decks · native workspace"+
-                    (selectedCommander.isEmpty()?"":" · Commander: "+selectedCommander));
-                if(!selectedCommander.isEmpty()){
+                deckSnapshot=new JSONArray(json);
+                if(deckSnapshot.length()>5000)
+                    throw new IllegalArgumentException("Deck library exceeds display safety limit");
+                if(!deckCommanderFilter.isEmpty())
                     button("Show all saved decks",()->{
                         deckCommanderFilter="";deckLibrary();
                     });
+
+                EditText search=new EditText(activity);
+                VaultNativeStyle.search(activity,search);
+                search.setSingleLine(true);
+                search.setHint("Search deck, commander, format, or tags");
+                search.setText(deckSearch);
+                VaultNativeStyle.margin(content,search,7,activity);
+
+                LinearLayout filters=VaultNativeStyle.row(activity);
+                Spinner sort=new Spinner(activity);
+                String[] names={"Recently updated","Deck name A-Z","Commander A-Z"};
+                String[] values={"updated","name","commander"};
+                ArrayAdapter<String> sortAdapter=new ArrayAdapter<>(activity,
+                    android.R.layout.simple_spinner_item,names);
+                sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                sort.setAdapter(sortAdapter);
+                sort.setSelection(Math.max(0,java.util.Arrays.asList(values).indexOf(deckSort)));
+                filters.addView(sort,new LinearLayout.LayoutParams(0,dp(49),1));
+                Spinner folders=new Spinner(activity);
+                ArrayList<String> choices=new ArrayList<>();
+                choices.add("All folders");
+                for(int i=0;i<deckSnapshot.length();i++){
+                    JSONObject item=deckSnapshot.optJSONObject(i);
+                    if(item==null)continue;
+                    String folder=item.optString("folder","Unfiled");
+                    if(folder.isEmpty())folder="Unfiled";
+                    if(!choices.contains(folder))choices.add(folder);
                 }
-                if(library.length()==0)row("No saved decks","Save decks in Legacy tools to see them here.",null);
-                int matching=0;
-                for(int i=0;i<Math.min(library.length(),300);i++){
-                    JSONObject d=library.optJSONObject(i);if(d==null)continue;
-                    String listedCommander=d.optString("commander","").trim();
-                    if(!selectedCommander.isEmpty() &&
-                        !selectedCommander.equalsIgnoreCase(listedCommander))continue;
-                    matching++;
-                    JSONArray entries=d.optJSONArray("entries");
-                    int qty=1;
-                    if(entries!=null)for(int n=0;n<entries.length();n++)
-                        qty+=entries.optJSONObject(n)==null?0:entries.optJSONObject(n).optInt("qty",0);
-                    deckCoverRow(d,qty,pageGeneration);
-                }
-                if(matching==0 && !selectedCommander.isEmpty())
-                    row("No saved decks for this commander",
-                        "You can open the existing editor to build a deck. No deck was created automatically.",
-                        null);
+                java.util.Collections.sort(choices.subList(1,choices.size()),
+                    String.CASE_INSENSITIVE_ORDER);
+                ArrayAdapter<String> folderAdapter=new ArrayAdapter<>(activity,
+                    android.R.layout.simple_spinner_item,choices);
+                folderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                folders.setAdapter(folderAdapter);
+                int selectedFolder=deckFolder.isEmpty()?0:choices.indexOf(deckFolder);
+                folders.setSelection(Math.max(0,selectedFolder));
+                filters.addView(folders,new LinearLayout.LayoutParams(0,dp(49),1));
+                VaultNativeStyle.margin(content,filters,5,activity);
+                CheckBox favoritesOnly=new CheckBox(activity);
+                favoritesOnly.setText("Favorite decks only");
+                favoritesOnly.setTextColor(VaultNativeStyle.TEXT);
+                favoritesOnly.setButtonTintList(android.content.res.ColorStateList.valueOf(VaultNativeStyle.PRIMARY));
+                favoritesOnly.setChecked(deckFavoritesOnly);
+                VaultNativeStyle.margin(content,favoritesOnly,4,activity);
+                deckListPanel=VaultNativeStyle.column(activity);
+                content.addView(deckListPanel);
+
+                search.addTextChangedListener(new TextWatcher(){
+                    public void beforeTextChanged(CharSequence x,int a,int b,int c){}
+                    public void onTextChanged(CharSequence x,int a,int b,int c){
+                        deckSearch=x.toString();renderDeckList();
+                    }
+                    public void afterTextChanged(Editable x){}
+                });
+                sort.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+                    public void onNothingSelected(AdapterView<?> p){}
+                    public void onItemSelected(AdapterView<?> p,View v,int idx,long id){
+                        deckSort=values[idx];renderDeckList();
+                    }
+                });
+                folders.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+                    public void onNothingSelected(AdapterView<?> p){}
+                    public void onItemSelected(AdapterView<?> p,View v,int idx,long id){
+                        deckFolder=idx==0?"":choices.get(idx);renderDeckList();
+                    }
+                });
+                favoritesOnly.setOnCheckedChangeListener((b,on)->{
+                    deckFavoritesOnly=on;renderDeckList();
+                });
+                renderDeckList();
                 button("Open legacy deck editing tools",legacy);
-                workspaceScroll.post(this::loadVisibleDeckCovers);
             }catch(Exception e){
                 status.setText("Could not load deck library: "+e.getMessage());
                 button("Open Legacy deck library",legacy);
