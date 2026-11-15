@@ -1201,11 +1201,15 @@ final class CatalogStore extends SQLiteOpenHelper {
     String representativeSetArt(String setCode,boolean arena)throws Exception{
         if(setCode==null||!setCode.matches("[A-Za-z0-9]{2,12}"))
             return "";
-        String eligible=arena?"arena=1":
-            "digital=0 AND instr(','||lower(replace(games,' ',''))||',',',paper,')>0";
+        // Scryfall's local games array may omit 'paper' on some specialty
+        // printings. Prefer physical/Arena eligible artwork, but never discard
+        // the entire set just because its first matching printing is unusual.
+        String preference=arena?"CASE WHEN arena=1 THEN 0 ELSE 1 END":
+            "CASE WHEN digital=0 AND instr(','||lower(replace(games,' ',''))||',',',paper,')>0 THEN 0 ELSE 1 END";
         String sql="SELECT image FROM variants WHERE setcode=? COLLATE NOCASE "+
-            "AND "+eligible+" AND image LIKE 'https://cards.scryfall.io/%' "+
-            "ORDER BY CASE WHEN collector GLOB '[0-9]*' THEN 0 ELSE 1 END, "+
+            "AND image LIKE 'https://cards.scryfall.io/%' "+
+            "ORDER BY "+preference+", "+
+            "CASE WHEN collector GLOB '[0-9]*' THEN 0 ELSE 1 END, "+
             "CAST(collector AS INTEGER),collector COLLATE NOCASE LIMIT 1";
         try(Cursor c=getReadableDatabase().rawQuery(sql,new String[]{setCode})){
             return c.moveToFirst()?c.getString(0):"";
