@@ -48,6 +48,7 @@ final class NativeWorkspaceScreen {
     private int page=0;
     private String syncSection="devices";
     private String deckCommanderFilter="";
+    private int deckPageGeneration;
     private int setRequestId=0;
     private String setQuery="";
     private String setSource="physical";
@@ -320,9 +321,10 @@ final class NativeWorkspaceScreen {
     }
 
     private void deckLibrary(){
+        final int pageGeneration=++deckPageGeneration;
         status.setText("Reading saved deck library from the existing app…");
         decks.fetch(json->ui.post(()->{
-            if(closed||activity.isFinishing())return;
+            if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
             content.removeAllViews();
             try{
                 JSONArray library=new JSONArray(json);
@@ -364,6 +366,7 @@ final class NativeWorkspaceScreen {
         }));
     }
     private void editDeck(JSONObject deck){
+        final int pageGeneration=++deckPageGeneration;
         // Stay in the same Decks workspace: the content area, rather than
         // another modal, owns the name, mainboard, search and save controls.
         content.removeAllViews();
@@ -432,7 +435,7 @@ final class NativeWorkspaceScreen {
                     }
                     ui.post(()->{
                         addCard.setEnabled(true);
-                        if(closed||activity.isFinishing())return;
+                        if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
                         if(names.isEmpty()){info("No local catalog matches for "+term);return;}
                         new AlertDialog.Builder(activity)
                             .setTitle("Add card to draft")
@@ -452,7 +455,7 @@ final class NativeWorkspaceScreen {
                     });
                 }catch(Exception error){
                     ui.post(()->{addCard.setEnabled(true);
-                        if(!closed)info("Card search unavailable: "+error.getMessage());});
+                        if(!closed&&pageGeneration==deckPageGeneration)info("Card search unavailable: "+error.getMessage());});
                 }
             });
         });
@@ -484,7 +487,7 @@ final class NativeWorkspaceScreen {
                     .setPositiveButton("Save",(d,w)->{
                         review.setEnabled(false);
                         deckSaver.save(deck,revised,(ok,message)->ui.post(()->{
-                            if(closed||activity.isFinishing())return;
+                            if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
                             if(ok){
                                 status.setText("Saved · "+revised.optString("name","Deck"));
                                 deckLibrary();
@@ -501,6 +504,7 @@ final class NativeWorkspaceScreen {
     }
 
     private void showDeck(JSONObject deck){
+        final int pageGeneration=++deckPageGeneration;
         status.setText("Reviewing "+deck.optString("name","saved deck")+"…");
         executor.execute(()->{
             try{
@@ -533,7 +537,7 @@ final class NativeWorkspaceScreen {
                 }
                 int missingCount=missing,totalCount=total;
                 ui.post(()->{
-                    if(closed||activity.isFinishing())return;
+                    if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
                     content.removeAllViews();
                     status.setText(totalCount+" cards · "+missingCount+
                         " not covered by recorded physical/Arena inventory");
@@ -555,7 +559,7 @@ final class NativeWorkspaceScreen {
                     for(String[] card:cards)row(card[0],card[1],null);
                 });
             }catch(Exception e){
-                ui.post(()->{if(!closed)info("Deck details unavailable: "+e.getMessage());});
+                ui.post(()->{if(!closed&&pageGeneration==deckPageGeneration)info("Deck details unavailable: "+e.getMessage());});
             }
         });
     }
