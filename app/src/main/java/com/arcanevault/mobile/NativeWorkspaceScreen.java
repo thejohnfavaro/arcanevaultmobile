@@ -336,6 +336,36 @@ final class NativeWorkspaceScreen {
         b.setOnClickListener(v->action.run());
         return b;
     }
+    /** Widget set tap selects an exact indexed set and reuses this same
+     * read-only detail screen. Never infer a printing from card name. */
+    void openWidgetSet(String code,String source){
+        if(closed||code==null||!code.matches("[A-Za-z0-9]{2,12}"))return;
+        if(!"arena".equals(source)&&!"physical".equals(source))return;
+        setSource=source;
+        final int ticket=++setRequestId;
+        status.setText("Opening "+code.toUpperCase(java.util.Locale.ROOT)+"…");
+        executor.execute(()->{
+            String title=code.toUpperCase(java.util.Locale.ROOT);
+            try{
+                Map<String,String> options=new HashMap<>();
+                options.put("q",code);
+                options.put("source",source);
+                if("arena".equals(source))options.put("arena","arena");
+                JSONArray sets=catalog.sets(options).optJSONArray("sets");
+                if(sets!=null)for(int i=0;i<sets.length();i++){
+                    JSONObject item=sets.optJSONObject(i);
+                    if(item!=null&&code.equalsIgnoreCase(item.optString("code",""))){
+                        title=item.optString("name",title);break;
+                    }
+                }
+            }catch(Exception ignored){}
+            final String display=title;
+            ui.post(()->{
+                if(!closed&&ticket==setRequestId)showSet(code,display,0);
+            });
+        });
+    }
+
     private void setProgress(String filter,int pageNumber){
         screenState="set-overview";
         page=pageNumber;
@@ -376,12 +406,22 @@ final class NativeWorkspaceScreen {
                         int owned=set.optInt("owned",0);
                         int total=set.optInt("total",0);
                         String release=set.optString("releaseDate","");
-                        row(name+" · "+code.toUpperCase(java.util.Locale.ROOT),
-                            owned+"/"+total+
+                        // The same card renderer powers both this workspace
+                        // and the selected-set Android launcher widget.
+                        android.widget.ImageView tile=new android.widget.ImageView(activity);
+                        tile.setScaleType(android.widget.ImageView.ScaleType.FIT_XY);
+                        tile.setImageBitmap(VaultSetProgressCard.render(activity,set,source,
+                            activity.getResources().getDisplayMetrics().widthPixels-dp(52),
+                            dp(176)));
+                        tile.setFocusable(true);
+                        tile.setClickable(true);
+                        tile.setContentDescription(name+" · "+owned+" of "+total+
                             (source.equals("physical")?" verified printings":" Arena card names")+
-                            " · "+set.optDouble("percentage",0)+"%"+
-                            (release.isEmpty()?"":" · "+release),
-                            ()->showSet(code,name,0));
+                            " · open set details");
+                        tile.setOnClickListener(v->showSet(code,name,0));
+                        LinearLayout.LayoutParams tileLayout=new LinearLayout.LayoutParams(-1,dp(161));
+                        tileLayout.bottomMargin=dp(9);
+                        content.addView(tile,tileLayout);
                     }
                     if(start+40<filtered.size())
                         button("Next sets ("+(start+40)+" / "+filtered.size()+")",
