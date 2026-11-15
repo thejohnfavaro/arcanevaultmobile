@@ -747,6 +747,52 @@ final class NativeWorkspaceScreen {
                 }
             });
         });
+        Button importList=VaultNativeStyle.button(activity,
+            "Paste / Import Arena decklist",false);
+        fields.addView(importList,new LinearLayout.LayoutParams(-1,dp(48)));
+        importList.setOnClickListener(v->{
+            EditText pasted=new EditText(activity);
+            pasted.setTextColor(VaultNativeStyle.TEXT);
+            pasted.setHint("Paste an Arena list with Deck / Commander headings, or numbered card names");
+            pasted.setHintTextColor(VaultNativeStyle.SUBTEXT);
+            pasted.setMinLines(7);
+            pasted.setMaxLines(13);
+            pasted.setGravity(Gravity.TOP);
+            pasted.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+            ClipboardManager clipboard=(ClipboardManager)activity.getSystemService(
+                Context.CLIPBOARD_SERVICE);
+            if(clipboard!=null&&clipboard.hasPrimaryClip() &&
+                clipboard.getPrimaryClip()!=null &&
+                clipboard.getPrimaryClip().getItemCount()>0){
+                CharSequence text=clipboard.getPrimaryClip().getItemAt(0).coerceToText(activity);
+                if(text!=null&&text.length()<=64000)pasted.setText(text);
+            }
+            LinearLayout wrapper=VaultNativeStyle.column(activity);
+            wrapper.setPadding(dp(14),dp(8),dp(14),dp(8));
+            wrapper.addView(pasted);
+            new AlertDialog.Builder(activity).setTitle("Import to unsaved mainboard")
+                .setView(wrapper).setNegativeButton("Cancel",null)
+                .setPositiveButton("Review", (dialog,which)->{
+                    try{
+                        NativeDeckTextExchange.Parsed parsed=NativeDeckTextExchange.parse(
+                            pasted.getText().toString(),deck.optString("commander",""));
+                        new AlertDialog.Builder(activity).setTitle("Replace draft mainboard?")
+                            .setMessage(parsed.copies+" imported mainboard copies. "+
+                                "Your saved deck remains unchanged until Review & Save. "+
+                                (parsed.removedPrintingAnnotations?
+                                "Arena set/collector annotations will be omitted; "+
+                                "preferred printings are not inferred.":""))
+                            .setNegativeButton("Keep draft",null)
+                            .setPositiveButton("Use imported draft",(d,w)->{
+                                if(pageGeneration==deckPageGeneration){
+                                    lines.setText(parsed.entries);
+                                    status.setText("Imported draft · not saved");
+                                }
+                            }).show();
+                    }catch(Exception error){info("Import rejected: "+error.getMessage());}
+                }).show();
+        });
         content.addView(fields);
         LinearLayout actions=VaultNativeStyle.row(activity);
         Button discard=VaultNativeStyle.button(activity,"Discard",false);
@@ -824,6 +870,10 @@ final class NativeWorkspaceScreen {
                         need>0?"Missing "+need+" · recorded copies "+have:
                             "Owned · recorded copies "+have});
                 }
+                JSONObject insights=null;
+                try{insights=catalog.deckInsights(deck.optString("commander",""),entries);}
+                catch(Exception ignored){ /* Catalog may be syncing; show existing deck unchanged. */ }
+                final JSONObject report=insights;
                 int missingCount=missing,totalCount=total;
                 ui.post(()->{
                     if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
@@ -841,6 +891,20 @@ final class NativeWorkspaceScreen {
                         VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,note,12,activity);
                     button("Edit this deck",()->editDeck(deck));
+                    LinearLayout share=VaultNativeStyle.row(activity);
+                    Button copyArena=VaultNativeStyle.button(activity,"Copy for Arena",false);
+                    Button copyText=VaultNativeStyle.button(activity,"Copy plain list",false);
+                    LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(46),1);
+                    p.rightMargin=dp(6);
+                    share.addView(copyArena,p);
+                    share.addView(copyText,new LinearLayout.LayoutParams(0,dp(46),1));
+                    VaultNativeStyle.margin(content,share,8,activity);
+                    copyArena.setOnClickListener(v->copyText("Arena deck",
+                        NativeDeckTextExchange.export(deck,true),"Arena-format decklist"));
+                    copyText.setOnClickListener(v->copyText("Plain decklist",
+                        NativeDeckTextExchange.export(deck,false),"plain-text decklist"));
+                    if(report!=null)renderDeckInsights(report);
+                    else row("Deck insights","Local Scryfall metadata unavailable; counts and deck text remain visible.",null);
                     TextView mainboard=VaultNativeStyle.label(activity,
                         "MAINBOARD  ·  "+cards.size()+" card names",12,
                         VaultNativeStyle.GOLD,true);
@@ -855,6 +919,60 @@ final class NativeWorkspaceScreen {
 
     /** Native Shortlist reads/writes the existing vault_favorites array in
      * the authoritative WebView. No second bookmark store is introduced. */
+    /** Local Scryfall facts only: missing names never turn into zero-cost cards. */
+    private void renderDeckInsights(JSONObject report){
+        LinearLayout insights=VaultNativeStyle.column(activity);
+        insights.setPadding(dp(13),dp(12),dp(13),dp(12));
+        VaultNativeStyle.surface(activity,insights,false);
+        insights.addView(VaultNativeStyle.label(activity,"DECK INSIGHTS",12,
+            VaultNativeStyle.PRIMARY,true));
+        String coverage=report.optInt("known",0)+"/"+report.optInt("total",0)+
+            " copies matched to local catalog";
+        insights.addView(VaultNativeStyle.label(activity,coverage+
+            (report.optInt("unknown",0)>0?" · "+report.optInt("unknown",0)+" unknown":""),
+            12,VaultNativeStyle.SUBTEXT,false));
+        insights.addView(VaultNativeStyle.label(activity,
+            "Creatures "+report.optInt("creatures",0)+" · Lands "+report.optInt("lands",0)+
+            " · Instants "+report.optInt("instants",0)+
+            " · Sorceries "+report.optInt("sorceries",0),12,
+            VaultNativeStyle.TEXT,false));
+        insights.addView(VaultNativeStyle.label(activity,
+            "Artifacts "+report.optInt("artifacts",0)+
+            " · Enchantments "+report.optInt("enchantments",0)+
+            " · Planeswalkers "+report.optInt("planeswalkers",0),12,
+            VaultNativeStyle.TEXT,false));
+        if(!report.isNull("avgMv"))
+            insights.addView(VaultNativeStyle.label(activity,
+                String.format(java.util.Locale.US,"Average nonland mana value: %.2f",
+                    report.optDouble("avgMv",0)),12,VaultNativeStyle.GOLD,true));
+        JSONArray curve=report.optJSONArray("curve");
+        if(curve!=null){
+            int max=1;
+            for(int i=0;i<curve.length();i++)max=Math.max(max,curve.optInt(i,0));
+            for(int i=0;i<Math.min(curve.length(),8);i++){
+                LinearLayout bar=VaultNativeStyle.row(activity);
+                TextView label=VaultNativeStyle.label(activity,
+                    i==7?"7+":Integer.toString(i),11,VaultNativeStyle.SUBTEXT,false);
+                label.setGravity(Gravity.CENTER_VERTICAL);
+                bar.addView(label,new LinearLayout.LayoutParams(dp(34),dp(25)));
+                android.widget.ProgressBar progress=new android.widget.ProgressBar(activity,
+                    null,android.R.attr.progressBarStyleHorizontal);
+                progress.setMax(max);
+                progress.setProgress(curve.optInt(i,0));
+                progress.setProgressTintList(android.content.res.ColorStateList.valueOf(VaultNativeStyle.PRIMARY));
+                LinearLayout.LayoutParams width=new LinearLayout.LayoutParams(0,dp(12),1);
+                width.gravity=Gravity.CENTER_VERTICAL;
+                bar.addView(progress,width);
+                TextView copies=VaultNativeStyle.label(activity,
+                    Integer.toString(curve.optInt(i,0)),11,VaultNativeStyle.TEXT,false);
+                copies.setGravity(Gravity.CENTER);
+                bar.addView(copies,new LinearLayout.LayoutParams(dp(36),dp(25)));
+                insights.addView(bar);
+            }
+        }
+        VaultNativeStyle.margin(content,insights,10,activity);
+    }
+
     private void shortlist(){
         final int generation=++deckPageGeneration;
         deckCoverTargets.clear();
