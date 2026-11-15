@@ -828,6 +828,22 @@ final class CatalogStore extends SQLiteOpenHelper {
             "LEFT JOIN ownership o ON o.name=d.name COLLATE NOCASE)";
     }
 
+    /** Representative official image for set tiles, never the set logo.
+     * A set widget uses this only as an art background. */
+    String representativeSetArt(String setCode,boolean arena)throws Exception{
+        if(setCode==null||!setCode.matches("[A-Za-z0-9]{2,12}"))
+            return "";
+        String eligible=arena?"arena=1":
+            "digital=0 AND instr(','||lower(replace(games,' ',''))||',',',paper,')>0";
+        String sql="SELECT image FROM variants WHERE setcode=? COLLATE NOCASE "+
+            "AND "+eligible+" AND image LIKE 'https://cards.scryfall.io/%' "+
+            "ORDER BY CASE WHEN collector GLOB '[0-9]*' THEN 0 ELSE 1 END, "+
+            "CAST(collector AS INTEGER),collector COLLATE NOCASE LIMIT 1";
+        try(Cursor c=getReadableDatabase().rawQuery(sql,new String[]{setCode})){
+            return c.moveToFirst()?c.getString(0):"";
+        }
+    }
+
     JSONObject sets(Map<String,String> p)throws Exception{
         String arena=get(p,"arena"),query=get(p,"q");JSONArray rows=new JSONArray();int t=0,owned=0;
         String source=setProgressCte(p);
