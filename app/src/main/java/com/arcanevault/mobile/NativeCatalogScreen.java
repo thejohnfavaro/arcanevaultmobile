@@ -346,7 +346,12 @@ final class NativeCatalogScreen {
     private void buildAdvancedFilters(){
         filterField("SET CODE","Exact set code (e.g. MH3)",value->setCode=value);
         filterField("TYPE CONTAINS","Creature, Wizard, Enchantment…",value->typeFilter=value);
-        filterField("KEYWORD / RULES TEXT","Comma-separated: Connive, Discard…",value->oracleFilter=value);
+        TextView mechanicHeader=text("KEYWORD / RULES TEXT",11,true);
+        mechanicHeader.setTextColor(VaultNativeStyle.SUBTEXT);
+        advancedFilters.addView(mechanicHeader);
+        advancedFilters.addView(new VaultKeywordTokens(activity,value->{
+            oracleFilter=value;page=0;schedule();
+        }).view());
         filterPicker("MECHANIC MATCH",new String[]{"Match All","Match Any"},
             new String[]{"all","any"},value->oracleMatch=value);
         filterPicker("RARITY",RARITY_NAMES,RARITY_VALUES,value->rarityFilter=value);
