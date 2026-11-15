@@ -62,6 +62,8 @@ public class MainActivity extends Activity {
     private String appUrl;
     private ValueCallback<Uri[]> pickerCallback;
     private boolean nativeHomeVisible = false;
+    private NativeCompanionScreen nativeController;
+    private android.window.OnBackInvokedCallback systemBackCallback;
     private byte[] pendingExport;
     private Uri pendingPeerComparison;
     private boolean pendingPeerApply;
@@ -84,6 +86,14 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        // Android 13+ predictive gestures go through the same page-aware
+        // dispatcher as older devices' physical/three-button Back controls.
+        if(android.os.Build.VERSION.SDK_INT>=33){
+            systemBackCallback=this::handleAppBack;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                systemBackCallback);
+        }
         NativeAppUpdater.cleanupAfterInstalledLaunch(this);
         getWindow().setStatusBarColor(Color.rgb(13,16,23));
         getWindow().setNavigationBarColor(Color.rgb(13,16,23));
@@ -200,8 +210,9 @@ public class MainActivity extends Activity {
 
     /** Native-first shell. Preserve legacy WebView and origin recovery. */
     private void showNativeHome() {
+        if(nativeController!=null)nativeController.close();
         nativeHomeVisible = true;
-        View nativeRoot=NativeCompanionScreen.create(this, durable, catalog, artwork,
+        nativeController=NativeCompanionScreen.createController(this, durable, catalog, artwork,
             this::showLegacyTools, callback -> {
                 // Read the WebView's authoritative saved-deck library. The native
                 // screen is a projection and never writes a duplicate database.
@@ -213,6 +224,7 @@ public class MainActivity extends Activity {
                         }catch(Exception error){callback.accept("[]");}
                     });
             }, this::saveNativeDeck);
+        View nativeRoot=nativeController.view();
         NativeSystemInsets.apply(this,nativeRoot);
         setContentView(nativeRoot);
     }
@@ -1529,6 +1541,7 @@ public class MainActivity extends Activity {
     }
 
     private void showLegacyTools() {
+        if(nativeController!=null){nativeController.close();nativeController=null;}
         nativeHomeVisible = false;
         setContentView(browser);
         if (appUrl != null) browser.loadUrl(appUrl);
@@ -1886,17 +1899,29 @@ public class MainActivity extends Activity {
             pendingExport=null;
         }
     }
-    @Override public void onBackPressed(){
-        if (nativeHomeVisible) {
-            super.onBackPressed();
+    private void handleAppBack(){
+        if(nativeHomeVisible){
+            if(nativeController!=null&&nativeController.onBack())return;
+            // Only exit after the native Home screen and history are exhausted.
+            finish();
             return;
         }
-        // Preserve the old modal-close behavior inside the legacy tools.
+        if(browser==null){finish();return;}
+        // Preserve legacy dialog handling; otherwise return to native Home.
         browser.evaluateJavascript("(function(){let d=document.querySelector('dialog[open]');if(d){d.close();return 'closed'}return 'none'})()", result -> {
             if ("\"none\"".equals(result)) showNativeHome();
         });
     }
+
+    @Override public void onBackPressed(){
+        handleAppBack();
+    }
     @Override protected void onDestroy(){
+        if(nativeController!=null){nativeController.close();nativeController=null;}
+        if(android.os.Build.VERSION.SDK_INT>=33&&systemBackCallback!=null){
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(systemBackCallback);
+            systemBackCallback=null;
+        }
         if(server!=null)server.close();
         if(workers!=null)workers.shutdownNow();
         if(catalog!=null)catalog.close();
