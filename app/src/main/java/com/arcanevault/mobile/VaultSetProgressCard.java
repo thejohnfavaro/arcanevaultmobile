@@ -25,8 +25,8 @@ final class VaultSetProgressCard {
     private static final int MUTED=Color.rgb(157,169,189);
 
     static Bitmap render(Context context,JSONObject set,String source,int widthPx,int heightPx){
-        int w=Math.max(240,Math.min(1100,widthPx));
-        int h=Math.max(120,Math.min(420,heightPx));
+        int w=Math.max(240,Math.min(600,widthPx));
+        int h=Math.max(120,Math.min(240,heightPx));
         Bitmap bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(bitmap);
         Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
