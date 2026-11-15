@@ -51,6 +51,68 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(oldVersion<2)db.execSQL("CREATE TABLE IF NOT EXISTS physical_ownership(name TEXT PRIMARY KEY COLLATE NOCASE,qty INTEGER NOT NULL)");
         if(oldVersion<3)db.execSQL("CREATE TABLE IF NOT EXISTS physical_printings(name TEXT NOT NULL COLLATE NOCASE,setcode TEXT NOT NULL COLLATE NOCASE,collector TEXT NOT NULL COLLATE NOCASE,print_id TEXT NOT NULL COLLATE NOCASE,qty INTEGER NOT NULL)");
     }
+    private static final String SET_CACHE_PREF="arcane_set_progress_cache_v1";
+    private android.content.SharedPreferences setCache(){
+        return application.getSharedPreferences(SET_CACHE_PREF,Context.MODE_PRIVATE);
+    }
+    private static String inventoryFingerprint(JSONArray cards){
+        // Order-independent identity signature: duplicate and quantity changes
+        // are still tracked. Never use card-name counts as a printing identity.
+        java.util.ArrayList<String> normalized=new java.util.ArrayList<>();
+        for(int i=0;i<cards.length();i++){
+            JSONObject item=cards.optJSONObject(i);
+            if(item==null)continue;
+            normalized.add(item.optString("name","").trim().toLowerCase(Locale.ROOT)+"|"+
+                item.optString("set","").trim().toLowerCase(Locale.ROOT)+"|"+
+                item.optString("number","").trim().toLowerCase(Locale.ROOT)+"|"+
+                item.optString("scryfallId","").trim().toLowerCase(Locale.ROOT)+"|"+
+                item.optInt("qty",0));
+        }
+        java.util.Collections.sort(normalized);
+        try{
+            java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");
+            for(String row:normalized){
+                digest.update(row.getBytes(StandardCharsets.UTF_8));
+                digest.update((byte)10);
+            }
+            StringBuilder hex=new StringBuilder();
+            for(byte b:digest.digest())hex.append(String.format(Locale.US,"%02x",b&255));
+            return hex.toString();
+        }catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}
+    }
+    private void invalidateSetProgress(String source){
+        android.content.SharedPreferences.Editor edit=setCache().edit();
+        if("all".equals(source)){
+            edit.remove("overview_physical").remove("overview_arena");
+        }else edit.remove("overview_"+source);
+        edit.apply();
+    }
+    private static JSONObject filterSetOverview(JSONObject snapshot,String query)throws Exception{
+        String filter=query==null?"":query.trim().toLowerCase(Locale.ROOT);
+        JSONArray original=snapshot.optJSONArray("sets"),shown=new JSONArray();
+        if(original!=null)for(int i=0;i<original.length();i++){
+            JSONObject set=original.optJSONObject(i);
+            if(set==null)continue;
+            if(filter.isEmpty()||
+                set.optString("code","").toLowerCase(Locale.ROOT).contains(filter)||
+                set.optString("name","").toLowerCase(Locale.ROOT).contains(filter))
+                shown.put(set);
+        }
+        return new JSONObject().put("sets",shown).put("count",shown.length())
+            .put("source",snapshot.optString("source",""))
+            .put("cached",true);
+    }
+    /** Memory/disk-backed snapshot read. No SQLite call or file lock. */
+    JSONObject cachedSetOverview(String source,String query){
+        if(!"physical".equals(source)&&!"arena".equals(source))return null;
+        try{
+            String json=setCache().getString("overview_"+source,null);
+            return json==null?null:filterSetOverview(new JSONObject(json),query);
+        }catch(Exception error){
+            android.util.Log.w("ArcaneVault","Set snapshot unavailable",error);
+            return null;
+        }
+    }
     private static int count(SQLiteDatabase db,String table){try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM "+table,null)){return c.moveToFirst()?c.getInt(0):0;}}
     JSONObject status() throws Exception {
         boolean busy=syncing.get();
@@ -148,6 +210,7 @@ final class CatalogStore extends SQLiteOpenHelper {
                 db.execSQL("INSERT OR REPLACE INTO state(key,value) VALUES('updated',?)",new Object[]{new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'",Locale.US){{setTimeZone(TimeZone.getTimeZone("UTC"));}}.format(new Date())});
                 db.setTransactionSuccessful();
             }finally{db.endTransaction();}
+            invalidateSetProgress("all");
             total=count(db,"cards");
             indexedPrintings=count(db,"variants");
             lastProgressAtMs=android.os.SystemClock.elapsedRealtime();
@@ -244,15 +307,21 @@ final class CatalogStore extends SQLiteOpenHelper {
     }
     void ownership(JSONObject input)throws Exception{
         JSONArray cards=input.getJSONArray("cards");if(cards.length()>150000)throw new IllegalArgumentException("Too many ownership entries");
+        String fingerprint=inventoryFingerprint(cards);
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("ownership",null,null);
             for(int i=0;i<cards.length();i++){JSONObject c=cards.optJSONObject(i);if(c==null)continue;String name=c.optString("name","");int qty=c.optInt("qty",0);if(name.isEmpty()||name.length()>300||qty<=0)continue;ContentValues v=new ContentValues();v.put("name",name);v.put("qty",qty);db.insertWithOnConflict("ownership",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
+        if(!fingerprint.equals(setCache().getString("fingerprint_arena",""))){
+            invalidateSetProgress("arena");
+            setCache().edit().putString("fingerprint_arena",fingerprint).apply();
+        }
     }
     // Isolated, persistent mirror for the local paper inventory. Never changes Arena quantities.
     synchronized void physicalOwnership(JSONObject input)throws Exception {
         JSONArray rows=input.getJSONArray("cards");
         if(rows.length()>150000)throw new IllegalArgumentException("Too many physical inventory entries");
+        String fingerprint=inventoryFingerprint(rows);
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try {
             // An aggregate-only recovery snapshot may arrive after this database
@@ -333,6 +402,10 @@ final class CatalogStore extends SQLiteOpenHelper {
             }
             db.setTransactionSuccessful();
         } finally {db.endTransaction();}
+        if(!fingerprint.equals(setCache().getString("fingerprint_physical",""))){
+            invalidateSetProgress("physical");
+            setCache().edit().putString("fingerprint_physical",fingerprint).apply();
+        }
     }
     private static String printingCte(Map<String,String> p){
         if(!"physical".equals(get(p,"source")))
@@ -944,6 +1017,8 @@ final class CatalogStore extends SQLiteOpenHelper {
      * Unmatched ownership stays unknown, not credited to an arbitrary edition.
      */
     JSONObject indexedSetOverview(String source,String query)throws Exception{
+        JSONObject saved=cachedSetOverview(source,query);
+        if(saved!=null)return saved;
         if(!"physical".equals(source)&&!"arena".equals(source))
             throw new IllegalArgumentException("Invalid set progress source");
         String filter=query==null?"":query.trim();
@@ -993,10 +1068,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             while(c.moveToNext()){
                 String code=c.getString(0),name=c.getString(1);
                 if(code==null||code.isEmpty())continue;
-                if(!filter.isEmpty()&&!code.toLowerCase(Locale.ROOT).contains(
-                    filter.toLowerCase(Locale.ROOT))&&
-                    (name==null||!name.toLowerCase(Locale.ROOT).contains(
-                        filter.toLowerCase(Locale.ROOT))))continue;
+                // Store the complete set snapshot. Search is done in memory.
                 int total=c.getInt(2);
                 if(total<=0)continue;
                 int owned=Math.min(total,Math.max(0,ownedBySet.getOrDefault(code,0)));
@@ -1009,9 +1081,15 @@ final class CatalogStore extends SQLiteOpenHelper {
                     .put("releaseDate",c.isNull(3)?"":c.getString(3)));
             }
         }
-        return new JSONObject().put("sets",rows).put("count",rows.length())
-            .put("totalCards",totalCards).put("ownedCards",ownedCards)
-            .put("source",source);
+        JSONObject snapshot=new JSONObject().put("sets",rows)
+            .put("count",rows.length()).put("totalCards",totalCards)
+            .put("ownedCards",ownedCards).put("source",source);
+        // The dataset itself is persisted, not only the last page/filter.
+        // Avoid retaining an outdated result if the inventory changed
+        // during reconciliation: the snapshot is valid for current index.
+        if(!setCache().edit().putString("overview_"+source,snapshot.toString()).commit())
+            android.util.Log.w("ArcaneVault","Unable to persist Set Progress cache");
+        return filterSetOverview(snapshot,filter);
     }
 
     JSONObject sets(Map<String,String> p)throws Exception{
