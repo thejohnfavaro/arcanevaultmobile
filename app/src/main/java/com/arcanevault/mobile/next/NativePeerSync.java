@@ -374,6 +374,7 @@ public final class NativePeerSync {
         JSONObject summary=new JSONObject();
         JSONArray changes=new JSONArray();
         int equal=0,conflicts=0;
+        long incomingCopies=0,absentCopies=0;
         for(String group:new String[]{"cards","physicalCards","deckLibrary"}){
             Map<String,JSONObject> before=index(group,own.getJSONArray(group));
             Map<String,JSONObject> after=index(group,data.getJSONArray(group));
@@ -383,6 +384,11 @@ public final class NativePeerSync {
                 if(equivalent(a,b)){equal++;continue;}
                 String action=a==null?"Add":b==null?"Absent in peer":"Different";
                 if(!"Add".equals(action))conflicts++;
+                if(!"deckLibrary".equals(group)){
+                    long delta=(long)quantity(b)-quantity(a);
+                    if(delta>0)incomingCopies=Math.addExact(incomingCopies,delta);
+                    if(delta<0)absentCopies=Math.addExact(absentCopies,-delta);
+                }
                 changes.put(new JSONObject().put("group",group)
                     .put("key",key).put("action",action));
             }
@@ -415,6 +421,9 @@ public final class NativePeerSync {
         return summary.put("peerDevice",incoming.getString("deviceId"))
             .put("revision",incoming.getString("revision")).put("equal",equal)
             .put("conflicts",conflicts).put("changes",changes)
-            .put("groups",groups).put("safeToAutoApply",false);
+            .put("groups",groups)
+            .put("peerMoreCopies",incomingCopies)
+            .put("peerFewerCopies",absentCopies)
+            .put("safeToAutoApply",false);
     }
 }
