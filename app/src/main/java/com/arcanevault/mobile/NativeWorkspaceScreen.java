@@ -460,11 +460,8 @@ final class NativeWorkspaceScreen {
         content.addView(tile,layout);
         // Resolve only cards visible in this page. No image fetch blocks the
         // overview or navigation, and later re-entry uses the on-disk cache.
-        if(!set.optString("artUrl","").isEmpty() &&
-            new ArtworkCache(activity).getCached(
-                VaultSetArtwork.cropUrl(set.optString("artUrl","")))==null){
-            // Metadata is cached but the cropped image can still be missing.
-        }
+        // Reuse existing cached artwork immediately. Missing images and set
+        // symbols are populated asynchronously without blocking set progress.
         final String key=source+":"+code.toLowerCase(java.util.Locale.ROOT);
         if(!setArtInFlight.add(key))return;
         coverWorkers.execute(()->{
