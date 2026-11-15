@@ -20,7 +20,7 @@ assert.match(screens,/catalog\.setPrintings\(args\)/,'Browse set-specific actual
 assert.match(screens,/catalog\.status\(\)/);
 assert.match(screens,/catalog\.start\(\)/);
 assert.match(screens,/deckLibrary\(\)/);
-assert.match(screens,/deckCoverRow\(d,qty,pageGeneration\)/,'Deck library now renders commander artwork tiles');
+assert.match(screens,/deckCoverRow\(deck,total,deckPageGeneration\)/,'Deck library now renders commander artwork tiles');
 assert.match(screens,/entry\.setOnClickListener\(v->showDeck\(deck\)\)/,'Deck cover tap still opens the saved deck');
 assert.match(activity,/vault_libraryV3/,'Native Decks must read existing deck library, not invent a second one');
 assert.match(screens,/vault_physicalCollectionV1/);
