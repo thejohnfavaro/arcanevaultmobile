@@ -24,4 +24,18 @@ assert.match(art,/VaultSetArtwork\.cachedSymbol\(context,code\)/,
  'Official set icon must be rendered');
 assert.match(art,/boolean measured=set!=null&&set\.has\("total"\)&&total>0/,
  'Unindexed fallbacks must never show misleading 0%');
+
+// Progress snapshot filtering must never reinsert unowned tiles.
+assert.doesNotMatch(normal,/if\(missingOwned\)filtered=NativeSetProgressFilters\.select\(sets,false,order\)/,
+ 'Hide-empty sets must not silently switch to unfiltered mode');
+assert.match(source,/if\(hide\)\{\s*row\("Preparing verified /,
+ 'Unknown ownership directory must respect hide-empty preference');
+assert.match(source,/setArtWorkers\.execute\(/,'Art uses its own nonblocking workers');
+assert.match(source,/VaultSetArtwork\.prefetchSymbol\(activity,code\)/,
+ 'Set icon must load independently before art');
+assert.match(source,/VaultSetArtwork\.prefetchArt\(activity,art\)/,
+ 'Set artwork is prefetched separately');
+assert.match(source,/redrawSetProgressArt\(tile,set,source,width,request\)/,
+ 'Visible cards rerender when cached assets arrive');
+assert.match(art,/VaultSetArtwork\.cachedSymbol\(context,code\)/);
 console.log('PASS: visual set-card parity, cached cover art, icons and completion safety');
