@@ -1120,6 +1120,98 @@ final class NativeWorkspaceScreen {
                     }catch(Exception error){info("Import rejected: "+error.getMessage());}
                 }).show();
         });
+        // Owned substitutions are staged only in the existing unsaved editor.
+        // Every approval rechecks inventory, legality and the draft itself.
+        Button planSubstitutions=VaultNativeStyle.button(activity,
+            "Plan owned substitutions",false);
+        fields.addView(planSubstitutions,new LinearLayout.LayoutParams(-1,dp(48)));
+        final NativeDeckSubstitutions.Plan[] proposedPlan={null};
+        final String[] plannedBoard={null};
+        final String[] plannedFingerprint={null};
+        planSubstitutions.setOnClickListener(v->{
+            final String draft=lines.getText().toString();
+            final int current=deckPageGeneration;
+            proposedPlan[0]=null;plannedBoard[0]=null;plannedFingerprint[0]=null;
+            planSubstitutions.setEnabled(false);
+            status.setText("Reviewing owned substitution candidates…");
+            executor.execute(()->{
+                try{
+                    JSONArray physical=new JSONArray(prefs.getString(
+                        "vault_physicalCollectionV1","[]"));
+                    JSONArray arenaCards=new JSONArray(prefs.getString("vault_cards","[]"));
+                    NativeDeckSubstitutions.Plan plan=NativeDeckSubstitutions.analyze(
+                        catalog,deck,draft,physical,arenaCards);
+                    ui.post(()->{
+                        if(closed||current!=deckPageGeneration)return;
+                        planSubstitutions.setEnabled(true);
+                        if(!draft.equals(lines.getText().toString())){
+                            status.setText("Draft changed; generate a new substitution plan.");
+                            return;
+                        }
+                        proposedPlan[0]=plan;
+                        plannedBoard[0]=draft;
+                        plannedFingerprint[0]=plan.fingerprint();
+                        status.setText("Owned substitutions: "+plan.summary());
+                        new AlertDialog.Builder(activity)
+                            .setTitle("Review owned substitutions")
+                            .setMessage(plan.details()+"\n\nSuggestions preserve recognized roles "+
+                                "and local format/color filters, but cannot prove "+
+                                "equivalent card power. No changes until approval.")
+                            .setNegativeButton("Keep draft",null)
+                            .setPositiveButton("Apply to unsaved draft",(d,w)->{
+                                if(proposedPlan[0]!=plan||
+                                    !draft.equals(lines.getText().toString())){
+                                    info("Draft changed; plan again.");return;
+                                }
+                                planSubstitutions.setEnabled(false);
+                                executor.execute(()->{
+                                    try{
+                                        JSONArray freshPhysical=new JSONArray(prefs.getString(
+                                            "vault_physicalCollectionV1","[]"));
+                                        JSONArray freshArena=new JSONArray(prefs.getString(
+                                            "vault_cards","[]"));
+                                        NativeDeckSubstitutions.Plan verified=
+                                            NativeDeckSubstitutions.analyze(catalog,deck,
+                                                draft,freshPhysical,freshArena);
+                                        if(!verified.fingerprint().equals(plannedFingerprint[0]))
+                                            throw new IllegalArgumentException(
+                                                "Inventory or legality changed; generate a new plan.");
+                                        String updated=NativeDeckSubstitutions.applyToText(
+                                            draft,verified);
+                                        ui.post(()->{
+                                            if(closed||current!=deckPageGeneration)return;
+                                            planSubstitutions.setEnabled(true);
+                                            if(!draft.equals(lines.getText().toString())){
+                                                info("Draft changed; no swaps applied.");return;
+                                            }
+                                            if(verified.swaps.isEmpty()){
+                                                info("No eligible owned swaps to apply.");return;
+                                            }
+                                            lines.setText(updated);
+                                            proposedPlan[0]=null;
+                                            status.setText(verified.swaps.size()+
+                                                " substitutions applied to UNSAVED draft. "+
+                                                "Review & Save remains separate.");
+                                        });
+                                    }catch(Exception error){
+                                        ui.post(()->{
+                                            if(closed||current!=deckPageGeneration)return;
+                                            planSubstitutions.setEnabled(true);
+                                            info("Plan not applied: "+error.getMessage());
+                                        });
+                                    }
+                                });
+                            }).show();
+                    });
+                }catch(Exception error){
+                    ui.post(()->{
+                        if(closed||current!=deckPageGeneration)return;
+                        planSubstitutions.setEnabled(true);
+                        status.setText("Substitution plan unavailable: "+error.getMessage());
+                    });
+                }
+            });
+        });
         content.addView(fields);
         LinearLayout actions=VaultNativeStyle.row(activity);
         Button discard=VaultNativeStyle.button(activity,"Discard",false);
