@@ -943,15 +943,28 @@ final class CatalogStore extends SQLiteOpenHelper {
                 "JOIN ownership o ON o.name=v.name COLLATE NOCASE AND o.qty>0 "+
                 "WHERE v.arena=1 GROUP BY v.setcode";
         }else{
-            ownedSql="SELECT v.setcode,COUNT(DISTINCT v.name) FROM physical_printings p "+
-                "JOIN variants v ON "+
-                "(p.print_id!='' AND v.print_id=p.print_id COLLATE NOCASE) OR "+
-                "(p.setcode!='' AND p.collector!='' AND "+
-                "v.collector=p.collector COLLATE NOCASE AND "+
-                "(v.setcode=p.setcode COLLATE NOCASE OR v.setname=p.setcode COLLATE NOCASE) "+
+            // Split the lookup by identity: SQLite can use the print_id primary
+            // key instead of evaluating a broad OR across all variants.
+            ownedSql="SELECT m.setcode,COUNT(DISTINCT m.name) FROM ("+
+                "SELECT v.setcode,v.name FROM physical_printings p "+
+                "JOIN variants v ON v.print_id=p.print_id COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.print_id!='' "+
+                "UNION "+
+                "SELECT v.setcode,v.name FROM physical_printings p "+
+                "JOIN variants v ON v.setcode=p.setcode COLLATE NOCASE "+
+                "AND v.collector=p.collector COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
                 "AND (p.print_id='' OR NOT EXISTS "+
-                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE))) "+
-                "WHERE p.qty>0 GROUP BY v.setcode";
+                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE)) "+
+                "UNION "+
+                "SELECT v.setcode,v.name FROM physical_printings p "+
+                "JOIN variants v ON v.setname=p.setcode COLLATE NOCASE "+
+                "AND v.collector=p.collector COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
+                "AND (p.print_id='' OR NOT EXISTS "+
+                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE))"+
+                ") m GROUP BY m.setcode";
+
         }
         try(Cursor c=db.rawQuery(ownedSql,null)){
             while(c.moveToNext())ownedBySet.put(c.getString(0),c.getInt(1));
