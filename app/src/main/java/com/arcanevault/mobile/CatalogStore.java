@@ -80,12 +80,18 @@ final class CatalogStore extends SQLiteOpenHelper {
             return hex.toString();
         }catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}
     }
-    private void invalidateSetProgress(String source){
-        android.content.SharedPreferences.Editor edit=setCache().edit();
+    private synchronized void invalidateSetProgress(String source){
+        android.content.SharedPreferences prefs=setCache();
+        android.content.SharedPreferences.Editor edit=prefs.edit();
         if("all".equals(source)){
-            edit.remove("overview_physical").remove("overview_arena");
-        }else edit.remove("overview_"+source);
-        edit.apply();
+            edit.remove("overview_physical").remove("overview_arena")
+                .putLong("revision_physical",prefs.getLong("revision_physical",0)+1)
+                .putLong("revision_arena",prefs.getLong("revision_arena",0)+1);
+        }else{
+            edit.remove("overview_"+source)
+                .putLong("revision_"+source,prefs.getLong("revision_"+source,0)+1);
+        }
+        edit.commit();
     }
     private static JSONObject filterSetOverview(JSONObject snapshot,String query)throws Exception{
         String filter=query==null?"":query.trim().toLowerCase(Locale.ROOT);
@@ -1025,6 +1031,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     JSONObject indexedSetOverview(String source,String query)throws Exception{
         JSONObject saved=cachedSetOverview(source,query);
         if(saved!=null)return saved;
+        long revision=setCache().getLong("revision_"+source,0);
         if(!"physical".equals(source)&&!"arena".equals(source))
             throw new IllegalArgumentException("Invalid set progress source");
         String filter=query==null?"":query.trim();
@@ -1093,8 +1100,12 @@ final class CatalogStore extends SQLiteOpenHelper {
         // The dataset itself is persisted, not only the last page/filter.
         // Avoid retaining an outdated result if the inventory changed
         // during reconciliation: the snapshot is valid for current index.
-        if(!setCache().edit().putString("overview_"+source,snapshot.toString()).commit())
-            android.util.Log.w("ArcaneVault","Unable to persist Set Progress cache");
+        // Never publish an old calculation after a catalog or ownership
+        // update invalidated the snapshot while the SQLite query was running.
+        if(setCache().getLong("revision_"+source,0)==revision){
+            if(!setCache().edit().putString("overview_"+source,snapshot.toString()).commit())
+                android.util.Log.w("ArcaneVault","Unable to persist Set Progress cache");
+        }
         return filterSetOverview(snapshot,filter);
     }
 
