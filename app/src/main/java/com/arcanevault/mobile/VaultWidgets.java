@@ -81,6 +81,38 @@ final class VaultWidgets {
         }catch(Exception error){return false;}
     }
 
+    /** At most once every 6h, only when a VALUE widget is installed and the
+     * app itself is open. Actual Scryfall requests are performed by the
+     * existing printing-aware physicalRefreshPrices() workflow in the WebView,
+     * not by a widget redraw or by a second market-price ledger. */
+    static boolean claimForegroundQuoteRefresh(Context context){
+        AppWidgetManager mgr=AppWidgetManager.getInstance(context);
+        int[] ids=mgr.getAppWidgetIds(
+            new ComponentName(context,VaultCollectionValueWidget.class));
+        if(ids.length==0)return false;
+        SharedPreferences p=prefs(context);
+        long now=System.currentTimeMillis();
+        if(now-p.getLong("price_attempt_at",0)<6L*60*60*1000)return false;
+        if(p.getBoolean("value_valid",false) &&
+                p.getBoolean("quotes_present",false) &&
+                p.getInt("priced_rows",0)>0){
+            String at=p.getString("quote_updated","");
+            try{
+                long latest=java.time.Instant.parse(at).toEpochMilli();
+                if(now-latest<24L*60*60*1000)return false;
+            }catch(Exception ignored){}
+        }
+        if(!p.edit().putLong("price_attempt_at",now)
+                .putBoolean("price_refresh_active",true).commit())return false;
+        refreshValue(context);
+        return true;
+    }
+
+    static void finishForegroundQuoteRefresh(Context context){
+        prefs(context).edit().putBoolean("price_refresh_active",false).apply();
+        refreshValue(context);
+    }
+
     static void invalidateValue(Context context){
         prefs(context).edit().putBoolean("value_valid",false).apply();
         refreshValue(context);
@@ -104,6 +136,8 @@ final class VaultWidgets {
             priced==0?"Quotes do not match owned printings · refresh prices":
             String.format(Locale.US,"%d / %d printings priced · %,d cards",
                 priced,total,copies);
+        if(data.getBoolean("price_refresh_active",false))
+            coverage="Refreshing Scryfall printing prices in Arcane Vault…";
         String when=data.getString("quote_updated","");
         String subtitle="Scryfall USD · cached estimate";
         if(valid&&!when.isEmpty()){
