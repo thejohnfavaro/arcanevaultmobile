@@ -19,7 +19,8 @@ final class NativeArtworkQuality {
         if(!supported(original))return "";
         // The normal/large path variants are Scryfall's own image endpoints.
         // Do not rewrite external URLs, other variants, or arbitrary query text.
-        if(!original.contains("/normal/")||!original.endsWith(".jpg"))
+        String path=original.split("\\?",2)[0];
+        if(!path.contains("/normal/")||!path.endsWith(".jpg"))
             return original;
         return original.replace("/normal/","/large/");
     }
