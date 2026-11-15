@@ -16,8 +16,10 @@ assert.match(normal,/addSetProgressCard\(set,source,request\)/,
 assert.match(source,/VaultSetProgressCard\.render\(activity,set,source,width,dp\(176\)\)/,
  'Both modes render the original card treatment');
 assert.match(source,/catalog\.cachedRepresentativeSetArt\(code,source\)/);
-assert.match(source,/VaultSetArtwork\.prefetch\(activity,art,code\)/,
- 'Art and official set symbols should warm outside UI thread');
+assert.match(source,/VaultSetArtwork\.prefetchArt\(activity,art\)/,
+ 'Background card art should warm outside UI thread');
+assert.match(source,/VaultSetArtwork\.prefetchSymbol\(activity,code\)/,
+ 'Set symbols should warm independently from the background');
 assert.match(catalog,/String resolveAndCacheSetArt\(/,
  'Art identity persists across progress cache invalidation');
 assert.match(art,/VaultSetArtwork\.cachedSymbol\(context,code\)/,
