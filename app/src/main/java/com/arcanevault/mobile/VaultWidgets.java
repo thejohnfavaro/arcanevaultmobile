@@ -185,7 +185,9 @@ final class VaultWidgets {
                     rate==null?"Currency exchange rate unavailable · connect to refresh":
                     String.format(Locale.US,"%d / %d printings priced · %,d cards",
                         priced,total,copies);
-                subtitle="Scryfall "+displayCurrency+" · "+
+                subtitle="USD".equals(displayCurrency)&&date.isEmpty()? 
+                    "Scryfall USD · cached estimate":
+                    "Scryfall "+displayCurrency+" · "+
                     (date.isEmpty()?"cached reference": "quotes "+date);
                 if(!"USD".equals(displayCurrency))
                     subtitle+=" · FX "+(VaultWidgetExchangeRates.date(context).isEmpty()?
