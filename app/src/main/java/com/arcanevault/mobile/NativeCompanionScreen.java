@@ -424,6 +424,42 @@ final class NativeCompanionScreen {
         VaultNativeStyle.margin(parent,pane,12,activity);
     }
 
+    /** Native mobile collection analytics; all money originates from saved
+     * exact-printing Scryfall snapshots, never guessed card-name prices. */
+    private void renderCollectionInsights(LinearLayout target){
+        LinearLayout pane=column();
+        pane.setPadding(dp(16),dp(14),dp(16),dp(16));
+        VaultNativeStyle.surface(activity,pane,false);
+        pane.addView(text("COLLECTION INTELLIGENCE",12,VaultNativeStyle.GOLD,true));
+        JSONObject snapshot=VaultCollectionInsights.read(activity);
+        int priced=snapshot.optInt("pricedRows",0);
+        int total=snapshot.optInt("totalRows",0);
+        String coverage=total>0?
+            String.format(Locale.US,"%.1f%%",100.0*priced/total):"Not priced";
+        pane.addView(text("Price coverage: "+coverage+" · "+priced+"/"+total+
+            " physical printing entries",12,VaultNativeStyle.SUBTEXT,false));
+        pane.addView(text("Scryfall quote estimates; adding cards is not a market gain.",
+            11,VaultNativeStyle.SUBTEXT,false));
+        android.widget.LinearLayout.LayoutParams topSpace=
+            new android.widget.LinearLayout.LayoutParams(-1,dp(10));
+        String[][] lists={
+            {"MOST VALUABLE OWNED PRINTINGS",
+                String.join("\n",VaultCollectionInsights.topCards(activity))},
+            {"TOP SETS BY OWNED VALUE",
+                String.join("\n",VaultCollectionInsights.topSets(activity))},
+            {"MISSING PRICE QUOTES",
+                String.join("\n",VaultCollectionInsights.unpriced(activity))}
+        };
+        for(String[] group:lists){
+            View spacing=new View(activity);
+            pane.addView(spacing,topSpace);
+            pane.addView(text(group[0],11,VaultNativeStyle.GOLD,true));
+            pane.addView(text(group[1].isEmpty()?"No verified results yet.":group[1],
+                12,VaultNativeStyle.TEXT,false));
+        }
+        VaultNativeStyle.margin(target,pane,12,activity);
+    }
+
     private static long copies(List<CardRow> rows){
         long value=0;for(CardRow r:rows)value+=r.qty;return value;
     }
@@ -433,6 +469,7 @@ final class NativeCompanionScreen {
         card(content,"Physical collection",String.format(Locale.US,"%,d cards",copies(physical)),
             String.format(Locale.US,"%,d printing and name entries",physical.size()),VaultNativeStyle.PRIMARY);
         renderCollectionValue(content);
+        renderCollectionInsights(content);
         card(content,"Arena collection",String.format(Locale.US,"%,d cards",copies(arena)),
             String.format(Locale.US,"%,d entries",arena.size()),VaultNativeStyle.GOLD);
         TextView tools=text("QUICK ACTIONS",12,VaultNativeStyle.SUBTEXT,true);
@@ -458,7 +495,10 @@ final class NativeCompanionScreen {
             String.format(Locale.US,"%,d copies",copies(rows)),
             String.format(Locale.US,"%,d entries • read-only",rows.size()),
             paper?VaultNativeStyle.PRIMARY:VaultNativeStyle.GOLD);
-        if(paper)renderCollectionValue(content);
+        if(paper){
+            renderCollectionValue(content);
+            renderCollectionInsights(content);
+        }
         EditText search=new EditText(activity);
         search.setHint("Search your cards");
         VaultNativeStyle.search(activity,search);
