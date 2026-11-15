@@ -73,7 +73,7 @@ public final class VaultSetWidgetConfigActivity extends Activity {
         LinearLayout body=VaultNativeStyle.column(this);
         body.setBackgroundColor(VaultNativeStyle.BACKGROUND);
         body.setPadding(dp(20),dp(16),dp(20),dp(28));
-        scroll.addView(body,new ScrollView.LayoutParams(-1,-1));
+        scroll.addView(body,new ScrollView.LayoutParams(-1,-2));
         setContentView(scroll);
 
         body.addView(VaultNativeStyle.label(this,"TRACK A MAGIC SET",23,
@@ -183,7 +183,8 @@ public final class VaultSetWidgetConfigActivity extends Activity {
     }
 
     private void applyDirectory(JSONArray items){
-        String chosen=selected!=null?selected.optString("code",""):configuredCode;
+        String chosen=selected!=null?selected.optString("code",""):
+            (query.isEmpty()?configuredCode:"");
         knownSets.clear();
         for(int i=0;i<items.length();i++){
             JSONObject item=items.optJSONObject(i);
