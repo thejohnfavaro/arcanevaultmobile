@@ -21,10 +21,10 @@ for(const q of [
 ])assert.ok(browser.includes(q),'Missing native EDH control: '+q);
 for(const q of [
   'deckCommanderFilter=initialCommander',
-  'String selectedCommander=deckCommanderFilter',
-  'selectedCommander.equalsIgnoreCase(listedCommander)',
+  'deckCommanderFilter.equalsIgnoreCase(commander)',
+  'deckCoverRow(deck,total,deckPageGeneration)',
   'Show all saved decks',
-  'No saved decks for this commander',
+  'No matching decks',
   'No deck was created automatically'
 ])assert.ok(workspace.includes(q),'Missing read-only saved-deck navigation: '+q);
 assert.match(nav,/this::showDecksForCommander/);
