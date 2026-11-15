@@ -13,7 +13,7 @@ assert.doesNotMatch(fallback,/row\(name\s*\+\s*" · "/,
  'Plain text fallback is a visual regression');
 assert.match(normal,/addSetProgressCard\(set,source,request\)/,
  'Saved/indexed overviews must use the same set-card renderer');
-assert.match(source,/VaultSetProgressCard\.render\(activity,set,source,width,dp\(176\)\)/,
+assert.match(source,/VaultSetProgressCard\.render\(activity,set,source,width,dp\(161\)\)/,
  'Both modes render the original card treatment');
 assert.match(source,/catalog\.cachedRepresentativeSetArt\(code,source\)/);
 assert.match(source,/VaultSetArtwork\.prefetchArt\(activity,art\)/,
@@ -40,4 +40,10 @@ assert.match(source,/VaultSetArtwork\.prefetchArt\(activity,art\)/,
 assert.match(source,/redrawSetProgressArt\(tile,set,source,width,request\)/,
  'Visible cards rerender when cached assets arrive');
 assert.match(art,/VaultSetArtwork\.cachedSymbol\(context,code\)/);
+assert.match(art,/float scale=Math\.min\(1f,Math\.min\(600f\/targetW,240f\/targetH\)\)/,
+ 'Bitmap width and height must share a single uniform scale');
+assert.match(source,/tile\.setScaleType\(ImageView\.ScaleType\.FIT_CENTER\)/,
+ 'Native ImageView must not stretch rendered text or symbols');
+assert.doesNotMatch(source,/tile\.setScaleType\(ImageView\.ScaleType\.FIT_XY\)/,
+ 'Stretched image cards distort typography');
 console.log('PASS: visual set-card parity, cached cover art, icons and completion safety');
