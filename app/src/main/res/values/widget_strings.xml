@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+ <string name="widget_collection_value_label">Collection Value</string>
+ <string name="widget_set_progress_label">Set Progress</string>
+ <string name="widget_collection_value_description">Arcane Vault — cached estimated physical collection value and priced printing coverage</string>
+ <string name="widget_set_progress_description">Arcane Vault — independently track a chosen Magic set in Physical or Arena</string>
+</resources>
