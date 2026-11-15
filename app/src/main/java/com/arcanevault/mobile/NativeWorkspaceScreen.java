@@ -75,7 +75,7 @@ final class NativeWorkspaceScreen {
     private String deckCommanderFilter="";
     private JSONArray deckSnapshot=new JSONArray();
     private LinearLayout deckListPanel;
-    private String deckSearch="",deckSort="updated",deckFolder="";
+    private String deckSearch="",deckSort="updated",deckFolder="",deckFormat="";
     private boolean deckFavoritesOnly=false;
     private LinearLayout shortlistPanel;
     private ArrayList<JSONObject> shortlistCards=new ArrayList<>();
@@ -505,6 +505,9 @@ final class NativeWorkspaceScreen {
             if(!deckCommanderFilter.isEmpty() &&
                     !deckCommanderFilter.equalsIgnoreCase(commander))continue;
             if(deckFavoritesOnly&&!deck.optBoolean("favorite",false))continue;
+            String format=deck.optString("format","").trim();
+            if(format.isEmpty())format="Unspecified";
+            if(!deckFormat.isEmpty()&&!deckFormat.equalsIgnoreCase(format))continue;
             String folder=deck.optString("folder","Unfiled");
             if(folder.isEmpty())folder="Unfiled";
             if(!deckFolder.isEmpty()&&!deckFolder.equalsIgnoreCase(folder))continue;
@@ -534,7 +537,9 @@ final class NativeWorkspaceScreen {
         }
         if(matches.isEmpty())
             rowTo(deckListPanel,"No matching decks",
-                "Try another search, folder or favorite filter.");
+                deckCommanderFilter.isEmpty()?
+                    "Try another search, format, folder or favorite filter.":
+                    "No deck was created automatically. Clear the commander filter to see other decks.");
         else if(matches.size()>limit)
             rowTo(deckListPanel,"Showing first "+limit+" decks",
                 "Narrow your search to find the others.");
@@ -600,6 +605,25 @@ final class NativeWorkspaceScreen {
                 folders.setSelection(Math.max(0,selectedFolder));
                 filters.addView(folders,new LinearLayout.LayoutParams(0,dp(49),1));
                 VaultNativeStyle.margin(content,filters,5,activity);
+                ArrayList<String> formats=new ArrayList<>();
+                formats.add("All formats");
+                for(int i=0;i<deckSnapshot.length();i++){
+                    JSONObject item=deckSnapshot.optJSONObject(i);
+                    if(item==null)continue;
+                    String format=item.optString("format","").trim();
+                    if(format.isEmpty())format="Unspecified";
+                    if(!formats.contains(format))formats.add(format);
+                }
+                java.util.Collections.sort(formats.subList(1,formats.size()),
+                    String.CASE_INSENSITIVE_ORDER);
+                Spinner formatPicker=new Spinner(activity);
+                ArrayAdapter<String> formatAdapter=new ArrayAdapter<>(activity,
+                    android.R.layout.simple_spinner_item,formats);
+                formatAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                formatPicker.setAdapter(formatAdapter);
+                int selectedFormat=deckFormat.isEmpty()?0:formats.indexOf(deckFormat);
+                formatPicker.setSelection(Math.max(0,selectedFormat));
+                VaultNativeStyle.margin(content,formatPicker,5,activity);
                 CheckBox favoritesOnly=new CheckBox(activity);
                 favoritesOnly.setText("Favorite decks only");
                 favoritesOnly.setTextColor(VaultNativeStyle.TEXT);
@@ -630,6 +654,12 @@ final class NativeWorkspaceScreen {
                 });
                 favoritesOnly.setOnCheckedChangeListener((b,on)->{
                     deckFavoritesOnly=on;renderDeckList();
+                });
+                formatPicker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+                    public void onNothingSelected(AdapterView<?> p){}
+                    public void onItemSelected(AdapterView<?> p,View v,int idx,long id){
+                        deckFormat=idx==0?"":formats.get(idx);renderDeckList();
+                    }
                 });
                 renderDeckList();
                 button("Open legacy deck editing tools",legacy);
