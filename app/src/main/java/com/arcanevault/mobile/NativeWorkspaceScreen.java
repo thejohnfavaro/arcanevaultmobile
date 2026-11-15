@@ -386,6 +386,13 @@ final class NativeWorkspaceScreen {
                 if(sets==null)sets=new JSONArray();
                 List<JSONObject> filtered=NativeSetProgressFilters.select(sets,hide,order);
                 int allSets=sets.length();
+                int first=pageNumber*40;
+                for(int i=first;i<Math.min(filtered.size(),first+40);i++){
+                    JSONObject tile=filtered.get(i);
+                    String image=catalog.representativeSetArt(
+                        tile.optString("code",""),"arena".equals(source));
+                    if(!image.isEmpty())tile.put("artUrl",image);
+                }
                 ui.post(()->{
                     if(closed||activity.isFinishing()||request!=setRequestId)return;
                     content.removeAllViews();
