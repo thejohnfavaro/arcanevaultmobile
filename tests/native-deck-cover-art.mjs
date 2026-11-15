@@ -5,7 +5,7 @@ const workspace=read('app/src/main/java/com/arcanevault/mobile/NativeWorkspaceSc
 const catalog=read('app/src/main/java/com/arcanevault/mobile/CatalogStore.java');
 const shell=read('app/src/main/java/com/arcanevault/mobile/NativeCompanionScreen.java');
 
-assert.match(workspace,/deckCoverRow\(d,qty,pageGeneration\)/,
+assert.match(workspace,/deckCoverRow\(deck,total,deckPageGeneration\)/,
   'Saved decks must display commander-art deck-box cards instead of text-only rows');
 for(const part of [
   'String commander=deck.optString("commander","").trim()',

@@ -38,6 +38,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.Collections;
 import java.util.Map;
@@ -1464,6 +1465,53 @@ public class MainActivity extends Activity {
     }
 
     /** Preferred artwork uses the existing legacy library key; no duplicate map. */
+    /** Reads the one authoritative legacy favourites list. It is not an
+     * independent native inventory or copied shortlist database. */
+    void loadNativeShortlist(java.util.function.Consumer<JSONArray> callback){
+        if(browser==null || !peerDataPageReady || appUrl==null ||
+                !appUrl.equals(browser.getUrl())){
+            callback.accept(null);return;
+        }
+        browser.evaluateJavascript(
+            "(function(){try{return localStorage.getItem('vault_favorites')||'[]'}"+
+            "catch(e){return null}})()", encoded->{
+                try{
+                    Object value=new org.json.JSONTokener(encoded).nextValue();
+                    if(!(value instanceof String)){callback.accept(null);return;}
+                    JSONArray names=new JSONArray((String)value);
+                    if(names.length()>20000){callback.accept(null);return;}
+                    callback.accept(names);
+                }catch(Exception error){callback.accept(null);}
+            });
+    }
+
+    /** Writes back to vault_favorites and updates the existing legacy
+     * in-memory Set in the same WebView. No new authority or sync schema. */
+    void setNativeShortlist(String name,boolean add,
+            java.util.function.BiConsumer<Boolean,String> callback){
+        String clean=name==null?"":name.trim();
+        if(clean.isEmpty()||clean.length()>180||browser==null ||
+                !peerDataPageReady || appUrl==null || !appUrl.equals(browser.getUrl())){
+            callback.accept(false,"Shortlist storage is not ready; nothing changed.");
+            return;
+        }
+        String script="(function(){try{"+
+            "const key='vault_favorites';let names=JSON.parse(localStorage.getItem(key)||'[]');"+
+            "if(!Array.isArray(names)||names.length>20000)return 'invalid';"+
+            "const value="+JSONObject.quote(clean)+";"+
+            "names=names.filter(x=>typeof x==='string' && x.toLowerCase()!==value.toLowerCase());"+
+            (add?"if(names.length>=20000)return 'full';names.push(value);":"")+
+            "localStorage.setItem(key,JSON.stringify(names));"+
+            "if(typeof favorite!=='undefined')favorite=new Set(names);"+
+            "try{if(typeof renderFavorites==='function')renderFavorites();}catch(e){}"+
+            "return 'saved'}catch(e){return 'error'}})()";
+        browser.evaluateJavascript(script,result->{
+            boolean success="\"saved\"".equals(result);
+            callback.accept(success,success?"Shortlist updated":
+                "Shortlist was not changed ("+result+").");
+        });
+    }
+
     void savePreferredArtwork(String name,String printingId,String imageUrl){
         if(name==null||name.isEmpty()||name.length()>200||imageUrl==null||
             !imageUrl.startsWith("https://cards.scryfall.io/"))return;

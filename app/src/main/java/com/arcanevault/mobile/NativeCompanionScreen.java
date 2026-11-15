@@ -115,6 +115,7 @@ final class NativeCompanionScreen {
         if(scope.equals("physical")||scope.equals("arena")||scope.equals("sets"))
             return "collection";
         if(scope.equals("decks")||scope.equals("edh lab"))return "decks";
+        if(scope.equals("shortlist"))return "catalog";
         if(scope.equals("data & sync"))return "sync";
         return scope;
     }
@@ -159,7 +160,10 @@ final class NativeCompanionScreen {
     private void drawSecondaryTabs(){
         secondaryTabs.removeAllViews();
         String primary=primaryScope();
-        if(primary.equals("collection")){
+        if(primary.equals("catalog")){
+            addSecondaryTab("Card Catalog","catalog");
+            addSecondaryTab("My Shortlist","shortlist");
+        } else if(primary.equals("collection")){
             for(String sub:new String[]{"Physical", "Arena", "Sets"}){
                 String target=sub.toLowerCase(Locale.ROOT);
                 addSecondaryTab(sub,target);
@@ -214,12 +218,13 @@ final class NativeCompanionScreen {
         drawTabs();
         drawSecondaryTabs();
         stage.removeAllViews();
-        if(scope.equals("sets")||scope.equals("decks")||scope.equals("data & sync")){
+        if(scope.equals("sets")||scope.equals("decks")||scope.equals("shortlist")||scope.equals("data & sync")){
             workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,deckLoader,
                 deckSaver,scope.equals("data & sync")?"data":scope);
             stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
-                scope.equals("decks")?"Saved deck library":"Backups, sync and recovery");
+                scope.equals("decks")?"Saved deck library":
+                scope.equals("shortlist")?"Cards saved for later":"Backups, sync and recovery");
             return;
         }
         if(scope.equals("edh lab")){
