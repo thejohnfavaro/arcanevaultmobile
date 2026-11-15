@@ -30,6 +30,19 @@ final class ArtworkCache {
         StringBuilder hex=new StringBuilder();for(byte b:digest)hex.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
         return new File(directory,hex.toString()+(raw.contains(".svg")?".svg":".img"));
     }
+    /** Local-only artwork read for launcher RemoteViews. Never issues network
+     * requests or changes a verified URL. Null means not cached yet. */
+    byte[] getCached(String raw)throws Exception{
+        permitted(raw);
+        File target=file(raw);
+        Object gate=downloadLocks[(raw.hashCode()&Integer.MAX_VALUE)%downloadLocks.length];
+        synchronized(gate){
+            if(!target.isFile())return null;
+            target.setLastModified(System.currentTimeMillis());
+            return read(target);
+        }
+    }
+
     byte[] get(String raw)throws Exception{
         // Synchronize by URL shard rather than serializing all card downloads.
         // A visible thumbnail can load while another page is being prefetched.

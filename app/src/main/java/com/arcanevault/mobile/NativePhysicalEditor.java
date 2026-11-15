@@ -134,6 +134,11 @@ final class NativePhysicalEditor {
                     catalog.physicalOwnership(new JSONObject().put("cards",new JSONArray(previous)));
                     throw dbFailure;
                 }
+                // The prior quote projection can no longer be assumed to
+                // match inventory. Invalidate value and recalculate set
+                // ownership from the updated native SQLite mirror.
+                VaultWidgets.invalidateValue(activity);
+                VaultWidgets.refreshSets(activity);
                 activity.runOnUiThread(()->{
                     new AlertDialog.Builder(activity).setTitle("Physical printing saved")
                         .setMessage("Inventory updated. The previous inventory is stored as a recovery snapshot.")

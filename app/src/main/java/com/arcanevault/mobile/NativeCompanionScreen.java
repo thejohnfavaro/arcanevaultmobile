@@ -260,6 +260,22 @@ final class NativeCompanionScreen {
         subtitle.setText("Saved decks for "+commanderName);
     }
 
+    /** Widget taps enter an existing native workspace. No data is modified:
+     * the set code and source only select the current read-only checklist. */
+    void openWidgetDestination(String destination,String set,String source){
+        if(closed)return;
+        if("physical".equals(destination)){
+            show("physical");
+            return;
+        }
+        if(!"set".equals(destination) || set==null ||
+                !set.matches("[A-Za-z0-9]{2,12}"))return;
+        String requested="arena".equals(source)?"arena":"physical";
+        prefs.edit().putString("native_set_source_v1",requested).apply();
+        show("sets");
+        if(workspace!=null)workspace.openWidgetSet(set,requested);
+    }
+
     private void show(String next){
         if(closed)return;
         if(workspace!=null && workspace.confirmLeave(()->show(next)))return;

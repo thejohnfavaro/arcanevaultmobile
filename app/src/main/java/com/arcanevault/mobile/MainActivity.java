@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> pickerCallback;
     private boolean nativeHomeVisible = false;
     private NativeCompanionScreen nativeController;
+    private Intent pendingWidgetLaunch;
     private android.window.OnBackInvokedCallback systemBackCallback;
     private byte[] pendingExport;
     private Uri pendingPeerComparison;
@@ -86,6 +87,8 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if(getIntent()!=null&&"com.arcanevault.mobile.WIDGET_OPEN".equals(getIntent().getAction()))
+            pendingWidgetLaunch=getIntent();
         // Android 13+ predictive gestures go through the same page-aware
         // dispatcher as older devices' physical/three-button Back controls.
         if(android.os.Build.VERSION.SDK_INT>=33){
@@ -227,6 +230,18 @@ public class MainActivity extends Activity {
         View nativeRoot=nativeController.view();
         NativeSystemInsets.apply(this,nativeRoot);
         setContentView(nativeRoot);
+        deliverWidgetNavigation();
+    }
+
+    private void deliverWidgetNavigation(){
+        if(pendingWidgetLaunch==null||nativeController==null)return;
+        Intent request=pendingWidgetLaunch;
+        pendingWidgetLaunch=null;
+        if(!"com.arcanevault.mobile.WIDGET_OPEN".equals(request.getAction()))return;
+        String target=request.getStringExtra(VaultWidgets.TARGET);
+        String set=request.getStringExtra(VaultWidgets.SET_CODE);
+        String source=request.getStringExtra(VaultWidgets.SOURCE);
+        nativeController.openWidgetDestination(target,set,source);
     }
 
     /** Compare-and-swap a single saved deck at its authoritative WebView origin.
@@ -595,6 +610,12 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if("com.arcanevault.mobile.WIDGET_OPEN".equals(intent.getAction())){
+            pendingWidgetLaunch=intent;
+            if(!nativeHomeVisible)showNativeHome();
+            else deliverWidgetNavigation();
+            return;
+        }
         handleUsbPeerLaunch(intent);
     }
 
@@ -1755,7 +1776,18 @@ public class MainActivity extends Activity {
             if(!validCollectionKey(key)||json==null||json.length()>6_000_000 || collectionSize(json)<0)return false;
             // Native SharedPreferences is the authoritative single copy for
             // inventories. Use commit() so a failed write is not reported as saved.
-            return durable.edit().putString("vault_"+key,json).commit();
+            boolean saved=durable.edit().putString("vault_"+key,json).commit();
+            if(saved){
+                if("physicalCollectionV1".equals(key))
+                    VaultWidgets.invalidateValue(MainActivity.this);
+                VaultWidgets.refreshSets(MainActivity.this);
+            }
+            return saved;
+        }
+        /** A price snapshot only: legacy physicalRender computes coverage from
+         * authoritative inventory and exact-printing Scryfall quote cache. */
+        @JavascriptInterface public boolean publishCollectionValueWidget(String payload){
+            return VaultWidgets.saveValueSnapshot(MainActivity.this,payload);
         }
         private boolean matchCollectionSnapshot(String expectedArena, String expectedPhysical) {
             return java.util.Objects.equals(durable.getString("vault_cards", null), expectedArena) &&
@@ -2000,10 +2032,12 @@ public class MainActivity extends Activity {
                 }
                 else if(path.equals("/api/catalog/ownership") && request[0].equals("POST")){
                     catalog.ownership(new JSONObject(new String(body,StandardCharsets.UTF_8)));
+                    VaultWidgets.refreshSets(MainActivity.this);
                     respondJson(out,200,"{\"ok\":true}");
                 }
                 else if(path.equals("/api/catalog/physical-ownership") && request[0].equals("POST")){
                     catalog.physicalOwnership(new JSONObject(new String(body,StandardCharsets.UTF_8)));
+                    VaultWidgets.refreshSets(MainActivity.this);
                     respondJson(out,200,"{\"ok\":true}");
                 }
                 else if(path.startsWith("/api/catalog/") && request[0].equals("GET")){
