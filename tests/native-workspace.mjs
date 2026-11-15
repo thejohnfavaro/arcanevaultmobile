@@ -15,7 +15,8 @@ assert.match(shell,/destinations=\{"home","catalog","collection","decks","sync"\
 assert.match(screens,/content.removeAllViews\(\)/,'Deck editor replaces workspace content rather than opening a full edit dialog');
 assert.match(screens,/button\("Edit this deck"/,'Saved decks expose inline editing');
 assert.match(shell,/NativeWorkspaceScreen\.create/);
-assert.match(screens,/catalog\.indexedSetOverview\(source,filter\)/,'Read indexed physical and Arena Set Progress data');
+assert.match(screens,/catalog\.cachedSetOverview\(source,filter\)/,'Read cached physical and Arena Set Progress data before indexing');
+assert.match(screens,/catalog\.indexedSetOverview\(source,""\)/,'Build missing snapshot from indexed data only once');
 assert.match(screens,/catalog\.setPrintings\(args\)/,'Browse set-specific actual printings');
 assert.match(screens,/catalog\.status\(\)/);
 assert.match(screens,/catalog\.start\(\)/);
