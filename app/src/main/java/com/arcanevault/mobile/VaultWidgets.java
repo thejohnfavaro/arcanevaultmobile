@@ -126,6 +126,7 @@ final class VaultWidgets {
                 .putBoolean("quotes_present",hasQuotes)
                 .putBoolean("value_valid",true).commit();
             if(!prefs(context).getBoolean("value_valid",false))return false;
+            VaultValueHistory.record(context,null,currentCents,priced);
             refreshValue(context);
             return true;
         }catch(Exception error){return false;}
