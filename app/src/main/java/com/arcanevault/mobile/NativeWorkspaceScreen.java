@@ -58,6 +58,7 @@ final class NativeWorkspaceScreen {
     private final DeckSaver deckSaver;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
+    private final ExecutorService setDetailsWorker=Executors.newSingleThreadExecutor();
     private final ExecutorService coverWorkers=Executors.newFixedThreadPool(2);
     private final ArrayList<DeckCoverTarget> deckCoverTargets=new ArrayList<>();
     private final Set<String> coverInFlight=new HashSet<>();
@@ -236,6 +237,7 @@ final class NativeWorkspaceScreen {
     void close(){
         closed=true;
         executor.shutdownNow();
+        setDetailsWorker.shutdownNow();
         coverWorkers.shutdownNow();
         deckCoverTargets.clear();
         coverInFlight.clear();
@@ -342,22 +344,9 @@ final class NativeWorkspaceScreen {
         if(closed||code==null||!code.matches("[A-Za-z0-9]{2,12}"))return;
         if(!"arena".equals(source)&&!"physical".equals(source))return;
         setSource=source;
-        final int ticket=++setRequestId;
-        status.setText("Opening "+code.toUpperCase(java.util.Locale.ROOT)+"…");
-        executor.execute(()->{
-            String title=code.toUpperCase(java.util.Locale.ROOT);
-            try{
-                // Exact one-set lookup, never the expensive all-sets ownership join.
-                JSONObject indexed=catalog.indexedSetProgress(code,source);
-                if(indexed!=null)title=indexed.optString("name",title);
-            }catch(Exception error){
-                android.util.Log.w("ArcaneVault","Set widget target lookup unavailable",error);
-            }
-            final String display=title;
-            ui.post(()->{
-                if(!closed&&ticket==setRequestId)showSet(code,display,0);
-            });
-        });
+        // Do not queue behind a full Set Progress overview or wait for a
+        // catalog-wide name lookup. The deep-link target is already verified.
+        showSet(code,code.toUpperCase(java.util.Locale.ROOT),0);
     }
 
     private void setProgress(String filter,int pageNumber){
@@ -460,7 +449,7 @@ final class NativeWorkspaceScreen {
         final String source=setSource;
         final boolean hideUnowned=hideUnownedSetSlots;
         status.setText("Reading "+title+(source.equals("physical")?" printings":" Arena cards")+"…");
-        executor.execute(()->{
+        setDetailsWorker.execute(()->{
             try {
                 Map<String,String> args=new HashMap<>();
                 args.put("set",set);args.put("page",Integer.toString(pageNumber));
