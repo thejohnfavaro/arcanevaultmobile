@@ -2,7 +2,6 @@ package com.arcanevault.mobile;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.text.NumberFormat;
@@ -78,6 +77,7 @@ final class VaultSetValues {
         if(total>0&&priced==0)return "No price quotes for owned printings in this set";
         if(total==0)return "No owned physical printings in this set";
         String amount=money(context,data.optLong("cents",0));
+        if(amount.isEmpty())return "Collection value unavailable · exchange rate not cached";
         String change=change(context,code,data);
         return "Owned set value: "+amount+
             (change.isEmpty()?"":" · "+change)+
@@ -119,7 +119,15 @@ final class VaultSetValues {
     /** Attach presentation metadata, without modifying stored set progress.
      * No effect for Arena sets, which have no physical printing valuation. */
     static void decorate(Context context,JSONObject card,String source){
-        if(card==null||!"physical".equals(source))return;
+        if(card==null)return;
+        // This card object may be reused from a cached set snapshot; do not
+        // leave stale values visible if coverage or scope changed.
+        card.remove("ownedValueLabel");
+        card.remove("ownedValueChange");
+        card.remove("ownedValuePercent");
+        card.remove("ownedValueDirection");
+        card.remove("ownedPriceCoverage");
+        if(!"physical".equals(source))return;
         String code=card.optString("code","").toLowerCase(Locale.ROOT);
         JSONObject item=forSet(context,code);
         if(item==null)return;
