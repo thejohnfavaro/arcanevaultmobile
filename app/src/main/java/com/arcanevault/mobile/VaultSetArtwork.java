@@ -52,15 +52,37 @@ final class VaultSetArtwork {
         }catch(Exception ignored){return null;}
     }
 
+    /** Warm icon before cover art, so the set symbol appears promptly even
+     * when a larger crop download is slow or unavailable. */
+    static void prefetchSymbol(Context context,String code){
+        String symbol=setSymbolUrl(code);
+        if(symbol.isEmpty())return;
+        try{new ArtworkCache(context).get(symbol);}
+        catch(Exception error){
+            android.util.Log.w("ArcaneVault","Set icon unavailable: "+code,error);
+        }
+    }
+    static void prefetchArt(Context context,String url){
+        if(url==null||!url.startsWith("https://cards.scryfall.io/"))return;
+        ArtworkCache artwork=new ArtworkCache(context);
+        String crop=cropUrl(url);
+        boolean hasCrop=false;
+        if(!crop.isEmpty())try{
+            artwork.get(crop);
+            hasCrop=true;
+        }catch(Exception error){
+            android.util.Log.w("ArcaneVault","Set art crop unavailable",error);
+        }
+        if(!hasCrop)try{
+            // Not every printing supports the constructed art_crop URL.
+            // The original normal image is a legitimate cached fallback.
+            artwork.get(url);
+        }catch(Exception error){
+            android.util.Log.w("ArcaneVault","Set card art unavailable",error);
+        }
+    }
     static void prefetch(Context context,String url,String code){
-        try{
-            ArtworkCache artwork=new ArtworkCache(context);
-            String crop=cropUrl(url);
-            if(!crop.isEmpty())artwork.get(crop);
-        }catch(Exception ignored){}
-        try{
-            String symbol=setSymbolUrl(code);
-            if(!symbol.isEmpty())new ArtworkCache(context).get(symbol);
-        }catch(Exception ignored){}
+        prefetchSymbol(context,code);
+        prefetchArt(context,url);
     }
 }
