@@ -22,3 +22,13 @@ assert.match(catalog,/ORACLE TEXT/,'Card inspector must have readable rules text
 assert.match(catalog,/View printings & edit physical ownership/,'Printing inspection is preserved');
 assert.match(catalog,/NativePrintingOwnership\.inspect/,'Verified physical identity safety stays in place');
 console.log('PASS: dark native shell, full-height catalog, real cached thumbnails, legible inspector, printing safety');
+
+// Android gallery must prioritize real browsing space over permanently expanded filters.
+assert.match(catalog,/quickFilters=VaultNativeStyle\.column\(activity\)/);
+assert.match(catalog,/advancedFilters\.addView\(quickFilters,0\)/);
+assert.match(catalog,/catalogTileWidth\(\)/);
+assert.match(catalog,/usableDp >= 680f \? 4 : usableDp >= 490f \? 3 : 2/);
+assert.match(catalog,/if\(artGrid\)\{/);
+assert.match(catalog,/renderOwnedPrintingTile\(gallery,row,i\)/);
+assert.match(catalog,/PREF_COMPACT_GRID/);
+console.log('PASS: responsive compact card grid and collapsible catalog controls');

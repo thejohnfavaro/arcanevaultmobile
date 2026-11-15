@@ -28,5 +28,7 @@ for(const q of [
   'No deck was created automatically'
 ])assert.ok(workspace.includes(q),'Missing read-only saved-deck navigation: '+q);
 assert.match(nav,/this::showDecksForCommander/);
-assert.match(nav,/deckLoader,"decks",commanderName/);
-console.log('PASS: Native Android commander ownership/identity filters and filtered saved-deck handoff preserve read-only data');
+assert.match(nav,/deckLoader,deckSaver,"decks",commanderName/);
+assert.match(workspace,/private void editDeck\(JSONObject deck\)/,'Native saved decks must support editing');
+assert.match(workspace,/deckSaver\.save\(deck,revised/,'Native editing must use authoritative deck persistence');
+console.log('PASS: Native Android commander ownership/identity filters and filtered saved-deck handoff preserve the original authoritative saved deck library');
