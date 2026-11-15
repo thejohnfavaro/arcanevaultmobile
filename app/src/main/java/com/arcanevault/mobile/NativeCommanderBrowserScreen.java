@@ -189,6 +189,16 @@ final class NativeCommanderBrowserScreen {
     }
 
     View view(){return root;}
+    /** A commander preview is a detail page only on narrow screens.
+     * Landscape/tablet split views remain in the same browser state. */
+    boolean onBack(){
+        if(closed||wide||previewScroll.getVisibility()!=View.VISIBLE)return false;
+        imageGeneration++;
+        previewScroll.setVisibility(View.GONE);
+        listScroll.setVisibility(View.VISIBLE);
+        return true;
+    }
+
     void close(){closed=true;generation.incrementAndGet();imageGeneration++;
         data.shutdownNow();images.shutdownNow();}
     private int dp(float n){return VaultNativeStyle.dp(activity,n);}
@@ -284,11 +294,7 @@ final class NativeCommanderBrowserScreen {
             listScroll.setVisibility(View.GONE);
             previewScroll.setVisibility(View.VISIBLE);
             Button back=VaultNativeStyle.button(activity,"← Back to commanders",false);
-            back.setOnClickListener(v->{
-                imageGeneration++;
-                previewScroll.setVisibility(View.GONE);
-                listScroll.setVisibility(View.VISIBLE);
-            });
+            back.setOnClickListener(v->onBack());
             addRow(preview,back);
         }
         String name=card.optString("name","Unknown commander");

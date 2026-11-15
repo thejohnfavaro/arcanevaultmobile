@@ -789,6 +789,16 @@ final class NativeCatalogScreen {
 
     /** In-workspace card inspection preserves the active query, filters, page,
      * and list scroll position. Returning does not re-fetch the catalog. */
+    private Runnable inspectorBack;
+    /** Android system Back follows the same card inspector hierarchy as the
+     * inline Back controls; it never dismisses the entire native activity. */
+    boolean onBack(){
+        if(disposed || inspectorScroll.getVisibility()!=View.VISIBLE)return false;
+        if(inspectorBack!=null)inspectorBack.run();
+        else closeInspector();
+        return true;
+    }
+
     private void openInspector(String heading) {
         inspectorRequest++;
         inspectorContent.removeAllViews();
@@ -797,13 +807,14 @@ final class NativeCatalogScreen {
         inspectorScroll.scrollTo(0,0);
         Button back=VaultNativeStyle.button(activity,"← Back to catalog",false);
         inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(46)));
-        back.setOnClickListener(v->closeInspector());
+        back.setOnClickListener(v->onBack());
         TextView title=text(heading,22,true);
         title.setMaxLines(3);
         inspectorContent.addView(title);
     }
 
     private void closeInspector() {
+        inspectorBack=null;
         inspectorRequest++;
         inspectorScroll.setVisibility(View.GONE);
         browseScroll.setVisibility(View.VISIBLE);
@@ -820,6 +831,7 @@ final class NativeCatalogScreen {
     private void showDetails(String name,String type,String oracle,String rarity,
             String imageUrl,String imageBack,int arenaQty,int physicalQty) {
         openInspector(name);
+        inspectorBack=null;
         addInspectorArtwork(name,imageUrl,imageBack);
         TextView typeLine=text(type,14,true);
         typeLine.setTextColor(VaultNativeStyle.SUBTEXT);
@@ -889,9 +901,10 @@ final class NativeCatalogScreen {
 
     private void showInlinePrintings(String name,Runnable previous) {
         openInspector("Printings · "+name);
+        inspectorBack=previous;
         Button back=VaultNativeStyle.button(activity,"← Card details",false);
         inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(44)));
-        back.setOnClickListener(v->previous.run());
+        back.setOnClickListener(v->onBack());
         TextView loading=text("Checking official printings and confirmed ownership…",13,false);
         inspectorContent.addView(loading);
         final int token=inspectorRequest;
@@ -975,6 +988,7 @@ final class NativeCatalogScreen {
         String code=printing.optString("set","").toUpperCase(java.util.Locale.ROOT);
         String collector=printing.optString("collectorNumber","");
         openInspector(name+" · "+code+" #"+collector);
+        inspectorBack=previous;
         Button back=VaultNativeStyle.button(activity,"← All printings",false);
         inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(44)));
         back.setOnClickListener(v->previous.run());

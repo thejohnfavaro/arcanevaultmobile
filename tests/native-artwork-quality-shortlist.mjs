@@ -39,7 +39,9 @@ assert.match(shortlist,/SHORTLIST_PAGE_SIZE=48/);
 assert.match(shortlist,/Math.min\(filtered.size\(\),first\+SHORTLIST_PAGE_SIZE\)/);
 assert.match(shortlist,/new ShortlistArtTarget\(image,url,/);
 assert.match(shortlist,/target.view.getGlobalVisibleRect\(visible\)/);
-assert.match(shortlist,/workspaceScroll.post\(this::loadVisibleShortlistArt\)/);
+assert.match(shortlist,/workspaceScroll.post\(\(\)->\{/,
+  'Shortlist restores prior gallery scroll position before lazy artwork');
+assert.match(shortlist,/loadVisibleShortlistArt\(\)/);
 assert.match(shortlist,/shortlistArtInFlight.size\(\)>=6/);
 assert.match(shortlist,/return size\(\)>20/);
 assert.match(shortlist,/tile.setOnClickListener\(v->openShortlistPreview\(card\)\)/);
