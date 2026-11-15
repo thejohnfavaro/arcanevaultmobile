@@ -363,6 +363,17 @@ final class NativeWorkspaceScreen {
         JSONObject cached=catalog.cachedSetOverview(source,filter);
         if(cached!=null){
             renderSetProgress(cached,request,source,filter,pageNumber,order,hide,true);
+            if(!catalog.dirtySetCodes(source).isEmpty()){
+                executor.execute(()->{
+                    if(!catalog.refreshDirtySetProgress(source))return;
+                    JSONObject refreshed=catalog.cachedSetOverview(source,filter);
+                    if(refreshed!=null)ui.post(()->{
+                        if(!closed&&request==setRequestId)
+                            renderSetProgress(refreshed,request,source,filter,
+                                pageNumber,order,hide,true);
+                    });
+                });
+            }
             return;
         }
 
@@ -440,6 +451,7 @@ final class NativeWorkspaceScreen {
         if(filtered.isEmpty())
             row("No sets match this view",
                 "Clear the search, change the collection, or sync the set catalog.",null);
+        java.util.Set<String> refreshing=catalog.dirtySetCodes(source);
         int start=pageNumber*40;
         int last=Math.min(filtered.size(),start+40);
         for(int i=start;i<last;i++){
@@ -462,6 +474,12 @@ final class NativeWorkspaceScreen {
             LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(-1,dp(161));
             layout.bottomMargin=dp(9);
             content.addView(tile,layout);
+            if(refreshing.contains(code.toLowerCase(java.util.Locale.ROOT))){
+                TextView progress=VaultNativeStyle.label(activity,
+                    "Updating "+name+" progress… · previous value shown",
+                    11,VaultNativeStyle.GOLD,false);
+                VaultNativeStyle.margin(content,progress,5,activity);
+            }
         }
         if(last<filtered.size())
             button("Next sets ("+last+" / "+filtered.size()+")",
