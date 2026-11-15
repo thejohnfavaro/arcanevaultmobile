@@ -36,10 +36,7 @@ final class NativeDeckFit {
             value.equals("historic")||value.equals("alchemy")||
             value.equals("explorer")||value.equals("timeless");
     }
-    static Result check(JSONObject deck,JSONArray physical,JSONArray arenaCards){
-        if(deck==null)return new Result(0,0,false,Collections.emptyList());
-        boolean arena=arenaFormat(deck.optString("format",""));
-        JSONArray pool=arena?arenaCards:physical;
+    private static Map<String,Integer> countPool(JSONArray pool){
         Map<String,Integer> owned=new HashMap<>();
         if(pool!=null)for(int i=0;i<Math.min(pool.length(),150000);i++){
             JSONObject row=pool.optJSONObject(i);if(row==null)continue;
@@ -48,6 +45,16 @@ final class NativeDeckFit {
             if(name.isEmpty()||qty<=0||qty>99999)continue;
             owned.put(name,Math.addExact(owned.getOrDefault(name,0),qty));
         }
+        return owned;
+    }
+    static Result check(JSONObject deck,JSONArray physical,JSONArray arenaCards){
+        return check(deck,countPool(physical),countPool(arenaCards));
+    }
+    private static Result check(JSONObject deck,Map<String,Integer> physical,
+            Map<String,Integer> arenaCards){
+        if(deck==null)return new Result(0,0,false,Collections.emptyList());
+        boolean arena=arenaFormat(deck.optString("format",""));
+        Map<String,Integer> owned=arena?arenaCards:physical;
         Map<String,Integer> need=new HashMap<>();
         JSONArray entries=deck.optJSONArray("entries");
         if(entries!=null)for(int i=0;i<Math.min(entries.length(),2000);i++){
@@ -73,22 +80,29 @@ final class NativeDeckFit {
         missing.sort(String.CASE_INSENSITIVE_ORDER);
         return new Result(required,covered,arena,missing);
     }
+    private static final class Candidate {
+        final JSONObject deck;
+        final Result fit;
+        Candidate(JSONObject deck,Result fit){this.deck=deck;this.fit=fit;}
+    }
     static List<String> rank(JSONArray decks,JSONArray physical,JSONArray arenaCards){
-        List<String> ranked=new ArrayList<>();
-        List<JSONObject> source=new ArrayList<>();
+        List<Candidate> source=new ArrayList<>();
+        Map<String,Integer> ownedPaper=countPool(physical);
+        Map<String,Integer> ownedArena=countPool(arenaCards);
         for(int i=0;i<Math.min(decks==null?0:decks.length(),500);i++){
             JSONObject deck=decks.optJSONObject(i);
-            if(deck!=null)source.add(deck);
+            if(deck==null)continue;
+            Result fit=check(deck,ownedPaper,ownedArena);
+            if(fit.required>0)source.add(new Candidate(deck,fit));
         }
-        source.sort(Comparator.<JSONObject>comparingInt(deck->{
-            Result result=check(deck,physical,arenaCards);
-            return result.required==0?Integer.MAX_VALUE:result.missingCopies();
-        }).thenComparing(deck->deck.optString("name","")));
-        for(JSONObject deck:source){
-            Result fit=check(deck,physical,arenaCards);
-            if(fit.required==0)continue;
+        source.sort(Comparator.comparingInt((Candidate c)->c.fit.missingCopies())
+            .thenComparing(c->c.deck.optString("name","")));
+        List<String> ranked=new ArrayList<>();
+        for(Candidate candidate:source){
+            JSONObject deck=candidate.deck;
+            Result fit=candidate.fit;
             ranked.add(deck.optString("name","Saved deck")+" · "+fit.summary()+
-                (fit.missingCopies()>0?"\nMissing: "+
+                (fit.missingCopies()>0?"\\nMissing: "+
                     String.join(", ",fit.missing.subList(0,Math.min(5,fit.missing.size()))):""));
             if(ranked.size()==8)break;
         }
