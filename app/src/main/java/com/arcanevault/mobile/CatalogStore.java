@@ -784,47 +784,61 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
     }
     /** Scoped read-only printing browser for native Set Progress. */
+    /** One-set page: restrict printing reconciliation to returned printing IDs.
+     * Never compute an all-catalog ownership CTE before drawing a set page. */
     JSONObject setPrintings(Map<String,String> p)throws Exception{
         String set=get(p,"set");
-        if(!set.matches("[A-Za-z0-9]{2,12}"))throw new IllegalArgumentException("Invalid set code");
+        if(!set.matches("[A-Za-z0-9]{2,12}"))
+            throw new IllegalArgumentException("Invalid set code");
         int page=clamp(get(p,"page"),0,100000,0);
         int size=clamp(get(p,"size"),1,80,48);
-        String match="WITH identified AS ("+
-            " SELECT v.print_id id,p.qty qty FROM physical_printings p JOIN variants v ON "+
-            " p.print_id!='' AND p.print_id=v.print_id COLLATE NOCASE "+
-            " WHERE p.qty>0 AND (p.setcode='' OR p.setcode=v.setcode COLLATE NOCASE "+
-            " OR p.setcode=v.setname COLLATE NOCASE) "+
-            " AND (p.collector='' OR p.collector=v.collector COLLATE NOCASE) "+
-            " UNION ALL "+
-            " SELECT v.print_id id,p.qty qty FROM physical_printings p JOIN variants v ON "+
-            " p.print_id='' AND p.setcode!='' AND p.collector!='' "+
-            " AND (p.setcode=v.setcode COLLATE NOCASE OR p.setcode=v.setname COLLATE NOCASE) "+
-            " AND p.collector=v.collector COLLATE NOCASE "+
-            " WHERE p.qty>0 AND NOT EXISTS(SELECT 1 FROM variants other "+
-            " WHERE other.print_id!=v.print_id AND "+
-            " (other.setcode=p.setcode COLLATE NOCASE OR other.setname=p.setcode COLLATE NOCASE) "+
-            " AND other.collector=p.collector COLLATE NOCASE)"+
-            " ), confirmed AS (SELECT id,SUM(qty) qty FROM identified GROUP BY id) ";
         SQLiteDatabase db=getReadableDatabase();
-        int total;
-        try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM variants WHERE setcode=? COLLATE NOCASE",new String[]{set})){
-            total=c.moveToFirst()?c.getInt(0):0;
+        int total=0;
+        try(Cursor c=db.rawQuery(
+            "SELECT COUNT(*) FROM variants WHERE setcode=? COLLATE NOCASE",
+            new String[]{set})){
+            if(c.moveToFirst())total=c.getInt(0);
         }
         JSONArray rows=new JSONArray();
-        String query=match+"SELECT v.name,v.print_id,v.setcode,v.setname,v.collector,v.rarity,"+
-            "v.image,COALESCE(o.qty,0) FROM variants v "+
-            "LEFT JOIN confirmed o ON o.id=v.print_id "+
-            "WHERE v.setcode=? COLLATE NOCASE ORDER BY v.name COLLATE NOCASE,v.collector "+
+        String sql="SELECT v.name,v.print_id,v.setcode,v.setname,v.collector,"+
+            "v.rarity,v.image FROM variants v "+
+            "WHERE v.setcode=? COLLATE NOCASE "+
+            "ORDER BY v.name COLLATE NOCASE,v.collector "+
             "LIMIT ? OFFSET ?";
-        try(Cursor c=db.rawQuery(query,new String[]{set,Integer.toString(size),Integer.toString(page*size)})){
+        try(Cursor c=db.rawQuery(sql,new String[]{
+            set,Integer.toString(size),Integer.toString(page*size)})){
             while(c.moveToNext()){
-                rows.put(new JSONObject().put("name",c.getString(0)).put("id",c.getString(1))
-                    .put("set",c.getString(2)).put("setName",c.getString(3))
-                    .put("collectorNumber",c.getString(4)).put("rarity",c.getString(5))
-                    .put("image",c.getString(6)).put("confirmedPhysicalCopies",c.getInt(7)));
+                String id=c.getString(1),code=c.getString(2),name=c.getString(3),
+                    collector=c.getString(4);
+                int qty=0;
+                // ID is authoritative. If absent from the ownership ledger,
+                // fall back only to the exact set+collector identity of rows
+                // lacking a Scryfall ID. Never match a card name across sets.
+                try(Cursor owned=db.rawQuery(
+                    "SELECT COALESCE(SUM(qty),0) FROM physical_printings "+
+                    "WHERE qty>0 AND print_id=? COLLATE NOCASE",
+                    new String[]{id==null?"":id})){
+                    if(owned.moveToFirst())qty=Math.max(0,owned.getInt(0));
+                }
+                if(qty==0){
+                    try(Cursor fallback=db.rawQuery(
+                        "SELECT COALESCE(SUM(qty),0) FROM physical_printings "+
+                        "WHERE qty>0 AND print_id='' AND collector=? COLLATE NOCASE "+
+                        "AND (setcode=? COLLATE NOCASE OR setcode=? COLLATE NOCASE)",
+                        new String[]{collector==null?"":collector,
+                            code==null?"":code,name==null?"":name})){
+                        if(fallback.moveToFirst())qty=Math.max(0,fallback.getInt(0));
+                    }
+                }
+                rows.put(new JSONObject().put("name",c.getString(0))
+                    .put("id",id).put("set",code).put("setName",name)
+                    .put("collectorNumber",collector)
+                    .put("rarity",c.getString(5)).put("image",c.getString(6))
+                    .put("confirmedPhysicalCopies",qty));
             }
         }
-        return new JSONObject().put("total",total).put("page",page).put("printings",rows);
+        return new JSONObject().put("total",total).put("page",page)
+            .put("printings",rows);
     }
 
     /** Arena set coverage is card-name ownership, never inferred physical printing ownership. */
