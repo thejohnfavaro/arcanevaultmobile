@@ -875,7 +875,7 @@ final class NativeCatalogScreen {
             ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty)));
 
         Button browsePrintings=VaultNativeStyle.button(activity,
-            "Browse printings & manage physical copies",false);
+            "View printings & edit physical ownership",false);
         inspectorContent.addView(browsePrintings,new LinearLayout.LayoutParams(-1,dp(48)));
         browsePrintings.setOnClickListener(v->showInlinePrintings(name,
             ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty)));
