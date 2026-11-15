@@ -41,6 +41,7 @@ final class NativeCompanionScreen {
     private NativeCommanderBrowserScreen commanderBrowser;
     private NativeWorkspaceScreen workspace;
     private final NativeWorkspaceScreen.DeckLoader deckLoader;
+    private final NativeWorkspaceScreen.DeckSaver deckSaver;
     private String scope="home", query="";
     private int visibleCount=PAGE_SIZE;
     private List<CardRow> physical=Collections.emptyList(),arena=Collections.emptyList();
@@ -53,10 +54,12 @@ final class NativeCompanionScreen {
 
     private NativeCompanionScreen(Activity activity,SharedPreferences prefs,
             CatalogStore catalog,ArtworkCache artwork,Runnable openLegacy,
-            NativeWorkspaceScreen.DeckLoader deckLoader) {
+            NativeWorkspaceScreen.DeckLoader deckLoader,
+            NativeWorkspaceScreen.DeckSaver deckSaver) {
         this.activity=activity;
         this.prefs=prefs;this.catalog=catalog;this.artwork=artwork;this.openLegacy=openLegacy;
         this.deckLoader=deckLoader;
+        this.deckSaver=deckSaver;
         root=VaultNativeStyle.column(activity);
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
         root.setPadding(0,dp(14),0,0);
@@ -87,8 +90,9 @@ final class NativeCompanionScreen {
     }
 
     static View create(Activity activity,SharedPreferences prefs,CatalogStore catalog,
-            ArtworkCache artwork,Runnable openLegacy,NativeWorkspaceScreen.DeckLoader deckLoader) {
-        return new NativeCompanionScreen(activity,prefs,catalog,artwork,openLegacy,deckLoader).root;
+            ArtworkCache artwork,Runnable openLegacy,NativeWorkspaceScreen.DeckLoader deckLoader,
+            NativeWorkspaceScreen.DeckSaver deckSaver) {
+        return new NativeCompanionScreen(activity,prefs,catalog,artwork,openLegacy,deckLoader,deckSaver).root;
     }
     private int dp(float n){return VaultNativeStyle.dp(activity,n);}
     private LinearLayout column(){return VaultNativeStyle.column(activity);}
@@ -125,7 +129,7 @@ final class NativeCompanionScreen {
         drawTabs();
         stage.removeAllViews();
         workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,
-            deckLoader,"decks",commanderName);
+            deckLoader,deckSaver,"decks",commanderName);
         stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
         subtitle.setText("Saved decks for "+commanderName);
     }
@@ -138,7 +142,7 @@ final class NativeCompanionScreen {
         stage.removeAllViews();
         if(scope.equals("sets")||scope.equals("decks")||scope.equals("data & sync")){
             workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,deckLoader,
-                scope.equals("data & sync")?"data":scope);
+                deckSaver,scope.equals("data & sync")?"data":scope);
             stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
                 scope.equals("decks")?"Saved deck library":"Backups, sync and recovery");
