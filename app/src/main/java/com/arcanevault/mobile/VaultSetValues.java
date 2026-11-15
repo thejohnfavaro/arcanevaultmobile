@@ -57,7 +57,7 @@ final class VaultSetValues {
                 .putString("updatedAt",updated)
                 .putBoolean("hasQuotes",hasQuotes);
             if(!changes.commit())return false;
-            VaultWidgets.refreshSets(context);
+            VaultWidgets.redrawSetWidgets(context);
             return true;
         }catch(Exception error){
             android.util.Log.w("ArcaneVault","Set valuation snapshot rejected",error);
@@ -133,6 +133,10 @@ final class VaultSetValues {
             card.put("ownedValueLabel","OWNED "+money);
             card.put("ownedValueChange",variance);
             card.put("ownedPriceCoverage",priced+"/"+total+" priced");
+            long baselineValue=prefs(context).getLong("baseline_"+code,0);
+            long difference=item.optLong("cents",0)-baselineValue;
+            card.put("ownedValuePercent",baselineValue>0?
+                String.format(Locale.US,"%+.1f%%",100.0*difference/baselineValue):"");
             long baseline=prefs(context).getLong("baseline_"+code,0);
             card.put("ownedValueDirection",
                 baseline<=0?0:Long.compare(item.optLong("cents",0),baseline));
