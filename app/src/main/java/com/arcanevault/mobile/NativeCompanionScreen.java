@@ -332,6 +332,93 @@ final class NativeCompanionScreen {
         block.addView(text(sub,13,VaultNativeStyle.SUBTEXT,false));
         VaultNativeStyle.margin(target,block,12,activity);
     }
+    /** In-app read-only projection of the exact saved Scryfall widget valuation.
+     * Currency and selected market are display preferences, never price writes. */
+    private void renderCollectionValue(LinearLayout parent){
+        android.content.SharedPreferences quotes=VaultWidgets.prefs(activity);
+        LinearLayout pane=column();
+        pane.setPadding(dp(16),dp(13),dp(16),dp(15));
+        VaultNativeStyle.surface(activity,pane,false);
+        pane.addView(text("PHYSICAL COLLECTION VALUE",12,VaultNativeStyle.GOLD,true));
+        TextView total=text("—",27,VaultNativeStyle.TEXT,true);
+        total.setPadding(0,dp(9),0,dp(5));
+        pane.addView(total);
+        TextView detail=text("",12,VaultNativeStyle.SUBTEXT,false);
+        pane.addView(detail);
+        TextView origin=text("",11,VaultNativeStyle.SUBTEXT,false);
+        origin.setPadding(0,dp(5),0,dp(7));
+        pane.addView(origin);
+        LinearLayout choices=VaultNativeStyle.row(activity);
+        android.widget.Spinner market=new android.widget.Spinner(activity);
+        String[] marketKeys={"scryfall","tcgplayer"};
+        String[] marketNames={"Scryfall reference","TCGplayer via Scryfall"};
+        android.widget.ArrayAdapter<String> markets=new android.widget.ArrayAdapter<>(
+            activity,android.R.layout.simple_spinner_item,marketNames);
+        markets.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        market.setAdapter(markets);
+        market.setSelection("tcgplayer".equals(quotes.getString("value_market_global","scryfall"))?1:0);
+        choices.addView(market,new LinearLayout.LayoutParams(0,dp(48),2));
+        android.widget.Spinner currency=new android.widget.Spinner(activity);
+        String[] codes={"USD","EUR","GBP","CAD","AUD","JPY"};
+        android.widget.ArrayAdapter<String> currencies=new android.widget.ArrayAdapter<>(
+            activity,android.R.layout.simple_spinner_item,codes);
+        currencies.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        currency.setAdapter(currencies);
+        String savedCode=quotes.getString("value_currency_global","USD");
+        int selectedCode=java.util.Arrays.asList(codes).indexOf(savedCode);
+        currency.setSelection(Math.max(0,selectedCode));
+        choices.addView(currency,new LinearLayout.LayoutParams(0,dp(48),1));
+        pane.addView(choices);
+        Runnable update=()->{
+            String marketKey=marketKeys[market.getSelectedItemPosition()];
+            String code=codes[currency.getSelectedItemPosition()];
+            quotes.edit().putString("value_market_global",marketKey)
+                .putString("value_currency_global",code).apply();
+            int priced=quotes.getInt("priced_rows",0);
+            int all=quotes.getInt("total_rows",0);
+            boolean valid=quotes.getBoolean("value_valid",false);
+            Double rate=VaultWidgetExchangeRates.rate(activity,code);
+            if(valid&&priced>0&&rate!=null){
+                java.util.Locale locale="EUR".equals(code)?java.util.Locale.GERMANY:
+                    "GBP".equals(code)?java.util.Locale.UK:
+                    "CAD".equals(code)?java.util.Locale.CANADA:
+                    "AUD".equals(code)?new java.util.Locale("en","AU"):
+                    "JPY".equals(code)?java.util.Locale.JAPAN:java.util.Locale.US;
+                java.text.NumberFormat amount=java.text.NumberFormat.getCurrencyInstance(locale);
+                amount.setCurrency(java.util.Currency.getInstance(code));
+                total.setText(amount.format((quotes.getLong("value_cents",0)/100.0)*rate));
+            }else total.setText("—");
+            String message=!valid?"Open Data & Sync or refresh Scryfall prices to load value":
+                all==0?"No inventoried physical printings":
+                !quotes.getBoolean("quotes_present",false)?"No cached Scryfall prices":
+                priced==0?"Owned printings have no matching price quotes":
+                rate==null?"Exchange rate unavailable · reconnect to refresh":
+                    priced+" of "+all+" printing entries priced · unpriced excluded";
+            detail.setText(message);
+            String updated=quotes.getString("quote_updated","");
+            if(updated.length()>10)updated=updated.substring(0,10);
+            origin.setText(("tcgplayer".equals(marketKey)?"TCGplayer market via Scryfall":
+                "Scryfall market reference")+" · "+code+
+                (updated.isEmpty()?" · cached quotes":" · quotes "+updated)+
+                ("USD".equals(code)?"":" · FX "+VaultWidgetExchangeRates.date(activity)));
+            if(rate==null)VaultWidgetExchangeRates.refreshIfNeeded(activity);
+        };
+        market.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){
+                update.run();
+            }
+        });
+        currency.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){
+                update.run();
+            }
+        });
+        update.run();
+        VaultNativeStyle.margin(parent,pane,12,activity);
+    }
+
     private static long copies(List<CardRow> rows){
         long value=0;for(CardRow r:rows)value+=r.qty;return value;
     }
@@ -340,6 +427,7 @@ final class NativeCompanionScreen {
             "Native Android companion • synced data stays on this device",VaultNativeStyle.GOLD);
         card(content,"Physical collection",String.format(Locale.US,"%,d cards",copies(physical)),
             String.format(Locale.US,"%,d printing and name entries",physical.size()),VaultNativeStyle.PRIMARY);
+        renderCollectionValue(content);
         card(content,"Arena collection",String.format(Locale.US,"%,d cards",copies(arena)),
             String.format(Locale.US,"%,d entries",arena.size()),VaultNativeStyle.GOLD);
         TextView tools=text("QUICK ACTIONS",12,VaultNativeStyle.SUBTEXT,true);
@@ -365,6 +453,7 @@ final class NativeCompanionScreen {
             String.format(Locale.US,"%,d copies",copies(rows)),
             String.format(Locale.US,"%,d entries • read-only",rows.size()),
             paper?VaultNativeStyle.PRIMARY:VaultNativeStyle.GOLD);
+        if(paper)renderCollectionValue(content);
         EditText search=new EditText(activity);
         search.setHint("Search your cards");
         VaultNativeStyle.search(activity,search);
