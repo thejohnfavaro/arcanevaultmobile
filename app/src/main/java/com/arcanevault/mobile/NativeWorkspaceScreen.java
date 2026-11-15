@@ -1024,6 +1024,7 @@ final class NativeWorkspaceScreen {
         final int generation=++deckPageGeneration;
         shortlistArtTargets.clear();
         content.removeAllViews();
+        workspaceScroll.scrollTo(0,0);
         String name=card.optString("name","");
         String url=card.optString("image","");
         status.setText("Shortlist · "+name);
@@ -1150,6 +1151,7 @@ final class NativeWorkspaceScreen {
         deckCoverTargets.clear();
         shortlistArtTargets.clear();
         content.removeAllViews();
+        workspaceScroll.scrollTo(0,0);
         status.setText("Reading saved card names…");
         ((MainActivity)activity).loadNativeShortlist(names->{
             if(closed||activity.isFinishing()||generation!=deckPageGeneration)return;
