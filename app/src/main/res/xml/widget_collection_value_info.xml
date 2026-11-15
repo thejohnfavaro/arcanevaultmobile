@@ -4,7 +4,7 @@
  android:minResizeWidth="180dp" android:minResizeHeight="95dp"
  android:targetCellWidth="3" android:targetCellHeight="2"
  android:description="@string/widget_collection_value_description"
- android:initialLayout="@layout/widget_collection_value"
+ android:configure="com.arcanevault.mobile.VaultValueWidgetConfigActivity"\n android:initialLayout="@layout/widget_collection_value"
  android:resizeMode="horizontal|vertical"
  android:widgetCategory="home_screen"
  android:updatePeriodMillis="1800000"/>
