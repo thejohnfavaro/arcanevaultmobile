@@ -74,7 +74,8 @@ final class VaultWidgets {
                 .putInt("priced_rows",priced).putInt("total_rows",total)
                 .putLong("total_copies",copies).putString("quote_updated",at)
                 .putBoolean("quotes_present",hasQuotes)
-                .putBoolean("value_valid",true).apply();
+                .putBoolean("value_valid",true).commit();
+            if(!prefs(context).getBoolean("value_valid",false))return false;
             refreshValue(context);
             return true;
         }catch(Exception error){return false;}
