@@ -140,6 +140,8 @@ final class NativePhysicalEditor {
                 VaultWidgets.invalidateValue(activity);
                 VaultWidgets.refreshSets(activity);
                 activity.runOnUiThread(()->{
+                    if(activity instanceof MainActivity)
+                        ((MainActivity)activity).refreshCollectionValueWidget();
                     new AlertDialog.Builder(activity).setTitle("Physical printing saved")
                         .setMessage("Inventory updated. The previous inventory is stored as a recovery snapshot.")
                         .setPositiveButton("OK",(d,w)->onSaved.run()).show();
