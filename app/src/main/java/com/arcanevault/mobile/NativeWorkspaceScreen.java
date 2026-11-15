@@ -60,6 +60,7 @@ final class NativeWorkspaceScreen {
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final ExecutorService setDetailsWorker=Executors.newSingleThreadExecutor();
     private final ExecutorService coverWorkers=Executors.newFixedThreadPool(2);
+    private final ExecutorService setArtWorkers=Executors.newFixedThreadPool(4);
     private final ArrayList<DeckCoverTarget> deckCoverTargets=new ArrayList<>();
     private final Set<String> coverInFlight=new HashSet<>();
     private final Set<String> coverUnavailable=new HashSet<>();
@@ -242,6 +243,7 @@ final class NativeWorkspaceScreen {
         executor.shutdownNow();
         setDetailsWorker.shutdownNow();
         coverWorkers.shutdownNow();
+        setArtWorkers.shutdownNow();
         deckCoverTargets.clear();
         coverInFlight.clear();
         setArtInFlight.clear();
@@ -383,8 +385,12 @@ final class NativeWorkspaceScreen {
         // directory immediately from disk while we index in the worker.
         content.removeAllViews();
         JSONArray directory=VaultSetDirectory.cached(activity);
-        renderCachedSetNames(directory,filter,source);
-        status.setText("Preparing "+source+" progress · set names available while indexing…");
+        if(hide){
+            row("Preparing verified "+source+" set progress…",
+                "Hide empty sets is enabled. Set cards appear once their "+
+                "owned progress is verified; no unverified sets are shown.",null);
+        }else renderCachedSetNames(directory,filter,source);
+        status.setText("Preparing "+source+" set progress · cached progress pending…");
         executor.execute(()->{
             try{
                 JSONObject result=catalog.indexedSetOverview(source,"");
@@ -464,25 +470,36 @@ final class NativeWorkspaceScreen {
         // symbols are populated asynchronously without blocking set progress.
         final String key=source+":"+code.toLowerCase(java.util.Locale.ROOT);
         if(!setArtInFlight.add(key))return;
-        coverWorkers.execute(()->{
+        setArtWorkers.execute(()->{
             try{
+                // Symbol download is independent of the local card catalog.
+                VaultSetArtwork.prefetchSymbol(activity,code);
+                ui.post(()->redrawSetProgressArt(tile,set,source,width,request));
                 String art=catalog.resolveAndCacheSetArt(code,source);
-                if(!art.isEmpty())VaultSetArtwork.prefetch(activity,art,code);
-                else VaultSetArtwork.prefetch(activity,"",code);
-                ui.post(()->{
-                    if(closed||request!=setRequestId || !tile.isAttachedToWindow())return;
-                    try{
-                        if(!art.isEmpty())set.put("artUrl",art);
-                        tile.setImageBitmap(VaultSetProgressCard.render(
-                            activity,set,source,width,dp(176)));
-                    }catch(Exception ignored){}
-                });
+                if(!art.isEmpty()){
+                    VaultSetArtwork.prefetchArt(activity,art);
+                    final String url=art;
+                    ui.post(()->{
+                        try{set.put("artUrl",url);}catch(Exception ignored){}
+                        redrawSetProgressArt(tile,set,source,width,request);
+                    });
+                }
             }catch(Exception error){
                 android.util.Log.w("ArcaneVault","Set artwork unavailable: "+code,error);
             }finally{
                 ui.post(()->setArtInFlight.remove(key));
             }
         });
+    }
+
+    private void redrawSetProgressArt(ImageView tile,JSONObject set,String source,
+            int width,int request){
+        if(closed||request!=setRequestId)return;
+        // Don't discard a completed image just because the list view has not
+        // attached yet; the image view retains the bitmap when attached.
+        if(tile.getParent()==null)return;
+        tile.setImageBitmap(VaultSetProgressCard.render(
+            activity,set,source,width,dp(176)));
     }
 
     /** Render only local data. No SQL is executed from the UI thread. */
@@ -494,7 +511,6 @@ final class NativeWorkspaceScreen {
         List<JSONObject> filtered=NativeSetProgressFilters.select(sets,hide,order);
         int allSets=sets.length();
         boolean missingOwned=filtered.isEmpty()&&allSets>0&&hide;
-        if(missingOwned)filtered=NativeSetProgressFilters.select(sets,false,order);
         content.removeAllViews();
         TextView hint=VaultNativeStyle.label(activity,
             "arena".equals(source)?
@@ -503,9 +519,10 @@ final class NativeWorkspaceScreen {
             12,VaultNativeStyle.SUBTEXT,false);
         VaultNativeStyle.margin(content,hint,10,activity);
         if(missingOwned)
-            row("No verified owned sets found",
-                "Showing indexed sets without claiming unverified ownership.",null);
-        if(filtered.isEmpty())
+            row("No sets with verified progress",
+                "Hide empty sets is enabled. Unverified sets remain hidden; "+
+                "turn it off to browse all sets.",null);
+        if(filtered.isEmpty()&&!missingOwned)
             row("No sets match this view",
                 "Clear the search, change the collection, or sync the set catalog.",null);
         java.util.Set<String> refreshing=catalog.dirtySetCodes(source);
