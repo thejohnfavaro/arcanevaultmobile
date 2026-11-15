@@ -64,16 +64,16 @@ assert.match(workspace,/catalog\.representativeSetArt\(/);
 
 // Multiple independently configured Set Progress widgets.
 assert.match(config,/new Spinner\(this\)/);
-assert.match(config,/Search a set name or enter its code/);
+assert.match(config,/Search set name or code/);
 assert.match(config,/loadSets\(\)/);
 assert.match(store,/putString\("code_"\+id/);
 assert.match(store,/putString\("source_"\+id/);
 assert.match(store,/removeSetChoice\(Context context,int id\)/);
 assert.match(store,/snapshot_"\+id/);
-assert.match(store,/catalog\.sets\(args\)/);
+assert.match(store,/catalog\.indexedSetProgress\(code,source\)/);
 assert.match(store,/if\(row==null\)continue/,
  'Missing set catalog must retain last valid widget snapshot');
-assert.match(store,/if\("arena"\.equals\(source\)\)args\.put\("arena","arena"\)/);
+assert.match(store,/catalog\.indexedSetProgress\(code,source\)/);
 
 // Valuation may use only already calculated Scryfall printing quotes.
 assert.match(html,/PHYSICAL_PRICE_KEY='physicalPriceQuotesV1'/);
