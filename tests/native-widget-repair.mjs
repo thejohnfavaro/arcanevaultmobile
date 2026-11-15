@@ -27,15 +27,15 @@ assert.match(layout,/android:scaleType="fitCenter"/);
 assert.doesNotMatch(layout,/android:scaleType="fitXY"/);
 assert.match(config,/preview.setScaleType\(ImageView.ScaleType.FIT_CENTER\)/);
 assert.doesNotMatch(config,/preview.setScaleType\(ImageView.ScaleType.FIT_XY\)/);
-assert.match(config,/screenWidth-dp\(40\)/);
+assert.match(config,/screen-dp\(40\)/);
 
 // Setup works without prematurely assuming the catalog index is complete.
 // Exact set codes are allowed, but no fake owned/total values are written.
-assert.match(config,/private JSONObject chosenSet\(\)/);
-assert.match(config,/code.matches\("\[a-z0-9\]\{2,5\}"\)/);
-assert.match(config,/Track "\+code\+" now/);
-assert.match(config,/save.setEnabled\(valid\)/);
-assert.match(config,/No set matches. Enter an official/);
+assert.match(config,/private void selectSet\(JSONObject item\)/);
+assert.match(config,/VaultSetDirectory\.official\(getApplicationContext\(\)\)/);
+assert.match(config,/Set name verified\. Card progress is unavailable/);
+assert.match(config,/save.setEnabled\(selected!=null\)/);
+assert.match(config,/No official set matched/);
 assert.match(config,/VaultWidgets.saveSetChoice\(this,widgetId,code,name,source\)/);
 assert.match(config,/setResult\(RESULT_OK,result\)/);
 assert.match(widgets,/if\(!stored\)throw new IllegalStateException/);
