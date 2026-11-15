@@ -283,6 +283,7 @@ public class MainActivity extends Activity {
                         "decks[index]=revised;localStorage.setItem(key,JSON.stringify(decks));"+
                         "if(JSON.parse(localStorage.getItem(key))[index].updated!==revised.updated)"+
                             "throw Error('Readback verification failed');"+
+                        "if(typeof deckLibrary!=='undefined')deckLibrary=decks;"+
                         "return JSON.stringify({ok:true});"+
                         "}catch(e){return JSON.stringify({ok:false,error:String(e)})}})()";
                     browser.evaluateJavascript(commit, reply->{
