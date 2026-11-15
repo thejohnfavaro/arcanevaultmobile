@@ -382,9 +382,21 @@ public final class NativePeerSync {
             changes.put(new JSONObject().put("group","preferredArtwork")
                 .put("key",key).put("action",action));
         }
+        JSONObject groups=new JSONObject();
+        for(int i=0;i<changes.length();i++){
+            JSONObject item=changes.getJSONObject(i);
+            String group=item.optString("group","");
+            JSONObject count=groups.optJSONObject(group);
+            if(count==null){count=new JSONObject().put("added",0)
+                .put("different",0).put("absent",0);groups.put(group,count);}
+            String action=item.optString("action","");
+            String column="Add".equals(action)?"added":
+                "Different".equals(action)?"different":"absent";
+            count.put(column,count.optInt(column,0)+1);
+        }
         return summary.put("peerDevice",incoming.getString("deviceId"))
             .put("revision",incoming.getString("revision")).put("equal",equal)
             .put("conflicts",conflicts).put("changes",changes)
-            .put("safeToAutoApply",false);
+            .put("groups",groups).put("safeToAutoApply",false);
     }
 }
