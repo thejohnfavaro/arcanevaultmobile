@@ -666,7 +666,6 @@ final class NativeCatalogScreen {
         GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
         cell.width=cardWidth;
         cell.height=-2;
-        int columns=catalogColumns();
         cell.rowSpec=GridLayout.spec(index/columns);
         cell.columnSpec=GridLayout.spec(index%columns);
         cell.setMargins(dp(3),dp(3),dp(3),dp(3));
