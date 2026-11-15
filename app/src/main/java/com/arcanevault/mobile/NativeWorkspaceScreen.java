@@ -77,6 +77,9 @@ final class NativeWorkspaceScreen {
     private LinearLayout deckListPanel;
     private String deckSearch="",deckSort="updated",deckFolder="";
     private boolean deckFavoritesOnly=false;
+    private LinearLayout shortlistPanel;
+    private ArrayList<JSONObject> shortlistCards=new ArrayList<>();
+    private String shortlistQuery="";
     private int deckPageGeneration;
     private int setRequestId=0;
     private String setQuery="";
@@ -227,6 +230,14 @@ final class NativeWorkspaceScreen {
         }
         VaultNativeStyle.margin(content,entry,8,activity);
     }
+    private void copyText(String label,String value,String description){
+        ClipboardManager board=(ClipboardManager)activity.getSystemService(
+            Context.CLIPBOARD_SERVICE);
+        if(board==null){info("Clipboard is unavailable.");return;}
+        board.setPrimaryClip(ClipData.newPlainText(label,value));
+        status.setText("Copied "+description+" to clipboard");
+    }
+
     private Button button(String label,Runnable action){
         Button b=VaultNativeStyle.button(activity,label,false);
         VaultNativeStyle.margin(content,b,9,activity);
@@ -840,6 +851,115 @@ final class NativeWorkspaceScreen {
                 ui.post(()->{if(!closed&&pageGeneration==deckPageGeneration)info("Deck details unavailable: "+e.getMessage());});
             }
         });
+    }
+
+    /** Native Shortlist reads/writes the existing vault_favorites array in
+     * the authoritative WebView. No second bookmark store is introduced. */
+    private void shortlist(){
+        final int generation=++deckPageGeneration;
+        deckCoverTargets.clear();
+        content.removeAllViews();
+        status.setText("Reading saved card names…");
+        ((MainActivity)activity).loadNativeShortlist(names->{
+            if(closed||activity.isFinishing()||generation!=deckPageGeneration)return;
+            content.removeAllViews();
+            if(names==null){
+                status.setText("Shortlist unavailable while legacy storage is loading");
+                row("Existing favorites were not changed",
+                    "Return once app data is ready, or use Legacy tools.",null);
+                return;
+            }
+            if(names.length()>20000){
+                status.setText("Shortlist exceeds safe display limit");return;
+            }
+            ArrayList<String> selected=new ArrayList<>();
+            Set<String> seen=new HashSet<>();
+            for(int i=0;i<names.length();i++){
+                String name=names.optString(i,"").trim();
+                if(name.isEmpty()||name.length()>180)continue;
+                if(seen.add(name.toLowerCase(java.util.Locale.ROOT)))selected.add(name);
+            }
+            status.setText(selected.size()+" bookmarked cards · no changes to inventory");
+            EditText search=new EditText(activity);
+            VaultNativeStyle.search(activity,search);
+            search.setSingleLine(true);
+            search.setHint("Search saved cards");
+            search.setText(shortlistQuery);
+            VaultNativeStyle.margin(content,search,8,activity);
+            Button copy=button("Copy shortlist as decklist",()->{
+                StringBuilder text=new StringBuilder();
+                for(String name:selected)text.append("1 ").append(name).append('\n');
+                copyText("Arcane Vault Shortlist",text.toString(),
+                    selected.size()+" card names");
+            });
+            copy.setEnabled(!selected.isEmpty());
+            shortlistPanel=VaultNativeStyle.column(activity);
+            content.addView(shortlistPanel);
+            search.addTextChangedListener(new TextWatcher(){
+                public void beforeTextChanged(CharSequence x,int a,int b,int c){}
+                public void onTextChanged(CharSequence x,int a,int b,int c){
+                    shortlistQuery=x.toString();renderShortlist();
+                }
+                public void afterTextChanged(Editable x){}
+            });
+            executor.execute(()->{
+                ArrayList<JSONObject> cards=new ArrayList<>();
+                for(String name:selected){
+                    try{cards.add(catalog.cardBrief(name));}
+                    catch(Exception error){
+                        cards.add(new JSONObject().put("name",name).put("known",false)
+                            .put("physical",0).put("arena",0).put("type",""));
+                    }
+                }
+                ui.post(()->{
+                    if(closed||activity.isFinishing()||generation!=deckPageGeneration)return;
+                    shortlistCards=cards;
+                    renderShortlist();
+                });
+            });
+        });
+    }
+
+    private void renderShortlist(){
+        if(shortlistPanel==null)return;
+        shortlistPanel.removeAllViews();
+        String term=shortlistQuery.trim().toLowerCase(java.util.Locale.ROOT);
+        int visible=0;
+        for(JSONObject card:shortlistCards){
+            String name=card.optString("name","");
+            if(!name.toLowerCase(java.util.Locale.ROOT).contains(term))continue;
+            visible++;
+            LinearLayout line=VaultNativeStyle.row(activity);
+            line.setPadding(dp(11),dp(10),dp(11),dp(10));
+            VaultNativeStyle.surface(activity,line,false);
+            LinearLayout detail=VaultNativeStyle.column(activity);
+            detail.addView(VaultNativeStyle.label(activity,name,15,VaultNativeStyle.TEXT,true));
+            String owned=card.optBoolean("known",false)?
+                "Physical ×"+card.optInt("physical",0)+" · Arena ×"+
+                card.optInt("arena",0):
+                "Not found in local catalog — ownership unverified";
+            detail.addView(VaultNativeStyle.label(activity,owned,11,
+                VaultNativeStyle.SUBTEXT,false));
+            line.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
+            Button remove=VaultNativeStyle.button(activity,"★",false);
+            remove.setContentDescription("Remove "+name+" from Shortlist");
+            LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(dp(48),dp(44));
+            size.leftMargin=dp(8);
+            line.addView(remove,size);
+            remove.setOnClickListener(v->{
+                remove.setEnabled(false);
+                ((MainActivity)activity).setNativeShortlist(name,false,(ok,message)->{
+                    if(!closed && !activity.isFinishing()){
+                        if(ok)shortlist();
+                        else{remove.setEnabled(true);info(message);}
+                    }
+                });
+            });
+            VaultNativeStyle.margin(shortlistPanel,line,6,activity);
+        }
+        if(visible==0)
+            rowTo(shortlistPanel,shortlistCards.isEmpty()?"Nothing bookmarked yet":"No matches",
+                "Use the star on Card Catalog details to save cards.");
     }
 
     private void dataSync(){
