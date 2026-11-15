@@ -16,15 +16,15 @@ import android.widget.HorizontalScrollView;
 
 /** Native Android visual foundation. Never relies on WebView CSS. */
 final class VaultNativeStyle {
-    static final int BACKGROUND=Color.rgb(13,17,26);
-    static final int SURFACE=Color.rgb(24,31,44);
-    static final int ELEVATED=Color.rgb(32,43,59);
-    static final int BORDER=Color.rgb(58,74,94);
-    static final int PRIMARY=Color.rgb(111,225,209);
-    static final int GOLD=Color.rgb(224,178,107);
-    static final int TEXT=Color.rgb(239,244,250);
-    static final int SUBTEXT=Color.rgb(171,190,205);
-    static final int DIM=Color.rgb(127,150,170);
+    static final int BACKGROUND=Color.rgb(13,16,23);
+    static final int SURFACE=Color.rgb(23,28,40);
+    static final int ELEVATED=Color.rgb(32,39,55);
+    static final int BORDER=Color.rgb(52,61,81);
+    static final int PRIMARY=Color.rgb(181,155,252);
+    static final int GOLD=Color.rgb(229,191,121);
+    static final int TEXT=Color.rgb(240,241,246);
+    static final int SUBTEXT=Color.rgb(157,169,189);
+    static final int DIM=Color.rgb(126,141,165);
 
     private VaultNativeStyle() {}
     static int dp(Activity a, float n) {
@@ -52,10 +52,12 @@ final class VaultNativeStyle {
         button.setAllCaps(false);
         button.setText(content);
         button.setTextSize(12);
+        button.setFocusable(true);
         button.setTextColor(active?BACKGROUND:TEXT);
         button.setMinHeight(0);
         button.setMinimumHeight(0);
-        button.setPadding(dp(a,12),dp(a,6),dp(a,12),dp(a,6));
+        button.setPadding(dp(a,12),dp(a,8),dp(a,12),dp(a,8));
+        button.setMinHeight(dp(a,42));
         button.setBackground(rounded(a,active?PRIMARY:ELEVATED,active?Color.TRANSPARENT:BORDER,11));
         return button;
     }
