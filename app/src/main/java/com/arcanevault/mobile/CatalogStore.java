@@ -923,6 +923,70 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
     }
 
+    /**
+     * Lightweight Set Progress overview. Counts distinct catalog card names per set,
+     * then resolves owned exact printing matches in one separate grouped query.
+     * Never multiplies every variant by the entire inventory in a global CTE.
+     * Unmatched ownership stays unknown, not credited to an arbitrary edition.
+     */
+    JSONObject indexedSetOverview(String source,String query)throws Exception{
+        if(!"physical".equals(source)&&!"arena".equals(source))
+            throw new IllegalArgumentException("Invalid set progress source");
+        String filter=query==null?"":query.trim();
+        if(filter.length()>120)throw new IllegalArgumentException("Set search is too long");
+        SQLiteDatabase db=getReadableDatabase();
+        JSONArray rows=new JSONArray();
+        java.util.HashMap<String,Integer> ownedBySet=new java.util.HashMap<>();
+        String ownedSql;
+        if("arena".equals(source)){
+            ownedSql="SELECT v.setcode,COUNT(DISTINCT v.name) FROM variants v "+
+                "JOIN ownership o ON o.name=v.name COLLATE NOCASE AND o.qty>0 "+
+                "WHERE v.arena=1 GROUP BY v.setcode";
+        }else{
+            ownedSql="SELECT v.setcode,COUNT(DISTINCT v.name) FROM physical_printings p "+
+                "JOIN variants v ON "+
+                "(p.print_id!='' AND v.print_id=p.print_id COLLATE NOCASE) OR "+
+                "(p.setcode!='' AND p.collector!='' AND "+
+                "v.collector=p.collector COLLATE NOCASE AND "+
+                "(v.setcode=p.setcode COLLATE NOCASE OR v.setname=p.setcode COLLATE NOCASE) "+
+                "AND (p.print_id='' OR NOT EXISTS "+
+                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE))) "+
+                "WHERE p.qty>0 GROUP BY v.setcode";
+        }
+        try(Cursor c=db.rawQuery(ownedSql,null)){
+            while(c.moveToNext())ownedBySet.put(c.getString(0),c.getInt(1));
+        }
+        String sql="SELECT setcode,MAX(setname),COUNT(DISTINCT name),"+
+            "MIN(CASE WHEN length(release)=10 AND release GLOB '????-??-??' "+
+            "THEN release END) FROM variants "+
+            ("arena".equals(source)?"WHERE arena=1 ":"")+
+            "GROUP BY setcode ORDER BY MAX(setname) COLLATE NOCASE";
+        int totalCards=0,ownedCards=0;
+        try(Cursor c=db.rawQuery(sql,null)){
+            while(c.moveToNext()){
+                String code=c.getString(0),name=c.getString(1);
+                if(code==null||code.isEmpty())continue;
+                if(!filter.isEmpty()&&!code.toLowerCase(Locale.ROOT).contains(
+                    filter.toLowerCase(Locale.ROOT))&&
+                    (name==null||!name.toLowerCase(Locale.ROOT).contains(
+                        filter.toLowerCase(Locale.ROOT))))continue;
+                int total=c.getInt(2);
+                if(total<=0)continue;
+                int owned=Math.min(total,Math.max(0,ownedBySet.getOrDefault(code,0)));
+                totalCards+=total;ownedCards+=owned;
+                rows.put(new JSONObject().put("code",code)
+                    .put("name",name==null?code:name)
+                    .put("total",total).put("owned",owned)
+                    .put("missing",total-owned)
+                    .put("percentage",Math.round(1000.0*owned/total)/10.0)
+                    .put("releaseDate",c.isNull(3)?"":c.getString(3)));
+            }
+        }
+        return new JSONObject().put("sets",rows).put("count",rows.length())
+            .put("totalCards",totalCards).put("ownedCards",ownedCards)
+            .put("source",source);
+    }
+
     JSONObject sets(Map<String,String> p)throws Exception{
         String arena=get(p,"arena"),query=get(p,"q");JSONArray rows=new JSONArray();int t=0,owned=0;
         String source=setProgressCte(p);
