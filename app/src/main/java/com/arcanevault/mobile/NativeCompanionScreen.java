@@ -201,7 +201,7 @@ final class NativeCompanionScreen {
         drawTabs();
         drawSecondaryTabs();
         stage.removeAllViews();
-        workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,
+        workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,
             deckLoader,deckSaver,"decks",commanderName);
         stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
         subtitle.setText("Saved decks for "+commanderName);
@@ -215,7 +215,7 @@ final class NativeCompanionScreen {
         drawSecondaryTabs();
         stage.removeAllViews();
         if(scope.equals("sets")||scope.equals("decks")||scope.equals("data & sync")){
-            workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,deckLoader,
+            workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,deckLoader,
                 deckSaver,scope.equals("data & sync")?"data":scope);
             stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
