@@ -850,6 +850,25 @@ function physicalRender(){
    totalCopies:total,hasQuotes:Object.keys(physicalPrices?.quotes||{}).length>0,
    updatedAt:String(physicalPrices?.updatedAt||'')
  }));}catch(error){console.warn('Collection Value widget cache unavailable',error)}
+ // Keep each physical set's valuation synchronized with the same exact
+ // printing quote cache, including while a multi-batch price refresh runs.
+ try{
+   const bySet=new Map();
+   for(const c of physicalCards){
+     if(!c||!Number.isInteger(c.qty)||c.qty<=0)continue;
+     const code=String(c.set||'').trim().toLowerCase();
+     if(!/^[a-z0-9]{2,12}$/.test(code))continue;
+     let row=bySet.get(code);
+     if(!row){row={code,value:0,pricedRows:0,totalRows:0};bySet.set(code,row)}
+     row.totalRows++;
+     const quote=physicalPrice(c);
+     if(quote!==null){row.pricedRows++;row.value+=quote*c.qty}
+   }
+   window.ArcaneAndroid?.publishSetValueSnapshots?.(JSON.stringify({
+     sets:[...bySet.values()],updatedAt:String(physicalPrices?.updatedAt||''),
+     hasQuotes:Object.keys(physicalPrices?.quotes||{}).length>0
+   }));
+ }catch(error){console.warn('Set Value cache unavailable',error)}
  $('physicalSummary').textContent=physicalCards.length.toLocaleString()+' inventory rows · '+total.toLocaleString()+' copies · '+physicalOwnership().length+' card names · '+physicalCards.filter(avPhysicalHasIdentity).length+' identified printing rows · '+physicalMoney(value)+' estimated ('+priced.length+' priced printings)';
  $('physicalPageLabel').textContent='Page '+(physicalPage+1)+' / '+pages+' · '+list.length+' matching'+($('physicalSort').value!=='name'?' · unpriced last':'');
  $('physicalPrev').disabled=physicalPage===0;$('physicalNext').disabled=physicalPage===pages-1;
