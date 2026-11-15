@@ -449,6 +449,11 @@ final class NativeWorkspaceScreen {
         final String source=setSource;
         final boolean hideUnowned=hideUnownedSetSlots;
         status.setText("Reading "+title+(source.equals("physical")?" printings":" Arena cards")+"…");
+        // Always provide an escape route even if indexing or a particular
+        // set's ownership query takes time. Never leave a blank detail pane.
+        content.removeAllViews();
+        button("← Back to sets",()->setProgress(setQuery,0));
+        row("Loading "+title+"…","Reading the local set index. Your collection is unchanged.",null);
         setDetailsWorker.execute(()->{
             try {
                 Map<String,String> args=new HashMap<>();
