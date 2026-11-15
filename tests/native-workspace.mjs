@@ -11,7 +11,7 @@ const provider=read('app/src/main/java/com/arcanevault/mobile/NativeBackupProvid
 const manifest=read('app/src/main/AndroidManifest.xml');
 for(const label of ['"Sets"','"Deck Library"','"Data & Sync"'])
  assert.ok(shell.includes(label),'Missing contextual workspace destination: '+label);
-assert.match(shell,/new String\[\]\{"home","catalog","collection","decks","sync"\}/);
+assert.match(shell,/destinations=\{"home","catalog","collection","decks","sync"\}/);
 assert.match(screens,/content.removeAllViews\(\)/,'Deck editor replaces workspace content rather than opening a full edit dialog');
 assert.match(screens,/button\("Edit this deck"/,'Saved decks expose inline editing');
 assert.match(shell,/NativeWorkspaceScreen\.create/);
