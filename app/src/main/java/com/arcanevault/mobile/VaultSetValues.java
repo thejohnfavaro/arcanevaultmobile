@@ -56,6 +56,13 @@ final class VaultSetValues {
                 .putString("updatedAt",updated)
                 .putBoolean("hasQuotes",hasQuotes);
             if(!changes.commit())return false;
+            for(int i=0;i<rows.length();i++){
+                JSONObject row=rows.optJSONObject(i);
+                if(row==null)continue;
+                VaultValueHistory.record(context,row.optString("code",""),
+                    Math.round(row.optDouble("value",0)*100),
+                    row.optInt("pricedRows",0));
+            }
             VaultWidgets.redrawSetWidgets(context);
             return true;
         }catch(Exception error){
