@@ -381,17 +381,26 @@ final class NativeWorkspaceScreen {
                 p.put("source",source);
                 p.put("arena",source.equals("arena")?"arena":"");
                 p.put("q",filter);
-                JSONObject result=catalog.sets(p);
+                JSONObject result=catalog.indexedSetOverview(source,filter);
                 JSONArray sets=result.optJSONArray("sets");
                 if(sets==null)sets=new JSONArray();
                 List<JSONObject> filtered=NativeSetProgressFilters.select(sets,hide,order);
                 int allSets=sets.length();
+                boolean emptyOwnershipOnly=filtered.isEmpty() && allSets>0 && hide;
+                if(emptyOwnershipOnly)
+                    filtered=NativeSetProgressFilters.select(sets,false,order);
+                final List<JSONObject> visibleSets=filtered;
+                final boolean showOwnershipHint=emptyOwnershipOnly;
                 int first=pageNumber*40;
-                for(int i=first;i<Math.min(filtered.size(),first+40);i++){
-                    JSONObject tile=filtered.get(i);
-                    String image=catalog.representativeSetArt(
-                        tile.optString("code",""),"arena".equals(source));
-                    if(!image.isEmpty())tile.put("artUrl",image);
+                // Artwork is optional: listing progress cannot be blocked by a slow
+                // art query or an absent printing image. Warm only visible tiles.
+                for(int i=first;i<Math.min(visibleSets.size(),first+12);i++){
+                    JSONObject tile=visibleSets.get(i);
+                    try{
+                        String image=catalog.representativeSetArt(
+                            tile.optString("code",""),"arena".equals(source));
+                        if(!image.isEmpty())tile.put("artUrl",image);
+                    }catch(Exception ignored){ /* Progress must still render. */ }
                 }
                 ui.post(()->{
                     if(closed||activity.isFinishing()||request!=setRequestId)return;
@@ -402,12 +411,18 @@ final class NativeWorkspaceScreen {
                         "Arena tracks owned card names in Arena-available sets, not exact printings.",
                         12,VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,hint,10,activity);
-                    if(filtered.isEmpty())
-                        row("No sets match these filters",
-                            "Try showing empty sets, changing collection, or clearing the search.",null);
+                    if(showOwnershipHint)
+                        row("No verified ownership found in this scope",
+                            "Showing all indexed sets so you can still browse. Sync exact "+
+                            "physical printing IDs to populate your owned progress.",null);
+                    if(visibleSets.isEmpty())
+                        row(allSets==0?"Set catalog unavailable or empty":"No sets match these filters",
+                            allSets==0?"Open Data & Sync and refresh the Scryfall catalog. "+
+                                "Your collection has not been cleared.":
+                                "Try showing empty sets, changing collection, or clearing search.",null);
                     int start=pageNumber*40;
-                    for(int i=start;i<Math.min(filtered.size(),start+40);i++){
-                        JSONObject set=filtered.get(i);
+                    for(int i=start;i<Math.min(visibleSets.size(),start+40);i++){
+                        JSONObject set=visibleSets.get(i);
                         String code=set.optString("code","");
                         String name=set.optString("name","Unknown set");
                         int owned=set.optInt("owned",0);
@@ -430,11 +445,11 @@ final class NativeWorkspaceScreen {
                         tileLayout.bottomMargin=dp(9);
                         content.addView(tile,tileLayout);
                     }
-                    if(start+40<filtered.size())
-                        button("Next sets ("+(start+40)+" / "+filtered.size()+")",
+                    if(start+40<visibleSets.size())
+                        button("Next sets ("+(start+40)+" / "+visibleSets.size()+")",
                             ()->setProgress(filter,pageNumber+1));
                     if(start>0)button("Previous sets",()->setProgress(filter,pageNumber-1));
-                    status.setText(filtered.size()+" shown / "+allSets+" sets · "+
+                    status.setText(visibleSets.size()+" shown / "+allSets+" sets · "+
                         NativeSetProgressFilters.title(order));
                 });
             }catch(Exception error){
