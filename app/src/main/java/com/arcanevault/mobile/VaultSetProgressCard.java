@@ -55,6 +55,7 @@ final class VaultSetProgressCard {
         int total=set==null?0:Math.max(0,set.optInt("total",0));
         float percent=total>0?Math.min(100f,100f*owned/total):0f;
         boolean paper=!"arena".equals(source);
+        boolean measured=set!=null&&set.has("total")&&total>0;
 
         text(canvas,paint,"ARCANE VAULT  /  SET PROGRESS",
             left,27*unit,10*unit,GOLD,false);
@@ -71,20 +72,23 @@ final class VaultSetProgressCard {
         text(canvas,paint,ellipsize(paint,name,titleMax,20*unit,true),
             left,57*unit,20*unit,WHITE,true);
 
-        String count=String.format(Locale.US,"%,d / %,d",owned,total);
+        String count=measured?
+            String.format(Locale.US,"%,d / %,d",owned,total):"— / —";
         text(canvas,paint,count,left,96*unit,19*unit,WHITE,true);
-        text(canvas,paint,String.format(Locale.US,"%.1f%%",percent),
+        text(canvas,paint,measured?
+                String.format(Locale.US,"%.1f%%",percent):"—",
             right-82*unit,96*unit,19*unit,PURPLE,true);
         float top=h-49*unit;
         RectF track=new RectF(left,top,right,top+11*unit);
         paint.setColor(Color.rgb(52,61,81));
         canvas.drawRoundRect(track,6*unit,6*unit,paint);
-        if(percent>0){
+        if(measured&&percent>0){
             paint.setColor(PURPLE);
             RectF fill=new RectF(left,top,left+(right-left)*percent/100f,top+11*unit);
             canvas.drawRoundRect(fill,6*unit,6*unit,paint);
         }
-        text(canvas,paint,paper?"VERIFIED PHYSICAL PRINTINGS":"ARENA CARD NAMES",
+        text(canvas,paint,!measured?"CATALOG NOT AVAILABLE":
+            paper?"VERIFIED PHYSICAL PRINTINGS":"ARENA CARD NAMES",
             left,h-16*unit,10.5f*unit,MUTED,false);
         return bitmap;
     }
