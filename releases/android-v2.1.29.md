@@ -5,8 +5,8 @@
 - **Set Progress** launcher widget: independently configure a Magic set and Physical verified printings or Arena card-name tracking, with name, set code, owned/total and a progress bar.
 - Launcher Set Progress setup screen with local set search, separate per-widget source selection and live preview; reconfigure individual widgets via the gear icon.
 - Deep-link widget taps to Physical Collection or the matching exact Set Progress detail in native Arcane Vault, retaining native Back behavior.
-- Responsive visual tiles shared by native Set Progress and the launcher Set Progress widget, using a consistent dark Arcane Noir surface, gold highlight, purple progress bar, set badge and percentage.
-- Independently refreshing widget snapshots when app inventory or local ownership indexes change; scheduled widget updates read only local persisted state.
+- Responsive visual tiles shared by native Set Progress and the launcher Set Progress widget, matching Windows tiles with representative official card-art backgrounds, dark readability gradient, cached official set symbols, gold highlights, percentage and purple progress bar. Missing artwork keeps the styled gradient fallback.
+- Independently refreshing widget snapshots when app inventory or local ownership indexes change; scheduled widget updates read only local persisted state. The chosen set's official art and SVG icon are prefetched only once during explicit configuration (and cached for subsequent offline redraws).
 
 ## Changed
 - Android Set Progress rows now use the same designed card renderer as the home-screen Set Progress widget, while keeping Physical/Arena filters, sorting, and tap-to-view details.
