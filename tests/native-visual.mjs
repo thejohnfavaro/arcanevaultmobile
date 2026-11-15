@@ -6,10 +6,12 @@ const style=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/VaultNativ
 const manifest=fs.readFileSync('app/src/main/AndroidManifest.xml','utf8');
 assert.match(manifest,/@android:style\/Theme.Material.NoActionBar/,'App must not inherit Android light default controls');
 assert.doesNotMatch(manifest,/Theme.Material.Light/);
-assert.match(style,/BACKGROUND=Color\.rgb\(13,17,26\)/,'Native shell uses a dark vault palette');
+assert.match(style,/BACKGROUND=Color\.rgb\(13,16,23\)/,'Native shell uses a dark vault palette');
 assert.match(style,/static GradientDrawable rounded/);
 assert.match(style,/setTextColor\(active\?BACKGROUND:TEXT\)/,'Active navigation contrast must work');
-assert.match(shell,/HorizontalScrollView scroller/,'Five navigation destinations must scroll, not be squeezed');
+assert.match(shell,/root.addView\(tabs,new LinearLayout.LayoutParams\(-1,dp\(66\)\)\)/,'Five primary workspaces must remain visible at the bottom');
+assert.match(shell,/drawSecondaryTabs\(\)/,'Related destinations must use contextual navigation');
+assert.match(shell,/secondaryScroll.setVisibility/,'Contextual navigation must not waste catalog space');
 assert.match(shell,/FrameLayout stage/,'Native Catalog must fill available space');
 assert.doesNotMatch(shell,/dp\(540\)/,'Do not clip Catalog to a hardcoded partial-height window');
 assert.match(shell,/VaultNativeStyle\.surface/,'Dashboard and collection rows use themed surfaces');
@@ -32,3 +34,7 @@ assert.match(catalog,/if\(artGrid\)\{/);
 assert.match(catalog,/renderOwnedPrintingTile\(gallery,row,i\)/);
 assert.match(catalog,/PREF_COMPACT_GRID/);
 console.log('PASS: responsive compact card grid and collapsible catalog controls');
+
+assert.match(style,/PRIMARY=Color\.rgb\(181,155,252\)/,'Default mobile theme uses Arcane Noir accent');
+assert.match(shell,/destination.equals\("collection"\)\?"physical"/);
+console.log('PASS: five bottom destinations and themed compact secondary tabs');

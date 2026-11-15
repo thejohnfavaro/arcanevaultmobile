@@ -36,6 +36,8 @@ final class NativeCompanionScreen {
     private final FrameLayout stage;
     private final TextView subtitle;
     private final LinearLayout tabs;
+    private final HorizontalScrollView secondaryScroll;
+    private final LinearLayout secondaryTabs;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private NativeCatalogScreen nativeCatalog;
     private NativeCommanderBrowserScreen commanderBrowser;
@@ -76,15 +78,23 @@ final class NativeCompanionScreen {
         brand.addView(titles);
         root.addView(brand);
 
-        HorizontalScrollView scroller=VaultNativeStyle.horizontalScroll(activity);
-        scroller.setHorizontalScrollBarEnabled(false);
-        scroller.setFillViewport(false);
-        tabs=VaultNativeStyle.row(activity);
-        tabs.setPadding(dp(14),dp(4),dp(14),dp(12));
-        scroller.addView(tabs);
-        root.addView(scroller);
+        // The main workspaces are always reachable at the bottom of the screen.
+        // Related destinations live in a compact contextual row, not a
+        // nine-item scrolling bar that consumes room needed for card results.
+        secondaryScroll=VaultNativeStyle.horizontalScroll(activity);
+        secondaryScroll.setHorizontalScrollBarEnabled(false);
+        secondaryTabs=VaultNativeStyle.row(activity);
+        secondaryTabs.setPadding(dp(14),dp(2),dp(14),dp(7));
+        secondaryScroll.addView(secondaryTabs);
+        root.addView(secondaryScroll,new LinearLayout.LayoutParams(-1,dp(51)));
+
         stage=new FrameLayout(activity);
         root.addView(stage,new LinearLayout.LayoutParams(-1,0,1));
+
+        tabs=VaultNativeStyle.row(activity);
+        tabs.setPadding(dp(5),dp(6),dp(5),dp(7));
+        tabs.setBackgroundColor(VaultNativeStyle.SURFACE);
+        root.addView(tabs,new LinearLayout.LayoutParams(-1,dp(66)));
         show("home");
         refresh();
     }
@@ -101,20 +111,82 @@ final class NativeCompanionScreen {
     }
     private Button button(String title,boolean selected){return VaultNativeStyle.button(activity,title,selected);}
 
+    private String primaryScope(){
+        if(scope.equals("physical")||scope.equals("arena")||scope.equals("sets"))
+            return "collection";
+        if(scope.equals("decks")||scope.equals("edh lab"))return "decks";
+        if(scope.equals("data & sync"))return "sync";
+        return scope;
+    }
+
     private void drawTabs(){
         tabs.removeAllViews();
-        for(String tab:new String[]{"Home", "Catalog", "Physical", "Arena", "Sets", "Decks", "EDH Lab", "Data & Sync", "Legacy tools"}){
-            boolean active=scope.equals(tab.toLowerCase(Locale.ROOT));
-            Button action=button(tab,active);
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44));
-            lp.rightMargin=dp(8);
-            tabs.addView(action,lp);
-            action.setOnClickListener(v->{
-                if(tab.equals("Legacy tools")){closeCatalog();openLegacy.run();return;}
-                show(tab.toLowerCase(Locale.ROOT));
-            });
+        final String active=primaryScope();
+        final String[] destinations={"home","catalog","collection","decks","sync"};
+        final String[] labels={"Home","Catalog","Collection","Decks","Sync"};
+        final String[] symbols={"⌂","▤","▣","♜","⇄"};
+        for(int i=0;i<destinations.length;i++){
+            final String destination=destinations[i];
+            boolean selected=destination.equals(active);
+            LinearLayout item=VaultNativeStyle.column(activity);
+            item.setGravity(Gravity.CENTER);
+            item.setFocusable(true);
+            item.setClickable(true);
+            item.setContentDescription(labels[i]+" workspace"+
+                (selected?", selected":""));
+            item.setBackground(VaultNativeStyle.rounded(activity,
+                selected?VaultNativeStyle.ELEVATED:VaultNativeStyle.SURFACE,
+                selected?VaultNativeStyle.PRIMARY:Color.TRANSPARENT,10));
+            TextView symbol=text(symbols[i],19,
+                selected?VaultNativeStyle.PRIMARY:VaultNativeStyle.SUBTEXT,true);
+            symbol.setGravity(Gravity.CENTER);
+            item.addView(symbol,new LinearLayout.LayoutParams(-1,dp(24)));
+            TextView label=text(labels[i],10,
+                selected?VaultNativeStyle.TEXT:VaultNativeStyle.SUBTEXT,selected);
+            label.setGravity(Gravity.CENTER);
+            label.setMaxLines(1);
+            label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            item.addView(label,new LinearLayout.LayoutParams(-1,dp(18)));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(51),1);
+            lp.setMargins(dp(2),0,dp(2),0);
+            tabs.addView(item,lp);
+            item.setOnClickListener(v->show(
+                destination.equals("collection")?"physical":
+                destination.equals("sync")?"data & sync":destination));
         }
     }
+
+    private void drawSecondaryTabs(){
+        secondaryTabs.removeAllViews();
+        String primary=primaryScope();
+        if(primary.equals("collection")){
+            for(String sub:new String[]{"Physical", "Arena", "Sets"}){
+                String target=sub.toLowerCase(Locale.ROOT);
+                addSecondaryTab(sub,target);
+            }
+        } else if(primary.equals("decks")){
+            addSecondaryTab("Deck Library","decks");
+            addSecondaryTab("EDH Lab","edh lab");
+        } else if(primary.equals("sync")){
+            addSecondaryTab("Data & Sync","data & sync");
+            Button legacy=button("Settings & legacy",false);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
+            lp.rightMargin=dp(7);
+            secondaryTabs.addView(legacy,lp);
+            legacy.setOnClickListener(v->{closeCatalog();openLegacy.run();});
+        }
+        secondaryScroll.setVisibility(secondaryTabs.getChildCount()==0?View.GONE:View.VISIBLE);
+    }
+
+    private void addSecondaryTab(String label,String target){
+        Button choice=button(label,scope.equals(target));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
+        lp.rightMargin=dp(7);
+        secondaryTabs.addView(choice,lp);
+        choice.setContentDescription(label+" section");
+        choice.setOnClickListener(v->show(target));
+    }
+
     private void closeCatalog(){
         if(nativeCatalog!=null){nativeCatalog.close();nativeCatalog=null;}
         if(commanderBrowser!=null){commanderBrowser.close();commanderBrowser=null;}
@@ -127,6 +199,7 @@ final class NativeCompanionScreen {
         closeCatalog();
         scope="decks";query="";visibleCount=PAGE_SIZE;
         drawTabs();
+        drawSecondaryTabs();
         stage.removeAllViews();
         workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,
             deckLoader,deckSaver,"decks",commanderName);
@@ -139,6 +212,7 @@ final class NativeCompanionScreen {
         scope=next;
         query="";visibleCount=PAGE_SIZE;
         drawTabs();
+        drawSecondaryTabs();
         stage.removeAllViews();
         if(scope.equals("sets")||scope.equals("decks")||scope.equals("data & sync")){
             workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,openLegacy,deckLoader,
@@ -207,7 +281,7 @@ final class NativeCompanionScreen {
         Button refresh=button("Refresh collection totals",false);
         VaultNativeStyle.margin(content,refresh,10,activity);
         refresh.setOnClickListener(v->refresh());
-        TextView note=text("Data & Sync, deck editing, and other tools are still available in Legacy tools while we finish their native screens.",
+        TextView note=text("Your vault, card catalog, collection, decks and sync each have a dedicated workspace. Advanced settings remain under Sync.",
                 12,VaultNativeStyle.SUBTEXT,false);
         note.setPadding(0,dp(12),0,0);
         content.addView(note);
