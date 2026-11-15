@@ -93,6 +93,126 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         edit.commit();
     }
+    /** Resolve physical owned printing identifiers to a stable set identity.
+     * Used only after a real inventory change; never on screen navigation. */
+    private java.util.Map<String,String> physicalSetSignatures(SQLiteDatabase db){
+        java.util.TreeMap<String,java.util.ArrayList<String>> groups=new java.util.TreeMap<>();
+        java.util.HashMap<String,String> lookup=new java.util.HashMap<>();
+        try(Cursor c=db.rawQuery(
+            "SELECT p.name,p.setcode,p.collector,p.print_id,p.qty,v.setcode "+
+            "FROM physical_printings p LEFT JOIN variants v "+
+            "ON p.print_id!='' AND v.print_id=p.print_id COLLATE NOCASE "+
+            "WHERE p.qty>0",null)){
+            while(c.moveToNext()){
+                String raw=c.getString(1),resolved=c.getString(5);
+                String code=(resolved==null?"":resolved).trim().toLowerCase(Locale.ROOT);
+                if(code.isEmpty()&&raw!=null&&!raw.trim().isEmpty()){
+                    String key=raw.trim().toLowerCase(Locale.ROOT);
+                    if(!lookup.containsKey(key)){
+                        String match="";
+                        try(Cursor found=db.rawQuery(
+                            "SELECT setcode FROM variants WHERE setcode=? COLLATE NOCASE "+
+                            "OR setname=? COLLATE NOCASE LIMIT 1",
+                            new String[]{raw,raw})){
+                            if(found.moveToFirst())match=found.getString(0);
+                        }
+                        lookup.put(key,match==null?"":match.toLowerCase(Locale.ROOT));
+                    }
+                    code=lookup.get(key);
+                }
+                if(code.isEmpty())continue;
+                String row=(c.getString(0)==null?"":c.getString(0).toLowerCase(Locale.ROOT))+"|"+
+                    (c.getString(2)==null?"":c.getString(2).toLowerCase(Locale.ROOT))+"|"+
+                    (c.getString(3)==null?"":c.getString(3).toLowerCase(Locale.ROOT))+"|"+
+                    c.getInt(4);
+                groups.computeIfAbsent(code,k->new java.util.ArrayList<>()).add(row);
+            }
+        }
+        java.util.TreeMap<String,String> result=new java.util.TreeMap<>();
+        for(java.util.Map.Entry<String,java.util.ArrayList<String>> item:groups.entrySet()){
+            java.util.Collections.sort(item.getValue());
+            result.put(item.getKey(),String.join("\\n",item.getValue()));
+        }
+        return result;
+    }
+    /** Preserve all unaffected tiles and flag only changed set codes. */
+    private synchronized void invalidateChangedSets(String source,
+            java.util.Set<String> changed){
+        if(changed.isEmpty())return;
+        android.content.SharedPreferences prefs=setCache();
+        String existing=prefs.getString("overview_"+source,null);
+        if(existing==null || changed.size()>80){
+            invalidateSetProgress(source);
+            return;
+        }
+        try{
+            java.util.TreeSet<String> dirty=new java.util.TreeSet<>();
+            JSONArray old=new JSONArray(prefs.getString("dirty_"+source,"[]"));
+            for(int i=0;i<old.length();i++)dirty.add(old.optString(i));
+            dirty.addAll(changed);
+            JSONArray encoded=new JSONArray();
+            for(String code:dirty)if(code.matches("[a-z0-9]{2,12}"))encoded.put(code);
+            prefs.edit().putString("dirty_"+source,encoded.toString())
+                .putLong("revision_"+source,prefs.getLong("revision_"+source,0)+1)
+                .commit();
+        }catch(Exception error){invalidateSetProgress(source);}
+    }
+    /** A stale set retains its last known values until its own scoped refresh. */
+    java.util.Set<String> dirtySetCodes(String source){
+        java.util.TreeSet<String> codes=new java.util.TreeSet<>();
+        if(!"physical".equals(source)&&!"arena".equals(source))return codes;
+        try{
+            JSONArray list=new JSONArray(setCache().getString("dirty_"+source,"[]"));
+            for(int i=0;i<list.length();i++){
+                String code=list.optString(i,"");
+                if(code.matches("[a-z0-9]{2,12}"))codes.add(code);
+            }
+        }catch(Exception ignored){}
+        return codes;
+    }
+    /** Run on a worker only. Recalculate changed sets, never the entire overview. */
+    boolean refreshDirtySetProgress(String source){
+        java.util.Set<String> dirty=dirtySetCodes(source);
+        if(dirty.isEmpty())return false;
+        android.content.SharedPreferences prefs=setCache();
+        long revision=prefs.getLong("revision_"+source,0);
+        try{
+            String json=prefs.getString("overview_"+source,null);
+            if(json==null)return false;
+            JSONObject snapshot=new JSONObject(json);
+            JSONArray original=snapshot.optJSONArray("sets");
+            if(original==null)return false;
+            java.util.Map<String,JSONObject> refreshed=new java.util.HashMap<>();
+            for(String code:dirty){
+                JSONObject progress=indexedSetProgress(code,source);
+                if(progress!=null)refreshed.put(code,progress);
+            }
+            JSONArray updated=new JSONArray();
+            for(int i=0;i<original.length();i++){
+                JSONObject row=original.optJSONObject(i);
+                if(row==null)continue;
+                String code=row.optString("code","").toLowerCase(Locale.ROOT);
+                JSONObject progress=refreshed.get(code);
+                if(progress!=null){
+                    row.put("owned",progress.optInt("owned",0));
+                    row.put("total",progress.optInt("total",0));
+                    row.put("missing",progress.optInt("missing",0));
+                    row.put("percentage",progress.optDouble("percentage",0));
+                }
+                updated.put(row);
+            }
+            snapshot.put("sets",updated);
+            synchronized(this){
+                if(prefs.getLong("revision_"+source,0)!=revision)return false;
+                return prefs.edit().putString("overview_"+source,snapshot.toString())
+                    .remove("dirty_"+source).commit();
+            }
+        }catch(Exception error){
+            Log.w("ArcaneVault","Set-specific progress refresh unavailable",error);
+            return false;
+        }
+    }
+
     private static JSONObject filterSetOverview(JSONObject snapshot,String query)throws Exception{
         String filter=query==null?"":query.trim().toLowerCase(Locale.ROOT);
         JSONArray original=snapshot.optJSONArray("sets"),shown=new JSONArray();
