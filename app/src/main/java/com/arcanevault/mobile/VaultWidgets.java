@@ -58,6 +58,23 @@ final class VaultWidgets {
     static String configuredPriceType(Context context,int id){
         return prefs(context).getString("price_type_"+id,"market");
     }
+    static int configuredRefreshHours(Context context,int id){
+        int hours=prefs(context).getInt("refresh_hours_"+id,24);
+        return hours==6||hours==12||hours==24||hours==48?hours:24;
+    }
+    /** Price quotes are fetched only while Arcane Vault is running. The
+     * launcher can redraw periodically from the most recent valid snapshot. */
+    static boolean saveRefreshHours(Context context,int id,int hours){
+        if(hours!=6&&hours!=12&&hours!=24&&hours!=48)return false;
+        return prefs(context).edit().putInt("refresh_hours_"+id,hours).commit();
+    }
+    private static long requestedQuoteIntervalMillis(Context context){
+        int smallest=24;
+        int[] ids=AppWidgetManager.getInstance(context).getAppWidgetIds(
+            new ComponentName(context,VaultCollectionValueWidget.class));
+        for(int id:ids)smallest=Math.min(smallest,configuredRefreshHours(context,id));
+        return smallest*60L*60*1000;
+    }
     static boolean saveValueChoice(Context context,int id,String market,String currency,String type){
         if(!java.util.Arrays.asList("scryfall","tcgplayer","cardkingdom","cardmarket").contains(market)
             ||!java.util.Arrays.asList("AUTO","USD","EUR","GBP","CAD","AUD","JPY").contains(currency)
@@ -68,7 +85,7 @@ final class VaultWidgets {
     }
     static void removeValueChoice(Context context,int id){
         prefs(context).edit().remove("market_"+id).remove("currency_"+id)
-            .remove("price_type_"+id).apply();
+            .remove("price_type_"+id).remove("refresh_hours_"+id).apply();
     }
     static void removeSetChoice(Context context,int id){
         prefs(context).edit().remove("code_"+id).remove("name_"+id)
@@ -90,8 +107,19 @@ final class VaultWidgets {
             if(!Double.isFinite(usd)||usd<0||usd>10_000_000_000.0||
                 total<0||total>250000||priced<0||priced>total||
                 copies<0||copies>10_000_000||at.length()>80)return false;
-            prefs(context).edit()
-                .putLong("value_cents",Math.round(usd*100))
+            SharedPreferences snapshot=prefs(context);
+            long currentCents=Math.round(usd*100);
+            // The first valid, positively priced snapshot establishes a
+            // lifetime baseline; collection/price changes after that compare
+            // against it. Do not reset on refresh or when a widget is edited.
+            SharedPreferences.Editor editor=snapshot.edit();
+            if(priced>0&&currentCents>0&&!snapshot.contains("baseline_cents")){
+                editor.putLong("baseline_cents",currentCents)
+                    .putString("baseline_date",at.isEmpty()?
+                        java.time.LocalDate.now().toString():at.substring(0,Math.min(10,at.length())));
+            }
+            editor
+                .putLong("value_cents",currentCents)
                 .putInt("priced_rows",priced).putInt("total_rows",total)
                 .putLong("total_copies",copies).putString("quote_updated",at)
                 .putBoolean("quotes_present",hasQuotes)
@@ -120,7 +148,7 @@ final class VaultWidgets {
             String at=p.getString("quote_updated","");
             try{
                 long latest=java.time.Instant.parse(at).toEpochMilli();
-                if(now-latest<24L*60*60*1000)return false;
+                if(now-latest<requestedQuoteIntervalMillis(context))return false;
             }catch(Exception ignored){}
         }
         if(!p.edit().putLong("price_attempt_at",now)
@@ -197,6 +225,35 @@ final class VaultWidgets {
             }
             RemoteViews rv=new RemoteViews(context.getPackageName(),
                 R.layout.widget_collection_value);
+            String change="Change pending · first tracked value";
+            int changeColor=android.graphics.Color.rgb(159,173,195);
+            if(supported&&valid&&priced>0&&data.contains("baseline_cents")){
+                long baseline=data.getLong("baseline_cents",0);
+                Double rate=VaultWidgetExchangeRates.rate(context,displayCurrency);
+                if(baseline>0 && rate!=null){
+                    long difference=cents-baseline;
+                    double pct=100.0*difference/baseline;
+                    if(difference==0){
+                        change="±0.0% since tracking";
+                    }else{
+                        Locale locale="EUR".equals(displayCurrency)?Locale.GERMANY:
+                            "GBP".equals(displayCurrency)?Locale.UK:
+                            "CAD".equals(displayCurrency)?Locale.CANADA:
+                            "AUD".equals(displayCurrency)?new Locale("en","AU"):
+                            "JPY".equals(displayCurrency)?Locale.JAPAN:Locale.US;
+                        NumberFormat format=NumberFormat.getCurrencyInstance(locale);
+                        format.setCurrency(java.util.Currency.getInstance(displayCurrency));
+                        change=(difference>0?"+":"−")+
+                            format.format(Math.abs(difference/100.0*rate))+
+                            String.format(Locale.US," (%+.1f%%)",pct)+" since tracking";
+                        changeColor=difference>0?
+                            android.graphics.Color.rgb(99,221,155):
+                            android.graphics.Color.rgb(247,124,124);
+                    }
+                }
+            }else if(!supported)change="Lifetime change unavailable for this price source";
+            rv.setTextViewText(R.id.widget_value_change,change);
+            rv.setTextColor(R.id.widget_value_change,changeColor);
             rv.setTextViewText(R.id.widget_value_amount,amount);
             rv.setTextViewText(R.id.widget_value_coverage,coverage);
             rv.setTextViewText(R.id.widget_value_updated,subtitle);
