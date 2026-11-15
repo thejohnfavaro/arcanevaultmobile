@@ -24,6 +24,12 @@ public final class VaultValueWidgetConfigActivity extends Activity {
         "AUD · Australian dollar","JPY · Japanese yen"};
     private static final String[] PRICE_LABELS={
         "Reference / market","Low","Retail"};
+    private static final String[] REFRESH_LABELS={
+        "Every 6 hours (while app is open)",
+        "Every 12 hours (while app is open)",
+        "Every 24 hours (recommended)",
+        "Every 48 hours (while app is open)"};
+    private static final int[] REFRESH_HOURS={6,12,24,48};
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         setResult(RESULT_CANCELED);
@@ -62,6 +68,22 @@ public final class VaultValueWidgetConfigActivity extends Activity {
         body.addView(VaultNativeStyle.label(this,"PRICE TYPE",11,VaultNativeStyle.GOLD,true));
         Spinner types=spinner(PRICE_LABELS);
         body.addView(types,new LinearLayout.LayoutParams(-1,dp(52)));
+        body.addView(VaultNativeStyle.label(this,"PRICE CHECK FREQUENCY",11,
+            VaultNativeStyle.GOLD,true));
+        Spinner intervals=spinner(REFRESH_LABELS);
+        body.addView(intervals,new LinearLayout.LayoutParams(-1,dp(52)));
+        int currentHours=VaultWidgets.configuredRefreshHours(this,widgetId);
+        int refreshIndex=0;
+        for(int i=0;i<REFRESH_HOURS.length;i++)
+            if(REFRESH_HOURS[i]==currentHours)refreshIndex=i;
+        intervals.setSelection(refreshIndex);
+        TextView cadenceNote=VaultNativeStyle.label(this,
+            "When Arcane Vault is open, price checks use this interval. Android "+
+            "may refresh the widget's display in the background, but card "+
+            "prices cannot be fetched from the closed app's WebView price cache.",
+            12,VaultNativeStyle.SUBTEXT,false);
+        cadenceNote.setPadding(0,dp(7),0,dp(16));
+        body.addView(cadenceNote);
         String chosen=VaultWidgets.configuredMarket(this,widgetId);
         String[] marketsKeys={"scryfall","tcgplayer","cardkingdom","cardmarket"};
         String[] currenciesKeys={"AUTO","USD","EUR","GBP","CAD","AUD","JPY"};
@@ -84,6 +106,11 @@ public final class VaultValueWidgetConfigActivity extends Activity {
                 currenciesKeys[currencies.getSelectedItemPosition()],
                 priceKeys[types.getSelectedItemPosition()])){
                 note.setText("Could not save widget settings. Please try again.");
+                return;
+            }
+            if(!VaultWidgets.saveRefreshHours(this,widgetId,
+                REFRESH_HOURS[intervals.getSelectedItemPosition()])){
+                note.setText("Could not save refresh frequency.");
                 return;
             }
             VaultWidgets.refreshValue(this);
