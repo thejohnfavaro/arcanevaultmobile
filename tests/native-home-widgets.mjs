@@ -59,7 +59,7 @@ assert.match(imageCache,/byte\[\] getCached\(String raw\)/);
 assert.match(store,/representativeSetArt\(code,"arena"\.equals\(source\)\)/);
 assert.match(store,/prefetchSelectedSet\(Context context,int widgetId\)/);
 assert.match(config,/VaultWidgets\.prefetchSelectedSet\(this,widgetId\)/);
-assert.match(workspace,/catalog\.representativeSetArt\(/);
+assert.match(workspace,/renderSetProgress\(/,'Set cards render from snapshot without artwork database queries');
 
 
 // Multiple independently configured Set Progress widgets.
@@ -98,7 +98,7 @@ assert.match(collections,/JSONObject sets\(Map<String,String> p\)/);
 assert.match(store,/intent\.putExtra\(TARGET,target\)/); // Android Intent extra must identify destination
 assert.match(store,/PendingIntent\.getActivity/);
 assert.match(shell,/openWidgetDestination\(String destination,String set,String source\)/);
-assert.match(shell,/if\(workspace!=null\)workspace\.openWidgetSet\(set,requested\)/);
+assert.match(shell,/pendingSetFromWidget=set/,'Deep-link selection is routed before workspace initialization');
 assert.match(workspace,/void openWidgetSet\(String code,String source\)/);
 assert.match(workspace,/showSet\(code,code\.toUpperCase\(java\.util\.Locale\.ROOT\),0\)/);
 assert.match(activity,/deliverWidgetNavigation\(\)/);
