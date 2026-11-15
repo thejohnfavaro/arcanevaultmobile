@@ -89,7 +89,7 @@ final class NativeWorkspaceScreen {
     private final LinkedHashMap<String,Bitmap> shortlistBitmaps=
         new LinkedHashMap<String,Bitmap>(32,0.75f,true){
             @Override protected boolean removeEldestEntry(Map.Entry<String,Bitmap> entry){
-                return size()>36;
+                return size()>20;
             }
         };
     private int deckPageGeneration;
