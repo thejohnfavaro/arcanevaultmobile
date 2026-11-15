@@ -438,12 +438,44 @@ final class CatalogStore extends SQLiteOpenHelper {
         // entire ownership table or contend with Set Progress reads.
         if(fingerprint.equals(setCache().getString("fingerprint_arena","")))
             return;
-        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("ownership",null,null);
+        SQLiteDatabase db=getWritableDatabase();
+        java.util.HashMap<String,Integer> oldCards=new java.util.HashMap<>();
+        try(Cursor previous=db.rawQuery("SELECT name,qty FROM ownership",null)){
+            while(previous.moveToNext())
+                oldCards.put(previous.getString(0).toLowerCase(Locale.ROOT),
+                    previous.getInt(1));
+        }
+        java.util.HashMap<String,Integer> nextCards=new java.util.HashMap<>();
+        for(int i=0;i<cards.length();i++){
+            JSONObject row=cards.optJSONObject(i);
+            if(row==null)continue;
+            String name=row.optString("name","").trim().toLowerCase(Locale.ROOT);
+            int qty=row.optInt("qty",0);
+            if(!name.isEmpty()&&qty>0)nextCards.put(name,qty);
+        }
+        db.beginTransaction();try{db.delete("ownership",null,null);
             for(int i=0;i<cards.length();i++){JSONObject c=cards.optJSONObject(i);if(c==null)continue;String name=c.optString("name","");int qty=c.optInt("qty",0);if(name.isEmpty()||name.length()>300||qty<=0)continue;ContentValues v=new ContentValues();v.put("name",name);v.put("qty",qty);db.insertWithOnConflict("ownership",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
         if(!fingerprint.equals(setCache().getString("fingerprint_arena",""))){
-            invalidateSetProgress("arena");
+            java.util.TreeSet<String> changedNames=new java.util.TreeSet<>();
+            changedNames.addAll(oldCards.keySet());
+            changedNames.addAll(nextCards.keySet());
+            changedNames.removeIf(name->java.util.Objects.equals(
+                oldCards.get(name),nextCards.get(name)));
+            java.util.TreeSet<String> affected=new java.util.TreeSet<>();
+            if(changedNames.size()>80)invalidateSetProgress("arena");
+            else{
+                for(String name:changedNames){
+                    try(Cursor affectedSets=db.rawQuery(
+                        "SELECT DISTINCT setcode FROM variants WHERE name=? COLLATE NOCASE "+
+                        "AND arena=1",new String[]{name})){
+                        while(affectedSets.moveToNext())
+                            affected.add(affectedSets.getString(0).toLowerCase(Locale.ROOT));
+                    }
+                }
+                invalidateChangedSets("arena",affected);
+            }
             setCache().edit().putString("fingerprint_arena",fingerprint).apply();
         }
     }
@@ -454,7 +486,9 @@ final class CatalogStore extends SQLiteOpenHelper {
         String fingerprint=inventoryFingerprint(rows);
         if(fingerprint.equals(setCache().getString("fingerprint_physical","")))
             return;
-        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        SQLiteDatabase db=getWritableDatabase();
+        java.util.Map<String,String> beforeSets=physicalSetSignatures(db);
+        db.beginTransaction();
         try {
             // An aggregate-only recovery snapshot may arrive after this database
             // already indexed the real printing identities. Preserve those identities
@@ -535,7 +569,13 @@ final class CatalogStore extends SQLiteOpenHelper {
             db.setTransactionSuccessful();
         } finally {db.endTransaction();}
         if(!fingerprint.equals(setCache().getString("fingerprint_physical",""))){
-            invalidateSetProgress("physical");
+            java.util.Map<String,String> afterSets=physicalSetSignatures(db);
+            java.util.TreeSet<String> changed=new java.util.TreeSet<>();
+            changed.addAll(beforeSets.keySet());
+            changed.addAll(afterSets.keySet());
+            changed.removeIf(code->java.util.Objects.equals(
+                beforeSets.get(code),afterSets.get(code)));
+            invalidateChangedSets("physical",changed);
             setCache().edit().putString("fingerprint_physical",fingerprint).apply();
         }
     }
