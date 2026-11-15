@@ -347,18 +347,12 @@ final class NativeWorkspaceScreen {
         executor.execute(()->{
             String title=code.toUpperCase(java.util.Locale.ROOT);
             try{
-                Map<String,String> options=new HashMap<>();
-                options.put("q",code);
-                options.put("source",source);
-                if("arena".equals(source))options.put("arena","arena");
-                JSONArray sets=catalog.sets(options).optJSONArray("sets");
-                if(sets!=null)for(int i=0;i<sets.length();i++){
-                    JSONObject item=sets.optJSONObject(i);
-                    if(item!=null&&code.equalsIgnoreCase(item.optString("code",""))){
-                        title=item.optString("name",title);break;
-                    }
-                }
-            }catch(Exception ignored){}
+                // Exact one-set lookup, never the expensive all-sets ownership join.
+                JSONObject indexed=catalog.indexedSetProgress(code,source);
+                if(indexed!=null)title=indexed.optString("name",title);
+            }catch(Exception error){
+                android.util.Log.w("ArcaneVault","Set widget target lookup unavailable",error);
+            }
             final String display=title;
             ui.post(()->{
                 if(!closed&&ticket==setRequestId)showSet(code,display,0);
