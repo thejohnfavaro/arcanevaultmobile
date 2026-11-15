@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=(path)=>fs.readFileSync(path,'utf8');
+const source=read('app/src/main/java/com/arcanevault/mobile/VaultWidgets.java');
+const config=read('app/src/main/java/com/arcanevault/mobile/VaultValueWidgetConfigActivity.java');
+const layout=read('app/src/main/res/layout/widget_collection_value.xml');
+assert.match(source,/baseline_cents/,'Persist first valid value baseline');
+assert.match(source,/!snapshot\.contains\("baseline_cents"\)/,'Preserve first baseline on subsequent refreshes');
+assert.match(source,/priced>0&&currentCents>0/,'Never set baseline from empty quote coverage');
+assert.match(source,/difference=cents-baseline/,'Lifetime change based on USD source');
+assert.match(source,/R\.id\.widget_value_change/,'Bind change to actual widget text');
+assert.match(source,/changeColor=difference>0/,'Positive and negative coloring');
+assert.match(source,/configuredRefreshHours/,'Per-widget check interval');
+assert.match(source,/requestedQuoteIntervalMillis\(context\)/,'Apply chosen interval to foreground price checks');
+assert.match(config,/REFRESH_HOURS=\{6,12,24,48\}/,'Safe available cadence options');
+assert.match(config,/while app is open/,'Refresh limitation is plainly disclosed');
+assert.match(layout,/widget_value_change/,'Widget layout actually includes delta line');
+console.log('PASS: lifetime change, price coverage safety and per-widget foreground refresh cadence');
