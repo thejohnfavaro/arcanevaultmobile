@@ -291,7 +291,13 @@ final class NativeWorkspaceScreen {
                 "Keep editing, or discard this unsaved draft and go back.")
             .setNegativeButton("Keep editing",null)
             .setPositiveButton("Discard draft",(dialog,which)->{
-                if(!closed && "deck-edit".equals(screenState))next.run();
+                if(!closed && "deck-edit".equals(screenState)){
+                    // Clear the draft guard before running cross-tab navigation,
+                    // otherwise its callback would display the same dialog again.
+                    screenState="leaving-editor";
+                    editorName=null;editorMainboard=null;
+                    next.run();
+                }
             }).show();
     }
 
