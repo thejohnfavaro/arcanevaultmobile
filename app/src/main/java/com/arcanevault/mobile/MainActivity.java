@@ -240,7 +240,7 @@ public class MainActivity extends Activity {
                 "const expected=JSON.parse("+before+");"+
                 "const revised=JSON.parse("+after+");"+
                 "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
-                "if(index<0||JSON.stringify(decks[index])!==JSON.stringify(expected))"+
+                "if(index<0||JSON.stringify(Object.keys(decks[index]).sort().map(k=>[k,decks[index][k]]))!==JSON.stringify(Object.keys(expected).sort().map(k=>[k,expected[k]])))"+
                     "return JSON.stringify({ok:false,error:'Saved deck changed since opening. Reopen it.'});"+
                 "return JSON.stringify({ok:true,original:raw});"+
                 "}catch(e){return JSON.stringify({ok:false,error:String(e)})}})()";
@@ -269,7 +269,7 @@ public class MainActivity extends Activity {
                         "const expected=JSON.parse("+before+");"+
                         "const revised=JSON.parse("+after+");"+
                         "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
-                        "if(index<0||JSON.stringify(decks[index])!==JSON.stringify(expected))"+
+                        "if(index<0||JSON.stringify(Object.keys(decks[index]).sort().map(k=>[k,decks[index][k]]))!==JSON.stringify(Object.keys(expected).sort().map(k=>[k,expected[k]])))"+
                             "return JSON.stringify({ok:false,error:'Concurrent edit detected'});"+
                         "const prior=decks[index];const revisions=Array.isArray(prior.revisions)?prior.revisions.slice():[];"+
                         "revisions.push({name:prior.name,commander:prior.commander,entries:prior.entries,"+
