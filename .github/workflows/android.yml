@@ -75,6 +75,7 @@ jobs:
           node tests/native-widget-repair.mjs
           node tests/native-widget-real-data.mjs
           node tests/native-keyword-token-autocomplete.mjs
+          node tests/native-widget-lifetime-value.mjs
       - name: Test printing-aware ownership contract
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build debug APK
