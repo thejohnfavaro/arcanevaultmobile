@@ -474,6 +474,7 @@ final class NativeWorkspaceScreen {
 
     private void deckLibrary(){
         final int pageGeneration=++deckPageGeneration;
+        deckCoverTargets.clear();
         status.setText("Reading saved deck library from the existing app…");
         decks.fetch(json->ui.post(()->{
             if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
@@ -500,17 +501,14 @@ final class NativeWorkspaceScreen {
                     int qty=1;
                     if(entries!=null)for(int n=0;n<entries.length();n++)
                         qty+=entries.optJSONObject(n)==null?0:entries.optJSONObject(n).optInt("qty",0);
-                    String name=d.optString("name","Untitled deck");
-                    String commander=d.optString("commander","");
-                    int count=qty;
-                    row(name,commander+" · "+qty+" total cards · "+d.optString("folder","Unfiled"),
-                        ()->showDeck(d));
+                    deckCoverRow(d,qty,pageGeneration);
                 }
                 if(matching==0 && !selectedCommander.isEmpty())
                     row("No saved decks for this commander",
                         "You can open the existing editor to build a deck. No deck was created automatically.",
                         null);
                 button("Open legacy deck editing tools",legacy);
+                workspaceScroll.post(this::loadVisibleDeckCovers);
             }catch(Exception e){
                 status.setText("Could not load deck library: "+e.getMessage());
                 button("Open Legacy deck library",legacy);
@@ -519,6 +517,7 @@ final class NativeWorkspaceScreen {
     }
     private void editDeck(JSONObject deck){
         final int pageGeneration=++deckPageGeneration;
+        deckCoverTargets.clear();
         // Stay in the same Decks workspace: the content area, rather than
         // another modal, owns the name, mainboard, search and save controls.
         content.removeAllViews();
@@ -670,6 +669,7 @@ final class NativeWorkspaceScreen {
 
     private void showDeck(JSONObject deck){
         final int pageGeneration=++deckPageGeneration;
+        deckCoverTargets.clear();
         status.setText("Reviewing "+deck.optString("name","saved deck")+"…");
         executor.execute(()->{
             try{
