@@ -71,7 +71,9 @@ final class NativeCatalogScreen {
         java.util.Collections.synchronizedSet(new java.util.HashSet<>());
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
-    private String source = "both", owned = "all", query = "";
+    // Open the Android catalog on the cards users physically own.
+    // Switching to Arena, All or Missing remains an explicit in-session choice.
+    private String source = "physical", owned = "owned", query = "";
     private boolean onlyOwnedPhysicalPrintings = false;
     private String setCode="",typeFilter="",oracleFilter="",rarityFilter="",roleFilter="",sortMode="",oracleMatch="all";
     private String manaValueMin="",manaValueMax="";
@@ -82,7 +84,8 @@ final class NativeCatalogScreen {
     private Button viewModeButton;
     private LinearLayout advancedFilters;
     private Button advancedButton;
-    private final java.util.Map<String,Button> identityButtons=new java.util.LinkedHashMap<>();
+    private final java.util.Map<String,NativeManaFilterButton> identityButtons=
+        new java.util.LinkedHashMap<>();
     private static final String[] RARITY_NAMES={"All rarities","Common","Uncommon","Rare","Mythic","Special","Bonus"};
     private static final String[] RARITY_VALUES={"","common","uncommon","rare","mythic","special","bonus"};
     private static final String[] SORT_NAMES={"Name A–Z","Most owned","Mana value (low first)","Rarity (highest first)"};
@@ -295,15 +298,11 @@ final class NativeCatalogScreen {
     }
 
     private void updateIdentityButtons(){
-        for(java.util.Map.Entry<String,Button> entry:identityButtons.entrySet()){
+        for(java.util.Map.Entry<String,NativeManaFilterButton> entry:identityButtons.entrySet()){
             boolean selected=entry.getKey().equals("C")?
                 "C".equals(exactColorIdentity):
                 exactColorIdentity.contains(entry.getKey());
-            Button button=entry.getValue();
-            button.setTextColor(selected?VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
-            button.setBackground(VaultNativeStyle.rounded(activity,
-                selected?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
-                selected?Color.TRANSPARENT:VaultNativeStyle.BORDER,10));
+            entry.getValue().setSelectedMana(selected);
         }
     }
 
@@ -324,13 +323,13 @@ final class NativeCatalogScreen {
         advancedFilters.addView(colorLabel);
         LinearLayout colorRow=VaultNativeStyle.row(activity);
         for(String color:new String[]{"W","U","B","R","G","C"}){
-            Button button=VaultNativeStyle.button(activity,color,false);
+            NativeManaFilterButton button=new NativeManaFilterButton(activity,artwork,color);
             identityButtons.put(color,button);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(40),1);
             lp.rightMargin=dp(4);
             colorRow.addView(button,lp);
-            button.setContentDescription(("C".equals(color)?"Colorless":color)+
-                " exact color identity toggle");
+            // Exact official mana symbols; descriptive accessibility text is
+            // supplied by NativeManaFilterButton.
             button.setOnClickListener(v->{
                 if("C".equals(color))
                     exactColorIdentity="C".equals(exactColorIdentity)?"":"C";
