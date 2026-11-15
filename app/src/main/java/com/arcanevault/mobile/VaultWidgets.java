@@ -183,6 +183,8 @@ final class VaultWidgets {
                 }
                 JSONObject row=rows.get(code.toLowerCase(Locale.ROOT));
                 if(row==null)continue; // Missing catalog is unknown, not 0% ownership.
+                String representative=catalog.representativeSetArt(code,"arena".equals(source));
+                if(!representative.isEmpty())row.put("artUrl",representative);
                 prefs(context).edit().putString("snapshot_"+id,row.toString()).apply();
                 drawSet(context,manager,id);
             }
@@ -191,6 +193,28 @@ final class VaultWidgets {
         }finally{
             if(catalog!=null)catalog.close();
         }
+    }
+
+    /** Explicit one-off asset warmup after a user selects a set.
+     * Scheduled redraw/rebuild remains entirely offline. */
+    static void prefetchSelectedSet(Context context,int widgetId){
+        Context app=context.getApplicationContext();
+        String code=configuredSet(app,widgetId);
+        String source=configuredSource(app,widgetId);
+        if(!code.matches("[A-Za-z0-9]{2,12}"))return;
+        WORKER.execute(()->{
+            CatalogStore catalog=null;
+            try{
+                catalog=new CatalogStore(app);
+                String art=catalog.representativeSetArt(code,"arena".equals(source));
+                VaultSetArtwork.prefetch(app,art,code);
+            }catch(Exception ignored){
+                // Offline setup remains valid; the tile keeps its gradient.
+            }finally{
+                if(catalog!=null)catalog.close();
+            }
+            drawSet(app,AppWidgetManager.getInstance(app),widgetId);
+        });
     }
 
     static void drawSet(Context context,AppWidgetManager manager,int id){
