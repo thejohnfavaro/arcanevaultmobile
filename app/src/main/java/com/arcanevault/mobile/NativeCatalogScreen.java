@@ -71,7 +71,9 @@ final class NativeCatalogScreen {
         java.util.Collections.synchronizedSet(new java.util.HashSet<>());
     private final AtomicInteger request = new AtomicInteger();
     private final EditText search;
-    private String source = "both", owned = "all", query = "";
+    // Open the Android catalog on the cards users physically own.
+    // Switching to Arena, All or Missing remains an explicit in-session choice.
+    private String source = "physical", owned = "owned", query = "";
     private boolean onlyOwnedPhysicalPrintings = false;
     private String setCode="",typeFilter="",oracleFilter="",rarityFilter="",roleFilter="",sortMode="",oracleMatch="all";
     private String manaValueMin="",manaValueMax="";
@@ -81,8 +83,10 @@ final class NativeCatalogScreen {
     private static final String PREF_COMPACT_GRID="native_catalog_compact_grid_v1";
     private Button viewModeButton;
     private LinearLayout advancedFilters;
+    private LinearLayout quickFilters;
     private Button advancedButton;
-    private final java.util.Map<String,Button> identityButtons=new java.util.LinkedHashMap<>();
+    private final java.util.Map<String,NativeManaFilterButton> identityButtons=
+        new java.util.LinkedHashMap<>();
     private static final String[] RARITY_NAMES={"All rarities","Common","Uncommon","Rare","Mythic","Special","Bonus"};
     private static final String[] RARITY_VALUES={"","common","uncommon","rare","mythic","special","bonus"};
     private static final String[] SORT_NAMES={"Name A–Z","Most owned","Mana value (low first)","Rarity (highest first)"};
@@ -129,7 +133,7 @@ final class NativeCatalogScreen {
         });
         // Group high-density collection filters in a collapsed drawer so the
         // screen is used for actual card results rather than permanent controls.
-        LinearLayout quickFilters=VaultNativeStyle.column(activity);
+        quickFilters=VaultNativeStyle.column(activity);
         TextView sourceLabel=text("COLLECTION",11,true);
         sourceLabel.setTextColor(VaultNativeStyle.SUBTEXT);
         quickFilters.addView(sourceLabel);
@@ -207,6 +211,7 @@ final class NativeCatalogScreen {
         VaultNativeStyle.surface(activity,advancedFilters,false);
         buildAdvancedFilters();
         advancedFilters.addView(quickFilters,0);
+        buildQuickManaFilters();
         advancedFilters.setVisibility(View.GONE);
         advancedButton.setOnClickListener(v->{
             advancedOpen=!advancedOpen;
@@ -295,42 +300,29 @@ final class NativeCatalogScreen {
     }
 
     private void updateIdentityButtons(){
-        for(java.util.Map.Entry<String,Button> entry:identityButtons.entrySet()){
+        for(java.util.Map.Entry<String,NativeManaFilterButton> entry:identityButtons.entrySet()){
             boolean selected=entry.getKey().equals("C")?
                 "C".equals(exactColorIdentity):
                 exactColorIdentity.contains(entry.getKey());
-            Button button=entry.getValue();
-            button.setTextColor(selected?VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
-            button.setBackground(VaultNativeStyle.rounded(activity,
-                selected?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
-                selected?Color.TRANSPARENT:VaultNativeStyle.BORDER,10));
+            entry.getValue().setSelectedMana(selected);
         }
     }
 
-    private void buildAdvancedFilters(){
-        filterField("SET CODE","Exact set code (e.g. MH3)",value->setCode=value);
-        filterField("TYPE CONTAINS","Creature, Wizard, Enchantment…",value->typeFilter=value);
-        filterField("KEYWORD / RULES TEXT","Comma-separated: Connive, Discard…",value->oracleFilter=value);
-        filterPicker("MECHANIC MATCH",new String[]{"Match All","Match Any"},
-            new String[]{"all","any"},value->oracleMatch=value);
-        filterPicker("RARITY",RARITY_NAMES,RARITY_VALUES,value->rarityFilter=value);
-        filterPicker("UTILIZATION TAG",ROLE_NAMES,ROLE_NAMES,value->
-            roleFilter="All roles".equals(value)?"":value);
-        filterField("MANA VALUE / CMC MIN","Minimum mana value (0 or more)",value->manaValueMin=value);
-        filterField("MANA VALUE / CMC MAX","Maximum; same as min for exact",value->manaValueMax=value);
-        filterPicker("SORT BY",SORT_NAMES,SORT_VALUES,value->sortMode=value);
-        TextView colorLabel=text("COLOR IDENTITY · EXACT MATCH",11,true);
+    /** Keep color identity immediately available as a search control, using
+     * the same official mana SVGs as the desktop search and commander browser.
+     * Long-form filters stay collapsed, so two artwork columns remain visible. */
+    private void buildQuickManaFilters(){
+        LinearLayout quickManaRow=VaultNativeStyle.row(activity);
+        TextView colorLabel=text("COLOR",10,true);
         colorLabel.setTextColor(VaultNativeStyle.SUBTEXT);
-        advancedFilters.addView(colorLabel);
+        quickManaRow.addView(colorLabel,new LinearLayout.LayoutParams(dp(63),dp(42)));
         LinearLayout colorRow=VaultNativeStyle.row(activity);
         for(String color:new String[]{"W","U","B","R","G","C"}){
-            Button button=VaultNativeStyle.button(activity,color,false);
+            NativeManaFilterButton button=new NativeManaFilterButton(activity,artwork,color);
             identityButtons.put(color,button);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(40),1);
-            lp.rightMargin=dp(4);
+            lp.rightMargin=dp(3);
             colorRow.addView(button,lp);
-            button.setContentDescription(("C".equals(color)?"Colorless":color)+
-                " exact color identity toggle");
             button.setOnClickListener(v->{
                 if("C".equals(color))
                     exactColorIdentity="C".equals(exactColorIdentity)?"":"C";
@@ -346,15 +338,32 @@ final class NativeCatalogScreen {
                 updateIdentityButtons();page=0;schedule();
             });
         }
-        advancedFilters.addView(colorRow);
+        quickManaRow.addView(colorRow,new LinearLayout.LayoutParams(0,dp(42),1));
+        layout.addView(quickManaRow,new LinearLayout.LayoutParams(-1,dp(45)));
         updateIdentityButtons();
+    }
+
+    private void buildAdvancedFilters(){
+        filterField("SET CODE","Exact set code (e.g. MH3)",value->setCode=value);
+        filterField("TYPE CONTAINS","Creature, Wizard, Enchantment…",value->typeFilter=value);
+        filterField("KEYWORD / RULES TEXT","Comma-separated: Connive, Discard…",value->oracleFilter=value);
+        filterPicker("MECHANIC MATCH",new String[]{"Match All","Match Any"},
+            new String[]{"all","any"},value->oracleMatch=value);
+        filterPicker("RARITY",RARITY_NAMES,RARITY_VALUES,value->rarityFilter=value);
+        filterPicker("UTILIZATION TAG",ROLE_NAMES,ROLE_NAMES,value->
+            roleFilter="All roles".equals(value)?"":value);
+        filterField("MANA VALUE / CMC MIN","Minimum mana value (0 or more)",value->manaValueMin=value);
+        filterField("MANA VALUE / CMC MAX","Maximum; same as min for exact",value->manaValueMax=value);
+        filterPicker("SORT BY",SORT_NAMES,SORT_VALUES,value->sortMode=value);
         Button reset=VaultNativeStyle.button(activity,"Reset advanced filters",false);
         advancedFilters.addView(reset,new LinearLayout.LayoutParams(-1,dp(42)));
         reset.setOnClickListener(v->{
             setCode="";typeFilter="";oracleFilter="";oracleMatch="all";rarityFilter="";roleFilter="";
             sortMode="";exactColorIdentity="";manaValueMin="";manaValueMax="";
-            advancedFilters.removeAllViews();identityButtons.clear();
-            buildAdvancedFilters();page=0;schedule();
+            advancedFilters.removeAllViews();
+            buildAdvancedFilters();
+            advancedFilters.addView(quickFilters,0);
+            updateIdentityButtons();page=0;schedule();
         });
     }
 

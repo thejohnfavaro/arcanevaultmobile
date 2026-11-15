@@ -29,3 +29,14 @@ assert.match(native,/MECHANIC MATCH/,'Show all/any mechanic matching in advanced
 assert.match(native,/options\.put\("oracleMatch",selectedOracleMatch\)/,'Send match mode to catalog query and cache');
 assert.match(native,/oracleFilter=""/,'Resetting filters must reset the keyword filter');
 console.log('PASS: native Android Card Catalog uses SQLite, bounded async search, cached art and native inspection');
+
+// Every new Android catalog session opens on the recorded physical collection,
+// not the entire catalog, without altering persisted ownership values.
+assert.match(native,/private String source = "physical", owned = "owned", query = "";/);
+assert.match(native,/options.put\("source",src\)/);
+assert.match(native,/options.put\("scope",scope\)/);
+assert.match(native,/buildQuickManaFilters\(\)/);
+assert.match(native,/NativeManaFilterButton\(activity,artwork,color\)/);
+assert.match(native,/advancedFilters.addView\(quickFilters,0\)/);
+assert.match(native,/updateIdentityButtons\(\);page=0;schedule\(\)/);
+console.log('PASS: Android catalog defaults to Physical + Owned and provides quick official mana toggles');
