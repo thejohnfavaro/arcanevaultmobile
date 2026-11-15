@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Native read-only set browser and offline-first data/sync tools. */
+/** Native set browser, safe deck editing, and offline-first data/sync tools. */
 final class NativeWorkspaceScreen {
     interface DeckLoader { void fetch(DeckCallback callback); }
     interface DeckCallback { void accept(String json); }
@@ -186,7 +186,12 @@ final class NativeWorkspaceScreen {
             TextView b=VaultNativeStyle.label(activity,detail,12,VaultNativeStyle.SUBTEXT,false);
             b.setPadding(0,dp(5),0,0);entry.addView(b);
         }
-        if(action!=null)entry.setOnClickListener(v->action.run());
+        if(action!=null){
+            entry.setClickable(true);
+            entry.setFocusable(true);
+            entry.setContentDescription(title+(detail==null?"":". "+detail));
+            entry.setOnClickListener(v->action.run());
+        }
         VaultNativeStyle.margin(content,entry,8,activity);
     }
     private Button button(String label,Runnable action){
@@ -378,17 +383,30 @@ final class NativeWorkspaceScreen {
             "Commander: "+deck.optString("commander","")+" (unchanged)",13,
             VaultNativeStyle.SUBTEXT,false);
         fields.addView(commander);
+        TextView nameLabel=VaultNativeStyle.label(activity,
+            "DECK NAME",11,VaultNativeStyle.SUBTEXT,true);
+        fields.addView(nameLabel);
         EditText name=new EditText(activity);
-        name.setSingleLine(true);
+        VaultNativeStyle.search(activity,name);
         name.setText(deck.optString("name","Untitled deck"));
         name.setHint("Deck name");
-        fields.addView(name);
+        fields.addView(name,new LinearLayout.LayoutParams(-1,dp(50)));
         TextView hint=VaultNativeStyle.label(activity,
             "Edit the mainboard: one entry per line, e.g. 2 Sol Ring. "+
             "This changes your saved deck, not physical or Arena ownership.",12,
             VaultNativeStyle.SUBTEXT,false);
         fields.addView(hint);
         EditText lines=new EditText(activity);
+        TextView boardLabel=VaultNativeStyle.label(activity,
+            "MAINBOARD",11,VaultNativeStyle.SUBTEXT,true);
+        boardLabel.setPadding(0,dp(10),0,dp(4));
+        fields.addView(boardLabel);
+        lines.setTextColor(VaultNativeStyle.TEXT);
+        lines.setHintTextColor(VaultNativeStyle.DIM);
+        lines.setTextSize(14);
+        lines.setPadding(dp(12),dp(12),dp(12),dp(12));
+        lines.setBackground(VaultNativeStyle.rounded(activity,
+            VaultNativeStyle.SURFACE,VaultNativeStyle.BORDER,12));
         lines.setGravity(android.view.Gravity.TOP);
         lines.setMinLines(8);
         lines.setMaxLines(16);
