@@ -69,9 +69,10 @@ final class VaultWidgets {
         return prefs(context).edit().putInt("refresh_hours_"+id,hours).commit();
     }
     private static long requestedQuoteIntervalMillis(Context context){
-        int smallest=24;
+        int smallest=48;
         int[] ids=AppWidgetManager.getInstance(context).getAppWidgetIds(
             new ComponentName(context,VaultCollectionValueWidget.class));
+        if(ids.length==0)return 24L*60*60*1000;
         for(int id:ids)smallest=Math.min(smallest,configuredRefreshHours(context,id));
         return smallest*60L*60*1000;
     }
