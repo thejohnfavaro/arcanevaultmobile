@@ -167,33 +167,26 @@ final class VaultWidgets {
     }
 
     private static void rebuildSetSnapshots(Context context,AppWidgetManager manager,int[] ids){
-        Map<String,Map<String,JSONObject>> bySource=new HashMap<>();
         CatalogStore catalog=null;
         try{
             catalog=new CatalogStore(context.getApplicationContext());
             for(int id:ids){
                 String code=configuredSet(context,id),source=configuredSource(context,id);
                 if(code.isEmpty())continue;
-                Map<String,JSONObject> rows=bySource.get(source);
-                if(rows==null){
-                    rows=new HashMap<>();
-                    Map<String,String> args=new HashMap<>();
-                    args.put("source",source);
-                    if("arena".equals(source))args.put("arena","arena");
-                    JSONObject result=catalog.sets(args);
-                    JSONArray sets=result.optJSONArray("sets");
-                    if(sets!=null)for(int i=0;i<sets.length();i++){
-                        JSONObject row=sets.optJSONObject(i);
-                        if(row!=null)rows.put(row.optString("code","").toLowerCase(Locale.ROOT),row);
-                    }
-                    bySource.put(source,rows);
+                try{
+                    // Query only the chosen set; do not run an all-set aggregate
+                    // for each homescreen instance. Missing index is UNKNOWN.
+                    JSONObject row=catalog.indexedSetProgress(code,source);
+                    if(row==null)continue;
+                    String representative=catalog.representativeSetArt(
+                        code,"arena".equals(source));
+                    if(!representative.isEmpty())row.put("artUrl",representative);
+                    prefs(context).edit().putString("snapshot_"+id,row.toString()).apply();
+                    drawSet(context,manager,id);
+                }catch(Exception failure){
+                    android.util.Log.w("ArcaneVault","Widget set progress unavailable for "+code,failure);
+                    // Never clear the previous valid snapshot on index failure.
                 }
-                JSONObject row=rows.get(code.toLowerCase(Locale.ROOT));
-                if(row==null)continue; // Missing catalog is unknown, not 0% ownership.
-                String representative=catalog.representativeSetArt(code,"arena".equals(source));
-                if(!representative.isEmpty())row.put("artUrl",representative);
-                prefs(context).edit().putString("snapshot_"+id,row.toString()).apply();
-                drawSet(context,manager,id);
             }
         }catch(Exception ignored){
             // Index unavailable during Scryfall sync: keep prior valid snapshot.
