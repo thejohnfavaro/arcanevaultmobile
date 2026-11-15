@@ -561,8 +561,11 @@ final class NativeWorkspaceScreen {
         // set's ownership query takes time. Never leave a blank detail pane.
         content.removeAllViews();
         button("← Back to sets",()->setProgress(setQuery,0));
-        if("physical".equals(source))
+        if("physical".equals(source)){
             row("OWNED SET VALUE",VaultSetValues.detail(activity,set),null);
+            content.addView(VaultValueHistory.chart(activity,set),
+                new LinearLayout.LayoutParams(-1,dp(164)));
+        }
         row("Loading "+title+"…","Reading the local set index. Your collection is unchanged.",null);
         setDetailsWorker.execute(()->{
             try {
@@ -580,8 +583,11 @@ final class NativeWorkspaceScreen {
                     if(closed||activity.isFinishing()||request!=setRequestId)return;
                     content.removeAllViews();
                     button("← Back to sets",()->setProgress(setQuery,0));
-                    if("physical".equals(source))
+                    if("physical".equals(source)){
                         row("OWNED SET VALUE",VaultSetValues.detail(activity,set),null);
+                        content.addView(VaultValueHistory.chart(activity,set),
+                            new LinearLayout.LayoutParams(-1,dp(164)));
+                    }
                     CheckBox ownedOnly=new CheckBox(activity);
                     ownedOnly.setText(source.equals("physical")?
                         "Hide unowned printings":"Hide unowned Arena cards");
