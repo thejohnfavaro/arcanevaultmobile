@@ -219,7 +219,9 @@ final class NativeWorkspaceScreen {
                 }
                 public void afterTextChanged(Editable e){}
             });
-            setProgress("",0);
+            if(initialCommander!=null&&initialCommander.matches("[A-Za-z0-9]{2,12}"))
+                openWidgetSet(initialCommander,setSource);
+            else setProgress("",0);
         }
         else if(section.equals("decks"))deckLibrary();
         else if(section.equals("shortlist"))shortlist();
