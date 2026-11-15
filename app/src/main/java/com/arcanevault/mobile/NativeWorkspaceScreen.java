@@ -23,6 +23,7 @@ import android.graphics.Rect;
 import android.view.Gravity;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.GridLayout;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -80,6 +81,17 @@ final class NativeWorkspaceScreen {
     private LinearLayout shortlistPanel;
     private ArrayList<JSONObject> shortlistCards=new ArrayList<>();
     private String shortlistQuery="";
+    private int shortlistPage=0;
+    private static final int SHORTLIST_PAGE_SIZE=48;
+    private final ArrayList<ShortlistArtTarget> shortlistArtTargets=new ArrayList<>();
+    private final Set<String> shortlistArtInFlight=new HashSet<>();
+    private final Set<String> shortlistArtUnavailable=new HashSet<>();
+    private final LinkedHashMap<String,Bitmap> shortlistBitmaps=
+        new LinkedHashMap<String,Bitmap>(32,0.75f,true){
+            @Override protected boolean removeEldestEntry(Map.Entry<String,Bitmap> entry){
+                return size()>36;
+            }
+        };
     private int deckPageGeneration;
     private int setRequestId=0;
     private String setQuery="";
@@ -108,7 +120,10 @@ final class NativeWorkspaceScreen {
         root.addView(status);
         ScrollView scroll=VaultNativeStyle.scroll(activity);
         workspaceScroll=scroll;
-        workspaceScroll.setOnScrollChangeListener((view,x,y,oldX,oldY)->loadVisibleDeckCovers());
+        workspaceScroll.setOnScrollChangeListener((view,x,y,oldX,oldY)->{
+            loadVisibleDeckCovers();
+            loadVisibleShortlistArt();
+        });
         content=VaultNativeStyle.column(activity);
         scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -210,7 +225,15 @@ final class NativeWorkspaceScreen {
         return new NativeWorkspaceScreen(activity,prefs,catalog,artwork,legacy,decks,saver,section,initialCommander);
     }
     View view(){return root;}
-    void close(){closed=true;executor.shutdownNow();coverWorkers.shutdownNow();deckCoverTargets.clear();coverInFlight.clear();}
+    void close(){
+        closed=true;
+        executor.shutdownNow();
+        coverWorkers.shutdownNow();
+        deckCoverTargets.clear();
+        coverInFlight.clear();
+        shortlistArtTargets.clear();
+        shortlistArtInFlight.clear();
+    }
     private int dp(float x){return VaultNativeStyle.dp(activity,x);}
     private void row(String title,String detail,Runnable action){
         LinearLayout entry=VaultNativeStyle.column(activity);
@@ -943,6 +966,127 @@ final class NativeWorkspaceScreen {
                 ui.post(()->{if(!closed&&pageGeneration==deckPageGeneration)info("Deck details unavailable: "+e.getMessage());});
             }
         });
+    }
+
+    private static final class ShortlistArtTarget {
+        final ImageView view;
+        final String url;
+        final int width;
+        final int height;
+        boolean loaded;
+        ShortlistArtTarget(ImageView view,String url,int width,int height){
+            this.view=view;this.url=url;this.width=width;this.height=height;
+        }
+    }
+
+    /** Only download normal-resolution card art when a visible Shortlist card
+     * enters the ScrollView. This is intentionally bounded for 20k favorites. */
+    private void loadVisibleShortlistArt(){
+        if(closed||activity.isFinishing()||shortlistArtTargets.isEmpty())return;
+        final int generation=deckPageGeneration;
+        Rect visible=new Rect();
+        for(ShortlistArtTarget target:shortlistArtTargets){
+            if(target.loaded||!target.view.isAttachedToWindow()||
+                    !target.view.getGlobalVisibleRect(visible)||visible.isEmpty())
+                continue;
+            Bitmap cached=shortlistBitmaps.get(target.url);
+            if(cached!=null){
+                target.view.setImageBitmap(cached);
+                target.loaded=true;
+                continue;
+            }
+            if(shortlistArtUnavailable.contains(target.url)||
+                    shortlistArtInFlight.contains(target.url))continue;
+            if(shortlistArtInFlight.size()>=6)break;
+            String url=target.url;
+            int width=target.width,height=target.height;
+            shortlistArtInFlight.add(url);
+            coverWorkers.execute(()->{
+                Bitmap image=null;
+                try{
+                    image=NativeArtworkQuality.load(artwork,url,width,height,false);
+                }catch(Exception ignored){
+                    // Keep the readable card name and star while offline.
+                }
+                final Bitmap result=image;
+                ui.post(()->{
+                    shortlistArtInFlight.remove(url);
+                    if(result!=null)shortlistBitmaps.put(url,result);
+                    else shortlistArtUnavailable.add(url);
+                    if(!closed&&generation==deckPageGeneration)
+                        loadVisibleShortlistArt();
+                });
+            });
+        }
+    }
+
+    private void openShortlistPreview(JSONObject card){
+        final int generation=++deckPageGeneration;
+        shortlistArtTargets.clear();
+        content.removeAllViews();
+        String name=card.optString("name","");
+        String url=card.optString("image","");
+        status.setText("Shortlist · "+name);
+        button("← Back to Shortlist",this::shortlist);
+        TextView title=VaultNativeStyle.label(activity,name,21,
+            VaultNativeStyle.TEXT,true);
+        VaultNativeStyle.margin(content,title,10,activity);
+        FrameLayout frame=new FrameLayout(activity);
+        frame.setBackground(VaultNativeStyle.rounded(activity,
+            VaultNativeStyle.ELEVATED,VaultNativeStyle.BORDER,12));
+        TextView placeholder=VaultNativeStyle.label(activity,
+            NativeArtworkQuality.supported(url)?"Loading official card artwork…":
+                "Card art unavailable in the local catalog",14,
+            VaultNativeStyle.SUBTEXT,false);
+        placeholder.setGravity(Gravity.CENTER);
+        frame.addView(placeholder,new FrameLayout.LayoutParams(-1,-1));
+        ImageView large=new ImageView(activity);
+        large.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        large.setContentDescription("Large, full Scryfall card image for "+name);
+        large.setTag(url);
+        frame.addView(large,new FrameLayout.LayoutParams(-1,-1));
+        int height=Math.min(dp(480),
+            (int)(activity.getResources().getDisplayMetrics().heightPixels*0.64f));
+        VaultNativeStyle.margin(content,frame,10,activity);
+        LinearLayout.LayoutParams frameParams=(LinearLayout.LayoutParams)frame.getLayoutParams();
+        frameParams.height=height;
+        frame.setLayoutParams(frameParams);
+        String owned=card.optBoolean("known",false)?
+            "Physical ×"+card.optInt("physical",0)+" · Arena ×"+
+            card.optInt("arena",0):
+            "Printing and ownership not verified in local catalog";
+        row("COLLECTION",owned,null);
+        Button remove=button("★ Remove from Shortlist",()->{
+            ((MainActivity)activity).setNativeShortlist(name,false,(ok,message)->{
+                if(closed||activity.isFinishing()||generation!=deckPageGeneration)return;
+                if(ok)shortlist();
+                else info(message);
+            });
+        });
+        remove.setContentDescription("Remove "+name+" from My Shortlist");
+        if(NativeArtworkQuality.supported(url)){
+            coverWorkers.execute(()->{
+                Bitmap bitmap=null;
+                try{
+                    bitmap=NativeArtworkQuality.load(artwork,url,
+                        activity.getResources().getDisplayMetrics().widthPixels-dp(56),
+                        height,true);
+                }catch(Exception ignored){}
+                final Bitmap result=bitmap;
+                ui.post(()->{
+                    if(closed||activity.isFinishing()||generation!=deckPageGeneration){
+                        if(result!=null)result.recycle();
+                        return;
+                    }
+                    if(result!=null){
+                        placeholder.setVisibility(View.GONE);
+                        large.setImageBitmap(result);
+                    }else{
+                        placeholder.setText("Full artwork unavailable offline");
+                    }
+                });
+            });
+        }
     }
 
     /** Native Shortlist reads/writes the existing vault_favorites array in
