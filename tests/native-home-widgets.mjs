@@ -39,7 +39,7 @@ assert.match(setLayout,/widget_set_configure/);
 // duplicate percentage or ownership calculation.
 assert.match(workspace,/VaultSetProgressCard\.render\(activity,set,source,/);
 assert.match(store,/VaultSetProgressCard\.render\(context,selected,configuredSource\(context,id\)/);
-assert.match(config,/VaultSetProgressCard\.render\(this,choice,source,/);
+assert.match(config,/VaultSetProgressCard\.render\(this,card,source,/);
 assert.match(progress,/Math\.min\(600,widthPx\)/,
  'Bitmaps must be under binder size limits');
 assert.match(progress,/boolean measured=set!=null&&set\.has\("total"\)&&total>0/,
@@ -64,16 +64,16 @@ assert.match(workspace,/catalog\.representativeSetArt\(/);
 
 // Multiple independently configured Set Progress widgets.
 assert.match(config,/new Spinner\(this\)/);
-assert.match(config,/Search a set name or enter its code/);
-assert.match(config,/loadSets\(\)/);
+assert.match(config,/Search set name or code/);
+assert.match(config,/loadDirectory\(\)/);
 assert.match(store,/putString\("code_"\+id/);
 assert.match(store,/putString\("source_"\+id/);
 assert.match(store,/removeSetChoice\(Context context,int id\)/);
 assert.match(store,/snapshot_"\+id/);
-assert.match(store,/catalog\.sets\(args\)/);
+assert.match(store,/catalog\.indexedSetProgress\(code,source\)/);
 assert.match(store,/if\(row==null\)continue/,
  'Missing set catalog must retain last valid widget snapshot');
-assert.match(store,/if\("arena"\.equals\(source\)\)args\.put\("arena","arena"\)/);
+assert.match(store,/catalog\.indexedSetProgress\(code,source\)/);
 
 // Valuation may use only already calculated Scryfall printing quotes.
 assert.match(html,/PHYSICAL_PRICE_KEY='physicalPriceQuotesV1'/);

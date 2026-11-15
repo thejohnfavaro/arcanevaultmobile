@@ -282,6 +282,45 @@ public class MainActivity extends Activity {
                     !result.contains("inventory-unavailable")))
                     android.util.Log.w("ArcaneVault",
                         "Could not initialize Collection Value widget: "+result);
+                if(result!=null&&result.contains("published"))
+                    maybeRefreshWidgetPrices();
+            });
+    }
+
+    /** Optional foreground refresh through the EXISTING Scryfall batch pricing
+     * routine. Never triggered by Android launcher redraws, and rate-limited
+     * by VaultWidgets to avoid repeat requests on navigation or app restart. */
+    private void maybeRefreshWidgetPrices(){
+        if(browser==null||!peerDataPageReady||appUrl==null||
+                !appUrl.equals(browser.getUrl())||
+                !VaultWidgets.claimForegroundQuoteRefresh(this))return;
+        browser.evaluateJavascript("""
+            (function(){
+              try{
+                if(typeof physicalRefreshPrices!=='function' ||
+                   typeof physicalCards==='undefined' ||
+                   !Array.isArray(physicalCards) || physicalCards.length===0)
+                   return 'no-eligible-inventory';
+                if(typeof physicalPricesBusy!=='undefined'&&physicalPricesBusy)
+                   return 'already-running';
+                // The established legacy routine validates exact printing
+                // identities and saves each completed batch of official quotes.
+                Promise.resolve().then(()=>physicalRefreshPrices())
+                  .catch(error=>console.warn('Widget price update',error))
+                  .finally(()=>{
+                    try{window.ArcaneAndroid?.widgetPriceRefreshEnded?.()}
+                    catch(ignored){}
+                  });
+                return 'started';
+              }catch(error){return 'unavailable'}
+            })()
+            """,result->{
+                if(!"\"started\"".equals(result)){
+                    VaultWidgets.finishForegroundQuoteRefresh(this);
+                    if(result!=null)
+                        android.util.Log.i("ArcaneVault",
+                            "Widget price update skipped: "+result);
+                }
             });
     }
 
@@ -1842,6 +1881,12 @@ public class MainActivity extends Activity {
          * authoritative inventory and exact-printing Scryfall quote cache. */
         @JavascriptInterface public boolean publishCollectionValueWidget(String payload){
             return VaultWidgets.saveValueSnapshot(MainActivity.this,payload);
+        }
+        @JavascriptInterface public void widgetPriceRefreshEnded(){
+            runOnUiThread(()->{
+                VaultWidgets.finishForegroundQuoteRefresh(MainActivity.this);
+                refreshCollectionValueWidget();
+            });
         }
         private boolean matchCollectionSnapshot(String expectedArena, String expectedPhysical) {
             return java.util.Objects.equals(durable.getString("vault_cards", null), expectedArena) &&

@@ -81,6 +81,38 @@ final class VaultWidgets {
         }catch(Exception error){return false;}
     }
 
+    /** At most once every 6h, only when a VALUE widget is installed and the
+     * app itself is open. Actual Scryfall requests are performed by the
+     * existing printing-aware physicalRefreshPrices() workflow in the WebView,
+     * not by a widget redraw or by a second market-price ledger. */
+    static boolean claimForegroundQuoteRefresh(Context context){
+        AppWidgetManager mgr=AppWidgetManager.getInstance(context);
+        int[] ids=mgr.getAppWidgetIds(
+            new ComponentName(context,VaultCollectionValueWidget.class));
+        if(ids.length==0)return false;
+        SharedPreferences p=prefs(context);
+        long now=System.currentTimeMillis();
+        if(now-p.getLong("price_attempt_at",0)<6L*60*60*1000)return false;
+        if(p.getBoolean("value_valid",false) &&
+                p.getBoolean("quotes_present",false) &&
+                p.getInt("priced_rows",0)>0){
+            String at=p.getString("quote_updated","");
+            try{
+                long latest=java.time.Instant.parse(at).toEpochMilli();
+                if(now-latest<24L*60*60*1000)return false;
+            }catch(Exception ignored){}
+        }
+        if(!p.edit().putLong("price_attempt_at",now)
+                .putBoolean("price_refresh_active",true).commit())return false;
+        refreshValue(context);
+        return true;
+    }
+
+    static void finishForegroundQuoteRefresh(Context context){
+        prefs(context).edit().putBoolean("price_refresh_active",false).apply();
+        refreshValue(context);
+    }
+
     static void invalidateValue(Context context){
         prefs(context).edit().putBoolean("value_valid",false).apply();
         refreshValue(context);
@@ -104,6 +136,8 @@ final class VaultWidgets {
             priced==0?"Quotes do not match owned printings · refresh prices":
             String.format(Locale.US,"%d / %d printings priced · %,d cards",
                 priced,total,copies);
+        if(data.getBoolean("price_refresh_active",false))
+            coverage="Refreshing Scryfall printing prices in Arcane Vault…";
         String when=data.getString("quote_updated","");
         String subtitle="Scryfall USD · cached estimate";
         if(valid&&!when.isEmpty()){
@@ -167,33 +201,26 @@ final class VaultWidgets {
     }
 
     private static void rebuildSetSnapshots(Context context,AppWidgetManager manager,int[] ids){
-        Map<String,Map<String,JSONObject>> bySource=new HashMap<>();
         CatalogStore catalog=null;
         try{
             catalog=new CatalogStore(context.getApplicationContext());
             for(int id:ids){
                 String code=configuredSet(context,id),source=configuredSource(context,id);
                 if(code.isEmpty())continue;
-                Map<String,JSONObject> rows=bySource.get(source);
-                if(rows==null){
-                    rows=new HashMap<>();
-                    Map<String,String> args=new HashMap<>();
-                    args.put("source",source);
-                    if("arena".equals(source))args.put("arena","arena");
-                    JSONObject result=catalog.sets(args);
-                    JSONArray sets=result.optJSONArray("sets");
-                    if(sets!=null)for(int i=0;i<sets.length();i++){
-                        JSONObject row=sets.optJSONObject(i);
-                        if(row!=null)rows.put(row.optString("code","").toLowerCase(Locale.ROOT),row);
-                    }
-                    bySource.put(source,rows);
+                try{
+                    // Query only the chosen set; do not run an all-set aggregate
+                    // for each homescreen instance. Missing index is UNKNOWN.
+                    JSONObject row=catalog.indexedSetProgress(code,source);
+                    if(row==null)continue;
+                    String representative=catalog.representativeSetArt(
+                        code,"arena".equals(source));
+                    if(!representative.isEmpty())row.put("artUrl",representative);
+                    prefs(context).edit().putString("snapshot_"+id,row.toString()).apply();
+                    drawSet(context,manager,id);
+                }catch(Exception failure){
+                    android.util.Log.w("ArcaneVault","Widget set progress unavailable for "+code,failure);
+                    // Never clear the previous valid snapshot on index failure.
                 }
-                JSONObject row=rows.get(code.toLowerCase(Locale.ROOT));
-                if(row==null)continue; // Missing catalog is unknown, not 0% ownership.
-                String representative=catalog.representativeSetArt(code,"arena".equals(source));
-                if(!representative.isEmpty())row.put("artUrl",representative);
-                prefs(context).edit().putString("snapshot_"+id,row.toString()).apply();
-                drawSet(context,manager,id);
             }
         }catch(Exception ignored){
             // Index unavailable during Scryfall sync: keep prior valid snapshot.

@@ -19,6 +19,7 @@ import java.util.zip.GZIPInputStream;
 
 /** On-device searchable Scryfall printing catalog. No network service beyond Scryfall. */
 final class CatalogStore extends SQLiteOpenHelper {
+    private final Context application;
     private final AtomicBoolean syncing=new AtomicBoolean(false);
     private volatile String phase="Not downloaded", error="", updatedAt=null;
     private volatile long imported=0;
@@ -29,6 +30,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     private volatile long lastProgressAtMs=0L, downloadedBytes=0L, expectedBytes=0L;
     CatalogStore(Context context) {
         super(context,"arcane_catalog.db",null,3);
+        application=context.getApplicationContext();
         SQLiteDatabase db=getWritableDatabase();
         total=count(db,"cards");
         indexedPrintings=count(db,"variants");
@@ -162,6 +164,11 @@ final class CatalogStore extends SQLiteOpenHelper {
                 db.execSQL("DROP INDEX IF EXISTS variants_stage_unique");}}
             catch(Exception cleanup){Log.w("ArcaneVault","Catalog staging cleanup failed",cleanup);}
             syncing.set(false);
+            // A completed full catalog sync can resolve previously unknown
+            // launcher sets immediately, without waiting for the next
+            // periodic Android home-screen redraw.
+            if("Ready".equals(phase))
+                VaultWidgets.refreshSets(application);
         }
     }
     private static String readSmall(InputStream in,int max)throws Exception {ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>max)throw new IOException("Manifest too large");}return out.toString("UTF-8");}
@@ -826,6 +833,78 @@ final class CatalogStore extends SQLiteOpenHelper {
         return "confirmed AS (SELECT d.setcode,d.name,COALESCE(o.qty,0) qty "+
             "FROM (SELECT DISTINCT setcode,name FROM variants WHERE arena=1) d "+
             "LEFT JOIN ownership o ON o.name=d.name COLLATE NOCASE)";
+    }
+
+    /** Fast picker metadata from the actual local variants index. Unlike sets(),
+     * this does NOT join every printing against every ownership row. */
+    JSONArray indexedSetNames()throws Exception{
+        JSONArray rows=new JSONArray();
+        SQLiteDatabase db=getReadableDatabase();
+        try(Cursor c=db.rawQuery(
+                "SELECT setcode,MAX(setname) FROM variants "+
+                "WHERE setcode<>'' GROUP BY setcode "+
+                "ORDER BY MAX(setname) COLLATE NOCASE",null)){
+            while(c.moveToNext()){
+                String code=c.getString(0),name=c.getString(1);
+                if(code==null||!code.matches("[A-Za-z0-9]{2,12}"))continue;
+                rows.put(new JSONObject().put("code",code.toLowerCase(Locale.ROOT))
+                    .put("name",name==null?code:name).put("indexed",true));
+            }
+        }
+        return rows;
+    }
+
+    /** One-set-only progress, keyed by EXACT verified printing for physical.
+     * Returns null when this set is not in the indexed catalog — never 0%. */
+    JSONObject indexedSetProgress(String setCode,String source)throws Exception{
+        if(setCode==null||!setCode.matches("[A-Za-z0-9]{2,12}")||
+                (!"physical".equals(source)&&!"arena".equals(source)))
+            throw new IllegalArgumentException("Invalid indexed set selection");
+        SQLiteDatabase db=getReadableDatabase();
+        String code=setCode.toLowerCase(Locale.ROOT);
+        boolean arena="arena".equals(source);
+        int total=0,owned=0;
+        String name=null;
+        try(Cursor c=db.rawQuery(
+                "SELECT MAX(setname),COUNT(DISTINCT name) FROM variants "+
+                "WHERE setcode=? COLLATE NOCASE"+(arena?" AND arena=1":""),
+                new String[]{code})){
+            if(c.moveToFirst()){name=c.getString(0);total=c.getInt(1);}
+        }
+        if(total<=0)return null;
+        if(arena){
+            try(Cursor c=db.rawQuery(
+                    "SELECT COUNT(DISTINCT v.name) FROM variants v "+
+                    "JOIN ownership o ON o.name=v.name COLLATE NOCASE AND o.qty>0 "+
+                    "WHERE v.setcode=? COLLATE NOCASE AND v.arena=1",
+                    new String[]{code})){
+                if(c.moveToFirst())owned=c.getInt(0);
+            }
+        }else{
+            // Same confirmed identity rules as printingCte(), scoped by set
+            // first so widget updates do not evaluate every set on the phone.
+            try(Cursor c=db.rawQuery(
+                    "SELECT COUNT(DISTINCT v.name) FROM variants v "+
+                    "JOIN physical_printings p ON p.qty>0 AND ("+
+                    "(p.print_id!='' AND v.print_id=p.print_id COLLATE NOCASE) OR "+
+                    "(p.setcode!='' AND p.collector!='' AND "+
+                    "v.collector=p.collector COLLATE NOCASE AND "+
+                    "(v.setcode=p.setcode COLLATE NOCASE OR "+
+                    "v.setname=p.setcode COLLATE NOCASE) AND "+
+                    "(p.print_id='' OR NOT EXISTS ("+
+                    "SELECT 1 FROM variants vi WHERE "+
+                    "vi.print_id=p.print_id COLLATE NOCASE)))) "+
+                    "WHERE v.setcode=? COLLATE NOCASE",
+                    new String[]{code})){
+                if(c.moveToFirst())owned=c.getInt(0);
+            }
+        }
+        owned=Math.max(0,Math.min(owned,total));
+        return new JSONObject().put("code",code)
+            .put("name",name==null?code:name).put("total",total)
+            .put("owned",owned).put("missing",total-owned)
+            .put("percentage",Math.round(1000.0*owned/total)/10.0)
+            .put("indexed",true);
     }
 
     /** Representative official image for set tiles, never the set logo.
