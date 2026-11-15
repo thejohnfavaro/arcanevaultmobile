@@ -85,10 +85,11 @@ final class CatalogStore extends SQLiteOpenHelper {
         android.content.SharedPreferences.Editor edit=prefs.edit();
         if("all".equals(source)){
             edit.remove("overview_physical").remove("overview_arena")
+                .remove("dirty_physical").remove("dirty_arena")
                 .putLong("revision_physical",prefs.getLong("revision_physical",0)+1)
                 .putLong("revision_arena",prefs.getLong("revision_arena",0)+1);
         }else{
-            edit.remove("overview_"+source)
+            edit.remove("overview_"+source).remove("dirty_"+source)
                 .putLong("revision_"+source,prefs.getLong("revision_"+source,0)+1);
         }
         edit.commit();
