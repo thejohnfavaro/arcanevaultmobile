@@ -15,8 +15,8 @@ public final class NativeDeckSubstitutionsTest {
         assertEquals(3,NativeDeckDraft.parseEntries(edited).getJSONObject(0).optInt("qty",0) +
             NativeDeckDraft.parseEntries(edited).getJSONObject(1).optInt("qty",0) +
             NativeDeckDraft.parseEntries(edited).getJSONObject(2).optInt("qty",0));
-        assertTrue(edited.contains("1 owned draw"));
-        assertTrue(edited.contains("1 second draw"));
+        assertTrue(edited.contains("1 Owned Draw"));
+        assertTrue(edited.contains("1 Second Draw"));
         assertTrue(original.contains("2 Missing Draw"));
     }
     @Test public void staleSourceCannotApply() throws Exception {
