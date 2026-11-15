@@ -473,10 +473,8 @@ final class NativeWorkspaceScreen {
                 try {
                     String url=catalog.commanderCoverUrl(commander);
                     if(!url.isEmpty()){
-                        byte[] bytes=artwork.get(url);
-                        BitmapFactory.Options options=new BitmapFactory.Options();
-                        options.inSampleSize=4;
-                        decoded=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+                        decoded=NativeArtworkQuality.load(artwork,url,
+                            dp(98),dp(132),false);
                     }
                 } catch(Exception ignored) {
                     // Offline or unknown commander: keep the deck-box fallback.
