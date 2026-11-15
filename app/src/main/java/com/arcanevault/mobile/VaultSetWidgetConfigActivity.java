@@ -212,6 +212,9 @@ public final class VaultSetWidgetConfigActivity extends Activity {
             VaultWidgets.saveSetChoice(this,widgetId,code,name,source);
             AppWidgetManager manager=AppWidgetManager.getInstance(this);
             VaultWidgets.updateSets(this,manager,new int[]{widgetId},null);
+            // Fetch this one explicitly chosen set's official assets once.
+            // Widget redrawing later is cache-only, including while offline.
+            VaultWidgets.prefetchSelectedSet(this,widgetId);
             Intent result=new Intent();
             result.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,widgetId);
             setResult(RESULT_OK,result);
