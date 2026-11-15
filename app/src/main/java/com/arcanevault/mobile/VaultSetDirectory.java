@@ -20,6 +20,16 @@ final class VaultSetDirectory {
     private static final long FRESH_MS=7L*24*60*60*1000;
     private VaultSetDirectory(){}
 
+    /** Offline-only directory; safe to show while a long catalog import owns
+     * the SQLite write lock. Directory entries never imply owned progress. */
+    static JSONArray cached(Context context){
+        String saved=context.getApplicationContext()
+            .getSharedPreferences(PREF,Context.MODE_PRIVATE)
+            .getString("sets","[]");
+        try{return new JSONArray(saved==null?"[]":saved);}
+        catch(Exception ignored){return new JSONArray();}
+    }
+
     static JSONArray official(Context context){
         SharedPreferences preferences=context.getApplicationContext()
             .getSharedPreferences(PREF,Context.MODE_PRIVATE);
