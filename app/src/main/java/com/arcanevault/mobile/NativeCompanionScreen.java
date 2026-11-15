@@ -419,6 +419,8 @@ final class NativeCompanionScreen {
             }
         });
         update.run();
+        View history=VaultValueHistory.chart(activity,null);
+        pane.addView(history,new LinearLayout.LayoutParams(-1,dp(164)));
         VaultNativeStyle.margin(parent,pane,12,activity);
     }
 
