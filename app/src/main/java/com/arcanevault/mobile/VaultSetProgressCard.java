@@ -141,9 +141,31 @@ final class VaultSetProgressCard {
             canvas.drawRoundRect(new RectF(left,top,
                 left+(right-left)*percent/100f,top+8*unit),5*unit,5*unit,paint);
         }
-        text(canvas,paint,!measured?"CATALOG NOT AVAILABLE":
-            paper?"VERIFIED PHYSICAL PRINTINGS":"ARENA CARD NAMES",
-            left,h-13*unit,10*unit,WHITE,false);
+        String scopedPrice=set==null?"":set.optString("ownedValueLabel","");
+        if(paper&&!scopedPrice.isEmpty()){
+            // The two compact labels share the original footer; they do not
+            // overlap the completion bar, set name, or the physical count.
+            float footerY=h-13*unit;
+            String variance=set.optString("ownedValuePercent","");
+            int sign=set.optInt("ownedValueDirection",0);
+            float size=10*unit;
+            paint.setTextSize(Math.max(8,size));
+            paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+            float varianceW=variance.isEmpty()?0:paint.measureText(variance);
+            float priceMax=Math.max(60*unit,right-left-varianceW-12*unit);
+            text(canvas,paint,ellipsize(paint,scopedPrice,priceMax,size,true),
+                left,footerY,size,WHITE,true);
+            if(!variance.isEmpty()){
+                int color=sign>0?Color.rgb(99,221,155):
+                    sign<0?Color.rgb(247,124,124):MUTED;
+                text(canvas,paint,variance,right-varianceW,footerY,
+                    size,color,true);
+            }
+        }else{
+            text(canvas,paint,!measured?"CATALOG NOT AVAILABLE":
+                paper?"VERIFIED PHYSICAL PRINTINGS":"ARENA CARD NAMES",
+                left,h-13*unit,10*unit,WHITE,false);
+        }
         return bitmap;
     }
 
