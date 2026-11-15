@@ -893,15 +893,15 @@ final class NativeWorkspaceScreen {
                     button("Edit this deck",()->editDeck(deck));
                     LinearLayout share=VaultNativeStyle.row(activity);
                     Button copyArena=VaultNativeStyle.button(activity,"Copy for Arena",false);
-                    Button copyText=VaultNativeStyle.button(activity,"Copy plain list",false);
+                    Button copyPlain=VaultNativeStyle.button(activity,"Copy plain list",false);
                     LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(46),1);
                     p.rightMargin=dp(6);
                     share.addView(copyArena,p);
-                    share.addView(copyText,new LinearLayout.LayoutParams(0,dp(46),1));
+                    share.addView(copyPlain,new LinearLayout.LayoutParams(0,dp(46),1));
                     VaultNativeStyle.margin(content,share,8,activity);
                     copyArena.setOnClickListener(v->copyText("Arena deck",
                         NativeDeckTextExchange.export(deck,true),"Arena-format decklist"));
-                    copyText.setOnClickListener(v->copyText("Plain decklist",
+                    copyPlain.setOnClickListener(v->copyText("Plain decklist",
                         NativeDeckTextExchange.export(deck,false),"plain-text decklist"));
                     if(report!=null)renderDeckInsights(report);
                     else row("Deck insights","Local Scryfall metadata unavailable; counts and deck text remain visible.",null);
@@ -1025,8 +1025,12 @@ final class NativeWorkspaceScreen {
                 for(String name:selected){
                     try{cards.add(catalog.cardBrief(name));}
                     catch(Exception error){
-                        cards.add(new JSONObject().put("name",name).put("known",false)
-                            .put("physical",0).put("arena",0).put("type",""));
+                        JSONObject fallback=new JSONObject();
+                        try {
+                            fallback.put("name",name).put("known",false)
+                                .put("physical",0).put("arena",0).put("type","");
+                        } catch(Exception ignored){}
+                        cards.add(fallback);
                     }
                 }
                 ui.post(()->{
