@@ -380,6 +380,93 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         query.append(")");
     }
+    /** Offline, read-only named card summary for Shortlist. Counts are
+     * independently recorded physical and Arena copies, never merged or
+     * credited to an unverified printing. */
+    JSONObject cardBrief(String cardName)throws Exception {
+        String name=cardName==null?"":cardName.trim();
+        if(name.isEmpty()||name.length()>180)
+            throw new IllegalArgumentException("Invalid card name");
+        SQLiteDatabase db=getReadableDatabase();
+        try(Cursor c=db.rawQuery(
+                "SELECT c.type,c.image,COALESCE(po.qty,0),COALESCE(ao.qty,0) "+
+                "FROM cards c LEFT JOIN physical_ownership po ON po.name=c.name "+
+                "LEFT JOIN ownership ao ON ao.name=c.name "+
+                "WHERE c.name=? COLLATE NOCASE LIMIT 1",
+                new String[]{name})){
+            if(c.moveToFirst())
+                return new JSONObject().put("name",name).put("type",c.getString(0))
+                    .put("image",c.getString(1)).put("physical",c.getInt(2))
+                    .put("arena",c.getInt(3)).put("known",true);
+        }
+        return new JSONObject().put("name",name).put("known",false)
+            .put("physical",0).put("arena",0).put("type","")
+            .put("image","");
+    }
+
+    /** Small, read-only Windows-style overview from the same local catalog.
+     * Unresolved card names remain UNKNOWN (not zero-cost spells), and the
+     * mana curve excludes lands. Quantities, not names, are counted. */
+    JSONObject deckInsights(String commander,JSONArray entries)throws Exception {
+        if(entries==null || entries.length()>500)
+            throw new IllegalArgumentException("Too many deck entries to analyze");
+        SQLiteDatabase db=getReadableDatabase();
+        int total=0,known=0,unknown=0,lands=0,creatures=0,
+            instants=0,sorceries=0,artifacts=0,enchantments=0,
+            planeswalkers=0,other=0,nonland=0;
+        double costSum=0;
+        int[] curve=new int[8];
+        JSONArray cards=new JSONArray();
+        for(int i=-1;i<entries.length();i++){
+            JSONObject row=i<0?null:entries.optJSONObject(i);
+            String name=i<0?(commander==null?"":commander.trim()):
+                row==null?"":row.optString("name","").trim();
+            int qty=i<0?(name.isEmpty()?0:1):
+                row==null?0:Math.max(0,Math.min(999,row.optInt("qty",0)));
+            if(name.isEmpty()||qty==0)continue;
+            total+=qty;
+            if(total>10000)throw new IllegalArgumentException("Deck size exceeds analysis limit");
+            try(Cursor card=db.rawQuery(
+                    "SELECT type,mv FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
+                    new String[]{name})){
+                if(!card.moveToFirst()){
+                    unknown+=qty;
+                    cards.put(name);
+                    continue;
+                }
+                known+=qty;
+                String type=card.getString(0);
+                if(type==null)type="";
+                String normalized=type.toLowerCase(java.util.Locale.ROOT);
+                double mv=card.getDouble(1);
+                if(normalized.contains("land"))lands+=qty;
+                else{
+                    nonland+=qty;
+                    if(Double.isFinite(mv)&&mv>=0){
+                        curve[Math.min(7,(int)Math.floor(mv))]+=qty;
+                        costSum+=mv*qty;
+                    }
+                    if(normalized.contains("creature"))creatures+=qty;
+                    else if(normalized.contains("instant"))instants+=qty;
+                    else if(normalized.contains("sorcery"))sorceries+=qty;
+                    else if(normalized.contains("artifact"))artifacts+=qty;
+                    else if(normalized.contains("enchantment"))enchantments+=qty;
+                    else if(normalized.contains("planeswalker"))planeswalkers+=qty;
+                    else other+=qty;
+                }
+            }
+        }
+        JSONArray bars=new JSONArray();
+        for(int number:curve)bars.put(number);
+        return new JSONObject().put("total",total).put("known",known)
+            .put("unknown",unknown).put("lands",lands)
+            .put("creatures",creatures).put("instants",instants)
+            .put("sorceries",sorceries).put("artifacts",artifacts)
+            .put("enchantments",enchantments).put("planeswalkers",planeswalkers)
+            .put("other",other).put("curve",bars).put("unknownNames",cards)
+            .put("avgMv",nonland>0?costSum/nonland:JSONObject.NULL);
+    }
+
     /** Resolve cover art for a saved deck's exact commander name.
      * This is a read-only illustration lookup, NOT an ownership or printing
      * assertion. Do not use a partial name match (a different commander could
