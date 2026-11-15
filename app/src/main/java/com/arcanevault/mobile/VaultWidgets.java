@@ -307,6 +307,14 @@ final class VaultWidgets {
         int[] ids=mgr.getAppWidgetIds(new ComponentName(context,VaultSetProgressWidget.class));
         if(ids.length>0)updateSets(context,mgr,ids,null);
     }
+    /** Redraw cached set widgets after price changes. Never recalculate
+     * ownership or schedule catalog SQL to update presentation-only prices. */
+    static void redrawSetWidgets(Context context){
+        AppWidgetManager manager=AppWidgetManager.getInstance(context);
+        int[] ids=manager.getAppWidgetIds(
+            new ComponentName(context,VaultSetProgressWidget.class));
+        for(int id:ids)drawSet(context,manager,id);
+    }
 
     static void updateSets(Context context,AppWidgetManager manager,int[] ids,
             android.content.BroadcastReceiver.PendingResult pending){
@@ -385,6 +393,7 @@ final class VaultWidgets {
                 selected.put("code",configuredSet(context,id));
             }catch(Exception ignored){}
         }
+        VaultSetValues.decorate(context,selected,configuredSource(context,id));
         Bundle options=manager.getAppWidgetOptions(id);
         float dp=context.getResources().getDisplayMetrics().density;
         int w=options==null?260:options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,260);
