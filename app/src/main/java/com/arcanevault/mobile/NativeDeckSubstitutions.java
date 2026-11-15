@@ -62,7 +62,10 @@ final class NativeDeckSubstitutions {
         if(arr==null)return map;
         for(int i=0;i<Math.min(arr.length(),150000);i++){
             JSONObject card=arr.optJSONObject(i);
-            if(card==null)continue;
+            if(card==null||card.optBoolean("isProxy",false)||
+                card.optBoolean("proxy",false)||
+                "proxy".equalsIgnoreCase(card.optString("ownershipType",""))||
+                "proxy".equalsIgnoreCase(card.optString("source","")))continue;
             String name=norm(card.optString("name",""));
             int qty=card.optInt("qty",0);
             if(name.isEmpty()||qty<=0||qty>99999)continue;
@@ -151,6 +154,12 @@ final class NativeDeckSubstitutions {
     static String applyToText(String original,Plan plan) throws Exception {
         JSONArray rows=NativeDeckDraft.parseEntries(original);
         Map<String,Integer> counts=draft(rows);
+        Map<String,String> spelling=new HashMap<>();
+        for(int i=0;i<rows.length();i++){
+            JSONObject card=rows.optJSONObject(i);
+            if(card!=null)spelling.put(norm(card.optString("name","")),
+                card.optString("name",""));
+        }
         int before=0;for(int n:counts.values())before=Math.addExact(before,n);
         for(Swap swap:plan.swaps){
             String from=norm(swap.source),to=norm(swap.target);
@@ -158,6 +167,7 @@ final class NativeDeckSubstitutions {
                 throw new IllegalArgumentException("Source copy no longer in draft: "+from);
             counts.put(from,counts.get(from)-1);
             counts.put(to,Math.addExact(counts.getOrDefault(to,0),1));
+            spelling.putIfAbsent(to,swap.target);
         }
         JSONArray revised=new JSONArray();
         int after=0;
@@ -168,7 +178,7 @@ final class NativeDeckSubstitutions {
             if(qty<=0)continue;
             after=Math.addExact(after,qty);
             JSONObject entry=new JSONObject();
-            entry.put("name",key);entry.put("qty",qty);
+            entry.put("name",spelling.getOrDefault(key,key));entry.put("qty",qty);
             revised.put(entry);
         }
         if(before!=after)throw new IllegalArgumentException("Substitution changed card count");
