@@ -64,7 +64,7 @@ assert.match(workspace,/catalog\.representativeSetArt\(/);
 
 // Multiple independently configured Set Progress widgets.
 assert.match(config,/new Spinner\(this\)/);
-assert.match(config,/Search sets by name or code/);
+assert.match(config,/Search a set name or enter its code/);
 assert.match(config,/loadSets\(\)/);
 assert.match(store,/putString\("code_"\+id/);
 assert.match(store,/putString\("source_"\+id/);
@@ -82,7 +82,7 @@ assert.match(html,/publishCollectionValueWidget/);
 assert.match(store,/pricedRows:|priced_rows/);
 assert.match(store,/priced>total/);
 assert.match(store,/value_cents/);
-assert.match(store,/No priced printings yet/);
+assert.match(store,/No Scryfall quotes cached/);
 assert.match(store,/Scryfall USD · cached estimate/);
 assert.doesNotMatch(store,/https?:\/\/|HttpURLConnection|scryfall\.com/,
  'Launcher redraws must never initiate quote network requests');
