@@ -211,9 +211,93 @@ public class MainActivity extends Activity {
                             callback.accept(value instanceof String?(String)value:"[]");
                         }catch(Exception error){callback.accept("[]");}
                     });
-            });
+            }, this::saveNativeDeck);
         NativeSystemInsets.apply(this,nativeRoot);
         setContentView(nativeRoot);
+    }
+
+    /** Compare-and-swap a single saved deck at its authoritative WebView origin.
+     * Keep the previous full library as a private recovery file before mutation.
+     * Never mutate physical/Arena inventories or duplicate saved decks in native preferences. */
+    private void saveNativeDeck(JSONObject expected, JSONObject revised,
+            NativeWorkspaceScreen.DeckSaveCallback callback) {
+        if(browser==null || !peerDataPageReady || appUrl==null ||
+                !appUrl.equals(browser.getUrl())) {
+            callback.accept(false,"Saved deck storage is not ready. No edit applied.");
+            return;
+        }
+        String id=expected.optString("id","");
+        if(id.isEmpty() || !id.equals(revised.optString("id",""))) {
+            callback.accept(false,"Saved deck identity changed. No edit applied.");
+            return;
+        }
+        try {
+            String before=JSONObject.quote(expected.toString());
+            String after=JSONObject.quote(revised.toString());
+            String script="(function(){try{"+
+                "const key='vault_libraryV3';const raw=localStorage.getItem(key)||'[]';"+
+                "const decks=JSON.parse(raw);"+
+                "const expected=JSON.parse("+before+");"+
+                "const revised=JSON.parse("+after+");"+
+                "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
+                "if(index<0||JSON.stringify(decks[index])!==JSON.stringify(expected))"+
+                    "return JSON.stringify({ok:false,error:'Saved deck changed since opening. Reopen it.'});"+
+                "return JSON.stringify({ok:true,original:raw});"+
+                "}catch(e){return JSON.stringify({ok:false,error:String(e)})}})()";
+            browser.evaluateJavascript(script, encoded->{
+                try {
+                    String output=(String)new org.json.JSONTokener(encoded).nextValue();
+                    JSONObject result=new JSONObject(output);
+                    if(!result.optBoolean("ok")) {
+                        callback.accept(false,result.optString("error","Deck has changed."));return;
+                    }
+                    String original=result.getString("original");
+                    // Recovery is saved before updating the sole authoritative library.
+                    java.io.File folder=new java.io.File(getFilesDir(),"deck-recovery");
+                    if(!folder.isDirectory()&&!folder.mkdirs())
+                        throw new IOException("Unable to create deck recovery directory");
+                    String stamp=java.time.format.DateTimeFormatter
+                        .ofPattern("yyyyMMdd-HHmmss-SSS",java.util.Locale.US)
+                        .withZone(java.time.ZoneOffset.UTC).format(java.time.Instant.now());
+                    java.io.File recovery=new java.io.File(folder,
+                        "deck-library-"+stamp+"-"+System.nanoTime()+".json");
+                    java.nio.file.Files.write(recovery.toPath(),
+                        original.getBytes(StandardCharsets.UTF_8),
+                        java.nio.file.StandardOpenOption.CREATE_NEW);
+                    String commit="(function(){try{"+
+                        "const key='vault_libraryV3';const decks=JSON.parse(localStorage.getItem(key)||'[]');"+
+                        "const expected=JSON.parse("+before+");"+
+                        "const revised=JSON.parse("+after+");"+
+                        "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
+                        "if(index<0||JSON.stringify(decks[index])!==JSON.stringify(expected))"+
+                            "return JSON.stringify({ok:false,error:'Concurrent edit detected'});"+
+                        "const prior=decks[index];const revisions=Array.isArray(prior.revisions)?prior.revisions.slice():[];"+
+                        "revisions.push({name:prior.name,commander:prior.commander,entries:prior.entries,"+
+                            "savedAt:new Date().toISOString(),label:'Before Android native edit',"+
+                            "coverCard:prior.coverCard||'',folder:prior.folder||'Unfiled',tags:prior.tags||[]});"+
+                        "revised.revisions=revisions.slice(-20);revised.updated=new Date().toISOString();"+
+                        "decks[index]=revised;localStorage.setItem(key,JSON.stringify(decks));"+
+                        "if(JSON.parse(localStorage.getItem(key))[index].updated!==revised.updated)"+
+                            "throw Error('Readback verification failed');"+
+                        "return JSON.stringify({ok:true});"+
+                        "}catch(e){return JSON.stringify({ok:false,error:String(e)})}})()";
+                    browser.evaluateJavascript(commit, reply->{
+                        try {
+                            JSONObject applied=new JSONObject(
+                                (String)new org.json.JSONTokener(reply).nextValue());
+                            callback.accept(applied.optBoolean("ok"),
+                                applied.optBoolean("ok")?
+                                    "Deck saved. Previous library preserved in private recovery.":
+                                    "Save not confirmed: "+applied.optString("error","Unknown error"));
+                        }catch(Exception error){
+                            callback.accept(false,"Save could not be verified: "+error.getMessage());
+                        }
+                    });
+                }catch(Exception error) {
+                    callback.accept(false,"Deck not saved: "+error.getMessage());
+                }
+            });
+        }catch(Exception error){callback.accept(false,"Deck not saved: "+error.getMessage());}
     }
 
     /** Fetch saved decks/artwork from the authoritative background WebView.
