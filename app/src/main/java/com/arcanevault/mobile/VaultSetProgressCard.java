@@ -26,8 +26,13 @@ final class VaultSetProgressCard {
     private static final int MUTED=Color.rgb(197,206,222);
 
     static Bitmap render(Context context,JSONObject set,String source,int widthPx,int heightPx){
-        int w=Math.max(240,Math.min(600,widthPx));
-        int h=Math.max(120,Math.min(240,heightPx));
+        // Scale both dimensions by the same factor. Independently clamping
+        // width and height distorts every set symbol and line of text when the
+        // bitmap is displayed in a differently proportioned card/widget.
+        float targetW=Math.max(1,widthPx),targetH=Math.max(1,heightPx);
+        float scale=Math.min(1f,Math.min(600f/targetW,240f/targetH));
+        int w=Math.max(1,Math.round(targetW*scale));
+        int h=Math.max(1,Math.round(targetH*scale));
         String code=set==null?"":set.optString("code","");
         String artUrl=set==null?"":set.optString("artUrl","");
         Bitmap backdrop=VaultSetArtwork.cachedArt(context,artUrl,w,h);
