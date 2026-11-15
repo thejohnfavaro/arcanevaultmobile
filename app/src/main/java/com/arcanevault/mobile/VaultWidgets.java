@@ -161,7 +161,9 @@ final class VaultWidgets {
 
     private static void rebuildSetSnapshots(Context context,AppWidgetManager manager,int[] ids){
         Map<String,Map<String,JSONObject>> bySource=new HashMap<>();
-        try(CatalogStore catalog=new CatalogStore(context.getApplicationContext())){
+        CatalogStore catalog=null;
+        try{
+            catalog=new CatalogStore(context.getApplicationContext());
             for(int id:ids){
                 String code=configuredSet(context,id),source=configuredSource(context,id);
                 if(code.isEmpty())continue;
@@ -186,6 +188,8 @@ final class VaultWidgets {
             }
         }catch(Exception ignored){
             // Index unavailable during Scryfall sync: keep prior valid snapshot.
+        }finally{
+            if(catalog!=null)catalog.close();
         }
     }
 
