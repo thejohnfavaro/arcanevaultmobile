@@ -78,6 +78,7 @@ final class NativeCatalogScreen {
     private String exactColorIdentity="";
     private boolean advancedOpen=false;
     private boolean artGrid=true;
+    private static final String PREF_COMPACT_GRID="native_catalog_compact_grid_v1";
     private Button viewModeButton;
     private LinearLayout advancedFilters;
     private Button advancedButton;
@@ -100,6 +101,7 @@ final class NativeCatalogScreen {
         this.catalog = catalog;
         this.inventory = inventory;
         this.artwork = artwork;
+        artGrid=inventory.getBoolean(PREF_COMPACT_GRID,true);
         layout = new LinearLayout(activity);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18),dp(12),dp(18),dp(10));
@@ -125,9 +127,12 @@ final class NativeCatalogScreen {
             }
             public void afterTextChanged(Editable s) {}
         });
+        // Group high-density collection filters in a collapsed drawer so the
+        // screen is used for actual card results rather than permanent controls.
+        LinearLayout quickFilters=VaultNativeStyle.column(activity);
         TextView sourceLabel=text("COLLECTION",11,true);
         sourceLabel.setTextColor(VaultNativeStyle.SUBTEXT);
-        layout.addView(sourceLabel);
+        quickFilters.addView(sourceLabel);
         LinearLayout filters = new LinearLayout(activity);
         sourceFilters=filters;
         filters.setOrientation(LinearLayout.HORIZONTAL);
@@ -146,10 +151,10 @@ final class NativeCatalogScreen {
         HorizontalScrollView sourceScroll=VaultNativeStyle.horizontalScroll(activity);
         sourceScroll.setHorizontalScrollBarEnabled(false);
         sourceScroll.addView(filters);
-        layout.addView(sourceScroll);
+        quickFilters.addView(sourceScroll);
         TextView ownedLabel=text("OWNERSHIP",11,true);
         ownedLabel.setTextColor(VaultNativeStyle.SUBTEXT);
-        layout.addView(ownedLabel);
+        quickFilters.addView(ownedLabel);
         LinearLayout ownership = new LinearLayout(activity);
         ownershipFilters=ownership;
         ownership.setOrientation(LinearLayout.HORIZONTAL);
@@ -169,33 +174,39 @@ final class NativeCatalogScreen {
         ownedScroll.addView(ownership);
         LinearLayout.LayoutParams ownedParams=new LinearLayout.LayoutParams(-1,-2);
         ownedParams.bottomMargin=dp(14);
-        layout.addView(ownedScroll,ownedParams);
+        quickFilters.addView(ownedScroll,ownedParams);
         printingFilter=VaultNativeStyle.button(activity,"Owned physical printings",false);
         LinearLayout.LayoutParams printingParams=new LinearLayout.LayoutParams(-1,dp(44));
         printingParams.bottomMargin=dp(12);
-        layout.addView(printingFilter,printingParams);
+        quickFilters.addView(printingFilter,printingParams);
         printingFilter.setOnClickListener(v -> {
             onlyOwnedPhysicalPrintings=!onlyOwnedPhysicalPrintings;
             if(onlyOwnedPhysicalPrintings){source="physical";owned="owned";}
             page=0;updateCollectionFilters();schedule();
         });
         LinearLayout toolRow=VaultNativeStyle.row(activity);
-        viewModeButton=VaultNativeStyle.button(activity,"Detailed List",false);
+        viewModeButton=VaultNativeStyle.button(activity,
+            artGrid?"Detailed List":"Card Grid",false);
         toolRow.addView(viewModeButton,new LinearLayout.LayoutParams(0,dp(42),1));
         viewModeButton.setOnClickListener(v->{
             artGrid=!artGrid;
-            viewModeButton.setText(artGrid?"Detailed List":"Card Art");
+            viewModeButton.setText(artGrid?"Detailed List":"Card Grid");
+            inventory.edit().putBoolean(PREF_COMPACT_GRID,artGrid).apply();
             schedule();
         });
-        layout.addView(toolRow);
         advancedButton=VaultNativeStyle.button(activity,"Filters & Sort  ▾",false);
-        LinearLayout.LayoutParams advancedButtonParams=new LinearLayout.LayoutParams(-1,dp(42));
-        advancedButtonParams.bottomMargin=dp(6);
-        layout.addView(advancedButton,advancedButtonParams);
+        LinearLayout.LayoutParams advancedButtonParams=
+            new LinearLayout.LayoutParams(0,dp(42),1);
+        advancedButtonParams.leftMargin=dp(7);
+        toolRow.addView(advancedButton,advancedButtonParams);
+        LinearLayout.LayoutParams toolRowParams=new LinearLayout.LayoutParams(-1,dp(42));
+        toolRowParams.bottomMargin=dp(7);
+        layout.addView(toolRow,toolRowParams);
         advancedFilters=VaultNativeStyle.column(activity);
         advancedFilters.setPadding(dp(10),dp(5),dp(10),dp(7));
         VaultNativeStyle.surface(activity,advancedFilters,false);
         buildAdvancedFilters();
+        advancedFilters.addView(quickFilters,0);
         advancedFilters.setVisibility(View.GONE);
         advancedButton.setOnClickListener(v->{
             advancedOpen=!advancedOpen;
@@ -523,7 +534,7 @@ final class NativeCatalogScreen {
             return;
         }
         GridLayout gallery=null;
-        if(artGrid&&!printingMode){
+        if(artGrid){
             gallery=new GridLayout(activity);
             gallery.setColumnCount(catalogColumns());
             gallery.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
@@ -532,7 +543,11 @@ final class NativeCatalogScreen {
         for(int i=0;i<count;i++){
             JSONObject row=rows.optJSONObject(i);
             if(row==null)continue;
-            if(printingMode){renderOwnedPrintingRow(row);continue;}
+            if(printingMode){
+                if(gallery!=null)renderOwnedPrintingTile(gallery,row,i);
+                else renderOwnedPrintingRow(row);
+                continue;
+            }
             if(gallery!=null){
                 renderArtworkTile(gallery,row,i);
                 continue;
@@ -593,11 +608,23 @@ final class NativeCatalogScreen {
             browseScroll.post(()->browseScroll.smoothScrollTo(0,0)); });
         results.addView(pager);
     }
-    /** At least two visible card tiles on a phone; three on larger displays. */
+    /** Width of the actual catalog content, not the physical screen: this also
+     * accounts for Android navigation insets, padding and multi-window mode. */
+    private int galleryWidth() {
+        return results.getWidth() > 0 ? results.getWidth() :
+            activity.getResources().getDisplayMetrics().widthPixels-dp(36);
+    }
+
+    /** Two cards on a phone; three or four when a larger viewport permits it. */
     private int catalogColumns() {
-        float usableDp=activity.getResources().getDisplayMetrics().widthPixels /
-            activity.getResources().getDisplayMetrics().density - 48f;
-        return usableDp >= 510f ? 3 : 2;
+        float usableDp=galleryWidth() /
+            activity.getResources().getDisplayMetrics().density;
+        return usableDp >= 680f ? 4 : usableDp >= 490f ? 3 : 2;
+    }
+
+    private int catalogTileWidth() {
+        int columns=catalogColumns();
+        return Math.max(dp(96),(galleryWidth()-columns*dp(6))/columns);
     }
 
     /** A responsive card-art browser with the same inspect action as
@@ -610,9 +637,8 @@ final class NativeCatalogScreen {
         String oracle=meta==null?"":meta.optString("oracle","");
         String rarity=meta==null?"":meta.optString("rarity","");
         int arenaQty=row.optInt("arenaQty",0),physicalQty=row.optInt("physicalQty",0);
-        int screenWidth=activity.getResources().getDisplayMetrics().widthPixels;
         int columns=catalogColumns();
-        int cardWidth=Math.max(dp(110),(screenWidth-dp(48)-columns*dp(6))/columns);
+        int cardWidth=catalogTileWidth();
         LinearLayout tile=VaultNativeStyle.column(activity);
         tile.setPadding(dp(8),dp(8),dp(8),dp(9));
         VaultNativeStyle.surface(activity,tile,false);
@@ -639,6 +665,48 @@ final class NativeCatalogScreen {
             showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty));
         GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
         cell.width=cardWidth;
+        cell.height=-2;
+        int columns=catalogColumns();
+        cell.rowSpec=GridLayout.spec(index/columns);
+        cell.columnSpec=GridLayout.spec(index%columns);
+        cell.setMargins(dp(3),dp(3),dp(3),dp(3));
+        gallery.addView(tile,cell);
+    }
+
+    /** Physical printings remain distinct by verified set/collector/finish even
+     * in the compact two-column gallery. Tapping opens the exact edition. */
+    private void renderOwnedPrintingTile(GridLayout gallery,JSONObject row,int index) {
+        JSONObject printing=row.optJSONObject("printing");
+        if(printing==null)return;
+        String name=row.optString("name","Unknown card");
+        String set=printing.optString("set","").toUpperCase(java.util.Locale.ROOT);
+        String collector=printing.optString("collectorNumber","");
+        String imageUrl=printing.optString("image","");
+        int copies=printing.optInt("confirmedPhysicalCopies",0);
+        int width=catalogTileWidth();
+        LinearLayout tile=VaultNativeStyle.column(activity);
+        tile.setPadding(dp(7),dp(7),dp(7),dp(8));
+        VaultNativeStyle.surface(activity,tile,false);
+        if(hasOfficialArt(imageUrl)) {
+            FrameLayout art=flippableArt(name,imageUrl,
+                printing.optString("imageBack",""),width-dp(14),
+                Math.round((width-dp(14))*1.36f));
+            tile.addView(art,new LinearLayout.LayoutParams(-1,
+                Math.round((width-dp(14))*1.36f)));
+        }
+        TextView title=text(name,12,true);
+        title.setMaxLines(2);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tile.addView(title);
+        TextView edition=text(set+" #"+collector+"  ·  ×"+copies,11,false);
+        edition.setTextColor(VaultNativeStyle.SUBTEXT);
+        edition.setMaxLines(1);
+        tile.addView(edition);
+        tile.setContentDescription(name+", "+set+" #"+collector+
+            ", physical copies "+copies+". Tap to inspect exact printing");
+        tile.setOnClickListener(v->showInlinePrintingDetail(name,printing,()->closeInspector()));
+        GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
+        cell.width=width;
         cell.height=-2;
         int columns=catalogColumns();
         cell.rowSpec=GridLayout.spec(index/columns);
