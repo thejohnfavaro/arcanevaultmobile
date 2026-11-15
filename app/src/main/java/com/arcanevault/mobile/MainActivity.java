@@ -2032,10 +2032,12 @@ public class MainActivity extends Activity {
                 }
                 else if(path.equals("/api/catalog/ownership") && request[0].equals("POST")){
                     catalog.ownership(new JSONObject(new String(body,StandardCharsets.UTF_8)));
+                    VaultWidgets.refreshSets(MainActivity.this);
                     respondJson(out,200,"{\"ok\":true}");
                 }
                 else if(path.equals("/api/catalog/physical-ownership") && request[0].equals("POST")){
                     catalog.physicalOwnership(new JSONObject(new String(body,StandardCharsets.UTF_8)));
+                    VaultWidgets.refreshSets(MainActivity.this);
                     respondJson(out,200,"{\"ok\":true}");
                 }
                 else if(path.startsWith("/api/catalog/") && request[0].equals("GET")){
