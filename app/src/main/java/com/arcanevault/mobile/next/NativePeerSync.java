@@ -116,6 +116,25 @@ public final class NativePeerSync {
         }
         return records;
     }
+    /** Display verified values for a genuine three-way Arena conflict. */
+    public static JSONObject describeArenaConflict(JSONObject local,JSONObject remote,
+            JSONObject baseline,String id)throws Exception {
+        JSONObject own=require(local),peer=require(remote),base=require(baseline);
+        String name=norm(id);
+        JSONObject l=index("cards",own.getJSONArray("cards")).get(name);
+        JSONObject r=index("cards",peer.getJSONArray("cards")).get(name);
+        JSONObject b=index("cards",base.getJSONArray("cards")).get(name);
+        if(l==null||r==null||equivalent(l,r)||
+                equivalent(l,b)||equivalent(r,b))
+            throw new IllegalArgumentException(
+                "The Arena conflict changed. Re-run the peer review.");
+        return new JSONObject().put("key",name)
+            .put("name",l.optString("name",r.optString("name",name)))
+            .put("baseline",b==null?0:quantity(b))
+            .put("android",quantity(l))
+            .put("windows",quantity(r));
+    }
+
     /** Stable across Windows and Android JSON object property ordering. */
     private static String canonical(Object value)throws Exception {
         if(value==null||value==JSONObject.NULL)return "null";
@@ -208,7 +227,16 @@ public final class NativePeerSync {
      */
     public static JSONObject prepareMerge(JSONObject local,JSONObject remote,
             JSONObject baseline)throws Exception {
+        return prepareMerge(local,remote,baseline,java.util.Collections.emptyMap());
+    }
+
+    /** Explicit per-card conflict choices. Never silently combine or sum
+     * independently edited Arena quantities; unresolved conflicts still fail. */
+    public static JSONObject prepareMerge(JSONObject local,JSONObject remote,
+            JSONObject baseline,Map<String,String> arenaChoices)throws Exception {
+        if(arenaChoices==null)throw new IllegalArgumentException("Missing conflict choices");
         JSONObject own=require(local), peer=require(remote), base=require(baseline);
+        Set<String> usedChoices=new HashSet<>();
         if(local.getString("deviceId").equals(remote.getString("deviceId")))
             throw new IllegalArgumentException("Peer snapshot belongs to this same device");
         JSONObject proposed=new JSONObject(own.toString());
@@ -227,10 +255,23 @@ public final class NativePeerSync {
                 if(old!=null&&r!=null&&l==null)
                     throw new IllegalArgumentException("Local absence needs tombstone: "+group+"/"+id);
                 boolean ownBase=equivalent(l,old),peerBase=equivalent(r,old);
-                if(!equivalent(l,r)&&!ownBase&&!peerBase)
-                    throw new IllegalArgumentException("Conflicting edits: "+group+"/"+id);
+                boolean conflict=!equivalent(l,r)&&!ownBase&&!peerBase;
+                String decision=arenaChoices.get(id);
+                if(conflict) {
+                    if(!group.equals("cards")||decision==null)
+                        throw new IllegalArgumentException("Conflicting edits: "+group+"/"+id);
+                    if(!decision.equals("android")&&!decision.equals("windows"))
+                        throw new IllegalArgumentException("Invalid Arena conflict selection");
+                    if(l==null||r==null)
+                        throw new IllegalArgumentException(
+                            "Arena removal/identity conflict requires manual review: "+id);
+                    usedChoices.add(id);
+                }
                 JSONObject chosen;
-                if(ownBase&&!peerBase){
+                if(conflict && decision.equals("windows")){
+                    incoming++;
+                    chosen=r;
+                } else if(ownBase&&!peerBase){
                     incoming++;
                     chosen=r;
                 } else {
@@ -250,6 +291,9 @@ public final class NativePeerSync {
             if(!merged.isEmpty())throw new IllegalArgumentException("Unmatched peer entries");
             proposed.put(group,combined);
         }
+        if(!usedChoices.equals(arenaChoices.keySet()))
+            throw new IllegalArgumentException(
+                "A conflict choice no longer matches the current records. Review again.");
         JSONObject localArt=own.getJSONObject("preferredArtwork");
         JSONObject baseArt=base.getJSONObject("preferredArtwork");
         JSONObject peerArt=peer.getJSONObject("preferredArtwork");
