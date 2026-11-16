@@ -476,7 +476,7 @@ final class NativeWorkspaceScreen {
             int allCount=Math.max(0,set.optInt("total",0));
             String released=set.optString("releaseDate","");
             String progress=ownedCount+" owned / "+allCount+" "+
-                ("arena".equals(source)?"Arena names":"verified set entries")+
+                ("arena".equals(source)?"Arena names":"paper collector slots")+
                 " · "+Math.max(0,allCount-ownedCount)+" missing";
             if(!released.isEmpty())progress+=" · Released "+released;
             TextView summary=VaultNativeStyle.label(activity,progress,
@@ -537,7 +537,7 @@ final class NativeWorkspaceScreen {
             double percent=100d*verifiedCoverage/totalCoverage;
             row("COLLECTION-WIDE SET COVERAGE",
                 verifiedCoverage+" / "+totalCoverage+" "+
-                    ("arena".equals(source)?"Arena card names":"catalog set entries")+
+                    ("arena".equals(source)?"Arena card names":"paper collector slots")+
                     " · "+String.format(java.util.Locale.US,"%.1f%%",percent)+
                     " covered · "+Math.max(0,totalCoverage-verifiedCoverage)+" missing",
                 null);
@@ -640,7 +640,9 @@ final class NativeWorkspaceScreen {
                     content.addView(ownedOnly);
                     TextView hint=VaultNativeStyle.label(activity,
                         source.equals("physical")?
-                            "Confirmed copies use exact printing identity, not card name.":
+                            "Set completion counts distinct paper collector-number slots. "+
+                            "Exact owned printing copies remain separately verified by "+
+                            "Scryfall ID, never inferred from card name.":
                             "Arena set coverage uses owned card names, not physical printings.",
                         12,VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,hint,12,activity);
