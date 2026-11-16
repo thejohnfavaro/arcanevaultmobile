@@ -104,4 +104,8 @@ assert.match(source,/totalCoverage-verifiedCoverage/,
  'Aggregate count must use cached verified set coverage, not guessed quantity');
 assert.match(catalogStore,/\.put\("totalCards",snapshot\.optInt\("totalCards",-1\)\)/,
  'Filtering cached sets must retain collection-wide overview totals');
+assert.match(catalogInspector,/toggle\.setOnClickListener\(/,
+ 'Format legality details should be expandable on compact phones');
+assert.match(catalogInspector,/list\.setVisibility\(View\.GONE\)/,
+ 'Oracle text should remain accessible without a long legality wall');
 console.log('PASS: visual set-card parity, cached cover art, icons and completion safety');
