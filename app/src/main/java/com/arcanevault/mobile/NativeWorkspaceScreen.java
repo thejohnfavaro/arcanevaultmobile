@@ -1846,6 +1846,10 @@ final class NativeWorkspaceScreen {
         content.addView(introText);
         if(syncSection.equals("snapshots")) {
         row("Collection storage","Physical and Arena inventories are stored separately in native Android storage.",null);
+        row("Native saved-deck and artwork safety copy",
+            NativeDeckArtworkMirror.overview(activity),null);
+        button("Export verified deck/artwork recovery copy",
+            ()->((MainActivity)activity).exportNativeDeckArtworkMirror());
         row("Safe recovery snapshot",prefs.contains("vault_nativePhysicalBackupV1")?
             "A prior physical collection snapshot is available. Restore only if needed.":
             "No native edit recovery snapshot yet.",null);
