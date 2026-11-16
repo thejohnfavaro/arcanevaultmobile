@@ -182,6 +182,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             String json=prefs.getString("overview_"+source,null);
             if(json==null)return false;
             JSONObject snapshot=new JSONObject(json);
+            if(snapshot.optInt("slotMetricVersion",0)!=2)return false;
             JSONArray original=snapshot.optJSONArray("sets");
             if(original==null)return false;
             java.util.Map<String,JSONObject> refreshed=new java.util.HashMap<>();
@@ -204,6 +205,16 @@ final class CatalogStore extends SQLiteOpenHelper {
                 updated.put(row);
             }
             snapshot.put("sets",updated);
+            // Keep collection-wide overview consistent with per-set refresh.
+            int aggregateOwned=0,aggregateTotal=0;
+            for(int i=0;i<updated.length();i++){
+                JSONObject row=updated.optJSONObject(i);
+                if(row==null)continue;
+                aggregateOwned+=row.optInt("owned",0);
+                aggregateTotal+=row.optInt("total",0);
+            }
+            snapshot.put("ownedCards",aggregateOwned)
+                .put("totalCards",aggregateTotal);
             synchronized(this){
                 if(prefs.getLong("revision_"+source,0)!=revision)return false;
                 return prefs.edit().putString("overview_"+source,snapshot.toString())
@@ -1190,10 +1201,13 @@ final class CatalogStore extends SQLiteOpenHelper {
         boolean arena="arena".equals(source);
         int total=0,owned=0;
         String name=null;
-        try(Cursor c=db.rawQuery(
-                "SELECT MAX(setname),COUNT(DISTINCT name) FROM variants "+
-                "WHERE setcode=? COLLATE NOCASE"+(arena?" AND arena=1":""),
-                new String[]{code})){
+        String paper="v.digital=0 AND "+
+            "instr(',' || lower(replace(v.games,' ','')) || ',', ',paper,')>0";
+        String totalSql="SELECT MAX(setname),"+
+            (arena?"COUNT(DISTINCT name)":"COUNT(DISTINCT collector COLLATE NOCASE)")+
+            " FROM variants v WHERE setcode=? COLLATE NOCASE "+
+            (arena?"AND arena=1":"AND "+paper+" AND trim(collector)!=''");
+        try(Cursor c=db.rawQuery(totalSql,new String[]{code})){
             if(c.moveToFirst()){name=c.getString(0);total=c.getInt(1);}
         }
         if(total<=0)return null;
@@ -1206,30 +1220,27 @@ final class CatalogStore extends SQLiteOpenHelper {
                 if(c.moveToFirst())owned=c.getInt(0);
             }
         }else{
-            // Resolve only owned IDs in the requested set. Split ID and
-            // set/collector fallbacks so an OR join cannot scan all variants.
-            String ownedSql="SELECT COUNT(DISTINCT matched.name) FROM ("+
-                "SELECT v.name FROM physical_printings p "+
-                "JOIN variants v ON v.print_id=p.print_id COLLATE NOCASE "+
-                "WHERE p.qty>0 AND p.print_id!='' AND v.setcode=? COLLATE NOCASE "+
-                "UNION "+
-                "SELECT v.name FROM physical_printings p "+
-                "JOIN variants v ON v.setcode=? COLLATE NOCASE "+
+            String ownedSql="SELECT COUNT(DISTINCT verified.collector) FROM ("+
+                "SELECT v.collector FROM physical_printings p "+
+                "JOIN variants v ON p.print_id=v.print_id COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.print_id!='' "+
+                "AND v.setcode=? COLLATE NOCASE AND "+paper+
+                " AND trim(v.collector)!='' "+
+                "UNION SELECT v.collector FROM physical_printings p "+
+                "JOIN variants v ON p.print_id='' "+
+                "AND v.setcode=p.setcode COLLATE NOCASE "+
                 "AND v.collector=p.collector COLLATE NOCASE "+
+                "AND v.name=p.name COLLATE NOCASE "+
                 "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
-                "AND p.setcode=v.setcode COLLATE NOCASE "+
-                "AND (p.print_id='' OR NOT EXISTS "+
-                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE)) "+
-                "UNION "+
-                "SELECT v.name FROM physical_printings p "+
-                "JOIN variants v ON v.setcode=? COLLATE NOCASE "+
-                "AND v.collector=p.collector COLLATE NOCASE "+
-                "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
-                "AND p.setcode=v.setname COLLATE NOCASE "+
-                "AND (p.print_id='' OR NOT EXISTS "+
-                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE))"+
-                ") matched";
-            try(Cursor c=db.rawQuery(ownedSql,new String[]{code,code,code})){
+                "AND v.setcode=? COLLATE NOCASE AND "+paper+
+                " AND (SELECT COUNT(*) FROM variants unique_slot "+
+                "WHERE unique_slot.setcode=p.setcode COLLATE NOCASE "+
+                "AND unique_slot.collector=p.collector COLLATE NOCASE "+
+                "AND unique_slot.name=p.name COLLATE NOCASE "+
+                "AND unique_slot.digital=0 "+
+                "AND instr(',' || lower(replace(unique_slot.games,' ','')) || ',', ',paper,')>0)=1"+
+                ") verified";
+            try(Cursor c=db.rawQuery(ownedSql,new String[]{code,code})){
                 if(c.moveToFirst())owned=c.getInt(0);
             }
         }
