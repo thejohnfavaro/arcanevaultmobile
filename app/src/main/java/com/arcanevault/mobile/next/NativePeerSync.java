@@ -135,6 +135,36 @@ public final class NativePeerSync {
             .put("windows",quantity(r));
     }
 
+    /** Select every genuinely divergent Arena card after checking the shared
+     * baseline. This is only a reviewed proposal, never permission to apply.
+     * Unrelated physical/deck/artwork conflicts retain their normal safeguards. */
+    public static Map<String,String> chooseAllArenaConflicts(
+            JSONObject local,JSONObject remote,JSONObject baseline,
+            String source)throws Exception {
+        if(!"windows".equals(source)&&!"android".equals(source))
+            throw new IllegalArgumentException("Invalid bulk Arena conflict choice");
+        JSONObject own=require(local),peer=require(remote),base=require(baseline);
+        Map<String,JSONObject> a=index("cards",own.getJSONArray("cards"));
+        Map<String,JSONObject> b=index("cards",base.getJSONArray("cards"));
+        Map<String,JSONObject> c=index("cards",peer.getJSONArray("cards"));
+        Set<String> all=new TreeSet<>();
+        all.addAll(a.keySet());all.addAll(b.keySet());all.addAll(c.keySet());
+        Map<String,String> decisions=new HashMap<>();
+        for(String key:all){
+            JSONObject android=a.get(key),before=b.get(key),windows=c.get(key);
+            if(equivalent(android,windows)||equivalent(android,before)||
+                    equivalent(windows,before))continue;
+            // Deletions never get silently approved by a blanket decision.
+            if(android==null||windows==null)
+                throw new IllegalArgumentException(
+                    "Arena removal/identity conflict requires manual review: "+key);
+            decisions.put(key,source);
+        }
+        if(decisions.isEmpty())
+            throw new IllegalArgumentException("No unresolved Arena conflicts to choose");
+        return decisions;
+    }
+
     /** Stable across Windows and Android JSON object property ordering. */
     private static String canonical(Object value)throws Exception {
         if(value==null||value==JSONObject.NULL)return "null";
