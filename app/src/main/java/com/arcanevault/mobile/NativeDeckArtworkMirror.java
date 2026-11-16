@@ -38,7 +38,7 @@ final class NativeDeckArtworkMirror {
         if(contents.length()>LIMIT)throw new IllegalArgumentException("Deck mirror too large");
         JSONObject envelope=new JSONObject().put("schema",1)
             .put("capturedUtc",System.currentTimeMillis())
-            .put("content",new JSONObject(contents))
+            .put("payload",contents)
             .put("sha256",hash(contents));
         File target=path(context);
         AtomicFile atomic=new AtomicFile(target);
@@ -50,7 +50,8 @@ final class NativeDeckArtworkMirror {
             atomic.finishWrite(stream);stream=null;
         }finally{if(stream!=null)atomic.failWrite(stream);}
         JSONObject stored=read(context);
-        if(stored.getJSONObject("content").getJSONArray("decks").length()!=library.length())
+        if(new JSONObject(stored.getString("payload"))
+                .getJSONArray("decks").length()!=library.length())
             throw new IllegalStateException("Native mirror verification failed");
     }
     static JSONObject read(Context context)throws Exception {
@@ -60,9 +61,10 @@ final class NativeDeckArtworkMirror {
         JSONObject envelope=new JSONObject(new String(
             java.nio.file.Files.readAllBytes(file.toPath()),StandardCharsets.UTF_8));
         if(envelope.getInt("schema")!=1)throw new IllegalStateException("Unsupported mirror");
-        JSONObject content=envelope.getJSONObject("content");
-        if(!hash(content.toString()).equals(envelope.getString("sha256")))
+        String payload=envelope.getString("payload");
+        if(!hash(payload).equals(envelope.getString("sha256")))
             throw new IllegalStateException("Native mirror hash mismatch");
+        JSONObject content=new JSONObject(payload);
         content.getJSONArray("decks");content.getJSONObject("preferredArtwork");
         return envelope;
     }
