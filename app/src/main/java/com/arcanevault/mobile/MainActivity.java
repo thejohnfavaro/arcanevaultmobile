@@ -486,8 +486,19 @@ public class MainActivity extends Activity {
                     if(!(decoded instanceof String) || "SYNC_ERROR".equals(decoded))
                         throw new IllegalStateException("Stored deck data is not readable");
                     JSONObject envelope=new JSONObject((String)decoded);
-                    callback.use(envelope.getJSONArray("decks").toString(),
-                        envelope.getJSONObject("art").toString());
+                    String verifiedDecks=envelope.getJSONArray("decks").toString();
+                    String verifiedArtwork=envelope.getJSONObject("art").toString();
+                    // Migration staging: durable, hash-verified native shadow
+                    // after reading the live authoritative WebView source.
+                    // Never use it to mask a failed source read.
+                    try{
+                        NativeDeckArtworkMirror.saveObserved(
+                            this,verifiedDecks,verifiedArtwork);
+                    }catch(Exception mirrorError){
+                        android.util.Log.w("ArcaneVault",
+                            "Native deck mirror could not be refreshed",mirrorError);
+                    }
+                    callback.use(verifiedDecks,verifiedArtwork);
                 } catch(Exception error) {
                     toast("Peer sync cannot read decks/artwork: "+error.getMessage());
                 }
