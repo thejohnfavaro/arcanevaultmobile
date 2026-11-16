@@ -56,10 +56,24 @@ assert.match(source,/setOverviewFilters\.setVisibility\(View\.VISIBLE\)/,
  'Restore overview controls on return to sets');
 assert.match(source,/setOverviewSearch\.setVisibility\(View\.VISIBLE\)/,
  'Restore overview search on return to sets');
-assert.match(source,/showSetCardPreview\(p,title,source,qty\)/,
- 'Set card rows must open an actual printing-aware preview');
-assert.match(source,/artwork\.get\(imageUrl\)/,
- 'Set card previews use bounded official artwork cache');
-assert.match(source,/Printing ID: /,
+const catalogInspector=fs.readFileSync(
+ 'app/src/main/java/com/arcanevault/mobile/NativeCatalogScreen.java','utf8');
+const companion=fs.readFileSync(
+ 'app/src/main/java/com/arcanevault/mobile/NativeCompanionScreen.java','utf8');
+assert.match(source,/\.inspectSetPrinting\(/,
+ 'Set card rows must enter the full Catalog inspector');
+assert.match(companion,/nativeCatalog\.inspectSetPrinting\(/,
+ 'Handoff must preserve the actual Set Progress printing');
+assert.match(catalogInspector,/void inspectSetPrinting\(JSONObject printing,/,
+ 'Catalog should support a printing-aware external inspector');
+assert.match(catalogInspector,/addInspectorArtwork\(name,front,backArt\)/,
+ 'Full inspector must use exact selected printing art and its alternate face');
+assert.match(catalogInspector,/Printing ID: /,
  'Owned physical printing identity must remain visible');
+assert.match(catalogInspector,/FORMAT LEGALITIES \(cached\)/,
+ 'Set and Catalog inspectors should expose cached format legality metadata');
+assert.match(source,/Released /,
+ 'Set Progress overview must show release data without opening a set');
+assert.match(source,/verified set entries/,
+ 'Overview must show verified ownership and missing coverage');
 console.log('PASS: visual set-card parity, cached cover art, icons and completion safety');
