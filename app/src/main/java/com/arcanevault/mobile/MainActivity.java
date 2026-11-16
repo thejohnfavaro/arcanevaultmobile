@@ -1329,6 +1329,14 @@ public class MainActivity extends Activity {
     private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,
             PeerSnapshotLoader baseline,java.util.Map<String,String> decisions,
             JSONObject reviewedLocal) {
+        applyPeerInventorySnapshot(incoming,baseline,decisions,
+            new java.util.HashMap<>(),reviewedLocal);
+    }
+
+    private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,
+            PeerSnapshotLoader baseline,java.util.Map<String,String> decisions,
+            java.util.Map<String,String> deckDecisions,
+            JSONObject reviewedLocal) {
         withPeerData((decks,art)->{
             try {
                 JSONObject local=com.arcanevault.mobile.next.NativePeerSync
@@ -1343,7 +1351,7 @@ public class MainActivity extends Activity {
                         remote=incoming.load();
                         original=baseline.load();
                         JSONObject proposal=com.arcanevault.mobile.next.NativePeerSync
-                            .prepareMerge(local,remote,original,decisions);
+                            .prepareMerge(local,remote,original,decisions,deckDecisions);
                         JSONObject before=local.getJSONObject("data");
                         JSONObject target=proposal.getJSONObject("candidate");
                         boolean decksChanged=!NativePeerInventoryApply.canonicalEqual(
@@ -1504,7 +1512,8 @@ public class MainActivity extends Activity {
                                             next.putAll(windowsAll);
                                         }else return;
                                         applyPeerInventorySnapshot(
-                                            ()->incomingSnapshot,()->baseSnapshot,next,local);
+                                            ()->incomingSnapshot,()->baseSnapshot,
+                                            next,deckDecisions,local);
                                     })
                                     .setNegativeButton("Cancel",null).show());
                                 return;
@@ -1512,6 +1521,52 @@ public class MainActivity extends Activity {
                                 message="Arena conflict was detected but its quantities "+
                                     "could not be validated safely. Original error: "+
                                     error.getMessage()+"; conflict detail: "+
+                                    invalid.getMessage();
+                            }
+                        }
+                        String deckPrefix="Conflicting edits: deckLibrary/";
+                        if(message.startsWith(deckPrefix)&&
+                            incomingSnapshot!=null&&baseSnapshot!=null){
+                            try{
+                                JSONObject conflict=com.arcanevault.mobile.next.NativePeerSync
+                                    .describeDeckConflict(local,incomingSnapshot,baseSnapshot,
+                                        message.substring(deckPrefix.length()));
+                                String key=conflict.getString("key");
+                                java.util.Map<String,String> windowsAll=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllDeckConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"windows");
+                                java.util.Map<String,String> androidAll=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllDeckConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"android");
+                                String[] choices={
+                                    "Keep Android for this deck",
+                                    "Use Windows for this deck",
+                                    "Use Android for all "+androidAll.size()+" differing decks",
+                                    "Use Windows for all "+windowsAll.size()+" differing decks"
+                                };
+                                String title="Saved deck conflict"+
+                                    "\nAndroid: "+conflict.getString("androidName")+
+                                    "\nWindows: "+conflict.getString("windowsName");
+                                runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                    .setTitle(title)
+                                    .setItems(choices,(dialog,which)->{
+                                        java.util.Map<String,String> next=
+                                            new java.util.HashMap<>(deckDecisions);
+                                        if(which==0)next.put(key,"android");
+                                        else if(which==1)next.put(key,"windows");
+                                        else if(which==2)next.putAll(androidAll);
+                                        else if(which==3)next.putAll(windowsAll);
+                                        else return;
+                                        applyPeerInventorySnapshot(
+                                            ()->incomingSnapshot,()->baseSnapshot,
+                                            decisions,next,local);
+                                    })
+                                    .setNegativeButton("Cancel",null).show());
+                                return;
+                            }catch(Exception invalid){
+                                message="Saved deck conflict cannot be reviewed safely: "+
                                     invalid.getMessage();
                             }
                         }
