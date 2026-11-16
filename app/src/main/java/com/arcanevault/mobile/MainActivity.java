@@ -1576,11 +1576,21 @@ public class MainActivity extends Activity {
                                     com.arcanevault.mobile.next.NativePeerSync
                                         .chooseAllDeckConflicts(local,incomingSnapshot,
                                             baseSnapshot,"android");
+                                java.util.Map<String,String> androidArenaBulk=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllArenaConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"android");
+                                java.util.Map<String,String> windowsArenaBulk=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllArenaConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"windows");
                                 String[] choices={
                                     "Keep Android for this deck",
                                     "Use Windows for this deck",
                                     "Use Android for all "+androidAll.size()+" differing decks",
-                                    "Use Windows for all "+windowsAll.size()+" differing decks"
+                                    "Use Windows for all "+windowsAll.size()+" differing decks",
+                                    "Use Android for all decks + Arena",
+                                    "Use Windows for all decks + Arena"
                                 };
                                 String title="Saved deck conflict"+
                                     "\nAndroid: "+conflict.getString("androidName")+
@@ -1594,10 +1604,16 @@ public class MainActivity extends Activity {
                                         else if(which==1)next.put(key,"windows");
                                         else if(which==2)next.putAll(androidAll);
                                         else if(which==3)next.putAll(windowsAll);
+                                        else if(which==4)next.putAll(androidAll);
+                                        else if(which==5)next.putAll(windowsAll);
                                         else return;
+                                        java.util.Map<String,String> combinedArena=
+                                            new java.util.HashMap<>(decisions);
+                                        if(which==4)combinedArena.putAll(androidArenaBulk);
+                                        if(which==5)combinedArena.putAll(windowsArenaBulk);
                                         applyPeerInventorySnapshot(
                                             ()->incomingSnapshot,()->baseSnapshot,
-                                            decisions,next,local);
+                                            combinedArena,next,local);
                                     })
                                     .setNegativeButton("Cancel",null).show());
                                 return;
