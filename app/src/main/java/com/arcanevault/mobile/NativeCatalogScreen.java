@@ -609,7 +609,8 @@ final class NativeCatalogScreen {
             entry.setContentDescription(name+", "+type+", "+rarityLabel+
                 (physicalQty>0?", Physical copies "+physicalQty:"")+
                 (arenaQty>0?", Arena copies "+arenaQty:"")+". Tap to inspect");
-            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty));
+            entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty,
+                null,"","",0,meta,null));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
             lp.bottomMargin=dp(9);
             results.addView(entry,lp);
@@ -681,7 +682,8 @@ final class NativeCatalogScreen {
         tile.setContentDescription(name+", "+(physicalQty+arenaQty)+
             " owned copies. Tap to inspect");
         tile.setOnClickListener(v->
-            showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty));
+            showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty,
+                null,"","",0,meta,null));
         GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
         cell.width=cardWidth;
         cell.height=-2;
