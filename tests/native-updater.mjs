@@ -3,6 +3,11 @@ import fs from 'node:fs';
 const updater = fs.readFileSync('app/src/main/java/com/arcanevault/mobile/NativeAppUpdater.java','utf8');
 const provider = fs.readFileSync('app/src/main/java/com/arcanevault/mobile/VerifiedUpdateProvider.java','utf8');
 const screen = fs.readFileSync('app/src/main/java/com/arcanevault/mobile/NativeCompanionScreen.java','utf8');
+const commanderScreen=fs.readFileSync('app/src/main/java/com/arcanevault/mobile/NativeCommanderBrowserScreen.java','utf8');
+assert.doesNotMatch(commanderScreen,/Copy commander name & open deck editor/,
+  'Commander browsing must not relaunch the legacy WebView editor');
+assert.match(commanderScreen,/Copy commander name/,
+  'Native commander browsing must retain a safe copy action');
 const manifest = fs.readFileSync('app/src/main/AndroidManifest.xml','utf8');
 const gradle = fs.readFileSync('app/build.gradle','utf8');
 for (const section of [
