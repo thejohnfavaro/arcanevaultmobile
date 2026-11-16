@@ -74,6 +74,8 @@ final class NativeWorkspaceScreen {
     private final LinearLayout root;
     private final LinearLayout content;
     private final TextView status;
+    private View setOverviewFilters;
+    private View setOverviewSearch;
     private volatile boolean closed;
     private int page=0;
     private String syncSection="devices";
@@ -209,10 +211,12 @@ final class NativeWorkspaceScreen {
             });
             settings.addView(sort,new LinearLayout.LayoutParams(-1,dp(46)));
             root.addView(settings,2);
+            setOverviewFilters=settings;
             EditText search=new EditText(activity);
             VaultNativeStyle.search(activity,search);
             search.setHint("Search sets by name or code");
             root.addView(search,3,new LinearLayout.LayoutParams(-1,dp(48)));
+            setOverviewSearch=search;
             search.addTextChangedListener(new TextWatcher(){
                 public void beforeTextChanged(CharSequence s,int start,int count,int after){}
                 public void onTextChanged(CharSequence s,int start,int before,int count){
@@ -358,6 +362,8 @@ final class NativeWorkspaceScreen {
     /** The UI never waits for the indexer before showing a cached page. */
     private void setProgress(String filter,int pageNumber){
         screenState="set-overview";
+        if(setOverviewFilters!=null)setOverviewFilters.setVisibility(View.VISIBLE);
+        if(setOverviewSearch!=null)setOverviewSearch.setVisibility(View.VISIBLE);
         page=pageNumber;
         setQuery=filter;
         final int request=++setRequestId;
@@ -553,6 +559,9 @@ final class NativeWorkspaceScreen {
 
     private void showSet(String set,String title,int pageNumber){
         screenState="set-details";
+        if(setOverviewFilters!=null)setOverviewFilters.setVisibility(View.GONE);
+        if(setOverviewSearch!=null)setOverviewSearch.setVisibility(View.GONE);
+        workspaceScroll.scrollTo(0,0);
         final int request=++setRequestId;
         final String source=setSource;
         final boolean hideUnowned=hideUnownedSetSlots;
@@ -616,11 +625,7 @@ final class NativeWorkspaceScreen {
                         row(name+(source.equals("physical")?" · #"+collector:""),
                             (qty>0?"Owned ×"+qty:"Missing")+
                                 " · "+p.optString("rarity",""),
-                            ()->new AlertDialog.Builder(activity).setTitle(name)
-                                .setMessage(title+(source.equals("physical")?" #"+collector:"")+"\n"+
-                                    (source.equals("physical")?"Confirmed physical copies: ":"Arena copies: ")+qty+"\n"+
-                                    (source.equals("physical")?"Printing ID: "+p.optString("id",""):"Arena card-name ownership"))
-                                .setPositiveButton("Close",null).show());
+                            ()->showSetCardPreview(p,title,source,qty));
                     }
                     if((source.equals("physical") && (pageNumber+1)*48<response.optInt("total",0)) ||
                         (source.equals("arena") && response.optBoolean("hasMore",false)))
@@ -628,6 +633,54 @@ final class NativeWorkspaceScreen {
                     status.setText(title+" · "+(source.equals("physical")?"Physical printings":"Arena card names"));
                 });
             }catch(Exception e){ui.post(()->{if(!closed)status.setText("Set details unavailable: "+e.getMessage());});}
+        });
+    }
+
+    /** Print-specific read-only preview from the same verified set row.
+     * The art is fetched only when opened, through the official cache.
+     * Set filters are hidden while browsing a set, avoiding overlapping UI. */
+    private void showSetCardPreview(JSONObject printing,String setName,
+            String source,int qty){
+        if(closed||activity.isFinishing())return;
+        String name=printing.optString("name","Unknown card");
+        String collector=printing.optString("collectorNumber","");
+        String imageUrl=printing.optString("image","");
+        LinearLayout body=VaultNativeStyle.column(activity);
+        body.setPadding(dp(18),dp(8),dp(18),dp(8));
+        ImageView picture=new ImageView(activity);
+        picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        picture.setAdjustViewBounds(true);
+        // Keep metadata visible even on compact phones.
+        if(!imageUrl.isEmpty())
+            body.addView(picture,new LinearLayout.LayoutParams(-1,dp(265)));
+        TextView details=VaultNativeStyle.label(activity,
+            setName+(source.equals("physical")?" · #"+collector:"")+
+            "\n"+(source.equals("physical")?"Confirmed physical copies: ":"Arena copies: ")+qty+
+            (source.equals("physical")?
+                "\nPrinting ID: "+printing.optString("id",""):
+                "\nArena ownership is counted by card name."),
+            13,VaultNativeStyle.TEXT,false);
+        details.setTextIsSelectable(true);
+        body.addView(details);
+        AlertDialog dialog=new AlertDialog.Builder(activity)
+            .setTitle(name).setView(body).setPositiveButton("Close",null).create();
+        dialog.show();
+        if(imageUrl.isEmpty())return;
+        setArtWorkers.execute(()->{
+            try{
+                byte[] data=artwork.get(imageUrl);
+                Bitmap bmp=BitmapFactory.decodeByteArray(data,0,data.length);
+                if(bmp==null)return;
+                ui.post(()->{
+                    if(!closed&&dialog.isShowing())picture.setImageBitmap(bmp);
+                });
+            }catch(Exception ignored){
+                ui.post(()->{
+                    if(!closed&&dialog.isShowing()){
+                        body.removeView(picture);
+                    }
+                });
+            }
         });
     }
 
