@@ -936,16 +936,6 @@ final class NativeCatalogScreen {
                 }
                 extra.append("\n");
             }
-            JSONObject legalities=metadata.optJSONObject("legalities");
-            if(legalities!=null&&legalities.length()>0){
-                extra.append("\nFORMAT LEGALITIES (cached)\n");
-                java.util.ArrayList<String> formats=new java.util.ArrayList<>();
-                for(java.util.Iterator<String> it=legalities.keys();it.hasNext();)formats.add(it.next());
-                java.util.Collections.sort(formats);
-                for(String format:formats)
-                    extra.append(format).append(": ")
-                        .append(legalities.optString(format,"unknown")).append("\n");
-            }
             if(extra.length()>0){
                 TextView metaInfo=text(extra.toString().trim(),13,false);
                 metaInfo.setTextColor(VaultNativeStyle.SUBTEXT);
@@ -969,6 +959,32 @@ final class NativeCatalogScreen {
         rules.setLineSpacing(dp(3),1f);
         oraclePanel.addView(rules);
         VaultNativeStyle.margin(inspectorContent,oraclePanel,10,activity);
+        // Keep the Oracle panel visible above the fold. The full legalities
+        // list remains available in a collapsible, scrollable inspector area.
+        JSONObject legalities=metadata==null?null:metadata.optJSONObject("legalities");
+        if(legalities!=null&&legalities.length()>0){
+            java.util.ArrayList<String> formats=new java.util.ArrayList<>();
+            for(java.util.Iterator<String> it=legalities.keys();it.hasNext();)
+                formats.add(it.next());
+            java.util.Collections.sort(formats);
+            StringBuilder statuses=new StringBuilder();
+            for(String format:formats)statuses.append(format).append(": ")
+                .append(legalities.optString(format,"unknown")).append("\n");
+            Button toggle=VaultNativeStyle.button(activity,
+                "FORMAT LEGALITIES (cached) · "+formats.size()+" formats ▸",false);
+            inspectorContent.addView(toggle,new LinearLayout.LayoutParams(-1,dp(46)));
+            TextView list=text(statuses.toString().trim()+
+                "\nCached Scryfall status; verify current bans before play.",13,false);
+            list.setTextColor(VaultNativeStyle.SUBTEXT);
+            list.setVisibility(View.GONE);
+            inspectorContent.addView(list);
+            toggle.setOnClickListener(v->{
+                boolean open=list.getVisibility()!=View.VISIBLE;
+                list.setVisibility(open?View.VISIBLE:View.GONE);
+                toggle.setText("FORMAT LEGALITIES (cached) · "+formats.size()+
+                    (open?" formats ▾":" formats ▸"));
+            });
+        }
 
         // A native star edits the SAME vault_favorites list used by Legacy
         // tools and Windows backups; never invent a parallel bookmark store.
