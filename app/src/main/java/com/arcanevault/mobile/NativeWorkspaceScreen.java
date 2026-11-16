@@ -471,6 +471,18 @@ final class NativeWorkspaceScreen {
         LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(-1,dp(161));
         layout.bottomMargin=dp(9);
         content.addView(tile,layout);
+        if(set.has("total")){
+            int ownedCount=Math.max(0,set.optInt("owned",0));
+            int allCount=Math.max(0,set.optInt("total",0));
+            String released=set.optString("releaseDate","");
+            String progress=ownedCount+" owned / "+allCount+" "+
+                ("arena".equals(source)?"Arena names":"verified set entries")+
+                " · "+Math.max(0,allCount-ownedCount)+" missing";
+            if(!released.isEmpty())progress+=" · Released "+released;
+            TextView summary=VaultNativeStyle.label(activity,progress,
+                12,VaultNativeStyle.SUBTEXT,false);
+            VaultNativeStyle.margin(content,summary,3,activity);
+        }
         // Resolve only cards visible in this page. No image fetch blocks the
         // overview or navigation, and later re-entry uses the on-disk cache.
         // Reuse existing cached artwork immediately. Missing images and set
