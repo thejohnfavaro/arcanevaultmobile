@@ -575,7 +575,7 @@ final class NativeCompanionScreen {
         output.sort(Comparator.comparing(row->row.name,String.CASE_INSENSITIVE_ORDER));
         return output;
     }
-    private void refresh(){
+    void refresh(){
         int ticket=++readGeneration;
         subtitle.setText("Refreshing local collection…");
         new Thread(()->{
