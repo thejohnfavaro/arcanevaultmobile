@@ -1487,9 +1487,12 @@ public class MainActivity extends Activity {
                                     "Use Windows for all chooses the Windows values "+
                                     "for every one of these records, including "+
                                     "Android-only edits; Use Android for all "+
-                                    "retains the Android values. Missing peer "+
-                                    "records are not deleted. Physical cards, "+
-                                    "decks and artwork are never overridden.";
+                                    "retains the Android values. Cards found on "+
+                                    "only one device are excluded from bulk "+
+                                    "selection: safe additions remain eligible, "+
+                                    "while ambiguous removals still block apply. "+
+                                    "Physical cards, decks and artwork are "+
+                                    "never overridden.";
                                 String[] choices={
                                     "Keep Android (this card)",
                                     "Use Windows (this card)",
@@ -1523,7 +1526,7 @@ public class MainActivity extends Activity {
                         }
                         final String rejection=message;
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                            .setTitle("Peer merge rejected · sync handler 2.1.46")
+                            .setTitle("Peer merge rejected · native sync")
                             .setMessage(rejection+
                                 "\n\nNo inventory, deck or artwork data was changed."+
                                 "\nIf this dialog shows handler 2.1.46, send its "+
