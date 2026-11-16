@@ -1022,13 +1022,15 @@ final class NativeCatalogScreen {
             "＋ Add to Physical Collection",true);
         inspectorContent.addView(quickAdd,new LinearLayout.LayoutParams(-1,dp(48)));
         quickAdd.setOnClickListener(v->showInlinePrintings(name,
-            ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty)));
+            ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty,
+                printing,setName,source,selectedCopies,metadata,returnToSet)));
 
         Button browsePrintings=VaultNativeStyle.button(activity,
             "View printings & edit physical ownership",false);
         inspectorContent.addView(browsePrintings,new LinearLayout.LayoutParams(-1,dp(48)));
         browsePrintings.setOnClickListener(v->showInlinePrintings(name,
-            ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty)));
+            ()->showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty,
+                printing,setName,source,selectedCopies,metadata,returnToSet)));
     }
 
     private void showInlinePrintings(String name,Runnable previous) {
