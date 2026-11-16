@@ -21,6 +21,12 @@ assert.match(manifest,/android\.permission\.REQUEST_INSTALL_PACKAGES/);
 assert.match(manifest,/android:exported="false" android:grantUriPermissions="true"/);
 assert.match(screen,/Check for app updates/);
 assert.match(screen,/new NativeAppUpdater\(activity\)\.check\(\)/);
+assert.match(updater,/No newer published APK found/,
+  'Source commits must not be presented as installed signed updates');
+assert.doesNotMatch(screen,/Settings & legacy/,
+  'Retired WebView UI must not be exposed in native Data & Sync');
+assert.match(screen,/addSecondaryTab\("Data & Sync","data & sync"\)/,
+  'Native Data & Sync must remain accessible');
 assert.match(gradle,/versionCode [1-9][0-9]*/);
 const versionName=gradle.match(/versionName '([0-9]+\.[0-9]+\.[0-9]+)'/);
 assert.ok(versionName,'Updater versionName must be semantic');
