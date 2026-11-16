@@ -203,12 +203,44 @@ public final class NativePeerSyncTest {
             NativePeerSync.chooseAllArenaConflicts(android,windows,baseline,"sum");
             fail("Unapproved bulk authority");
         }catch(IllegalArgumentException expected){}
-        // Deletions cannot be silently authorized by a blanket choice.
+        // Missing rows are excluded from bulk authority, not used as
+        // permission to delete. The actual merge still rejects the absence.
         windows.getJSONObject("data").put("cards",new JSONArray());
         try {
             NativePeerSync.chooseAllArenaConflicts(android,windows,baseline,"windows");
-            fail("Implicit remote deletion must be rejected");
-        }catch(IllegalArgumentException expected){}
+            fail("No shared record should be eligible for a bulk choice");
+        }catch(IllegalArgumentException expected){
+            assertTrue(expected.getMessage().contains("No unresolved"));
+        }
+        try {
+            NativePeerSync.prepareMerge(android,windows,baseline);
+            fail("Implicit remote deletion must still be rejected");
+        }catch(IllegalArgumentException expected){
+            assertTrue(expected.getMessage().contains("tombstone"));
+        }
+    }
+
+    @Test public void bulkChoiceSkipsUnmatchedArenaCardsButResolvesSharedConflicts()
+            throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",1);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",2);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",3);
+        // Windows-only card: safe addition must not block shared conflict choices.
+        windows.getJSONObject("data").getJSONArray("cards").put(
+            new JSONObject().put("name","Artificial Anomaly").put("qty",1));
+        Map<String,String> chosen=NativePeerSync.chooseAllArenaConflicts(
+            android,windows,baseline,"windows");
+        assertEquals(1,chosen.size());
+        assertEquals("windows",chosen.get("lightning bolt"));
+        assertFalse(chosen.containsKey("artificial anomaly"));
+        JSONObject proposal=NativePeerSync.prepareMerge(android,windows,baseline,chosen);
+        JSONArray result=proposal.getJSONObject("candidate").getJSONArray("cards");
+        assertEquals(2,result.length());
+        assertEquals(3,result.getJSONObject(0).getInt("qty"));
+        assertEquals("Artificial Anomaly",result.getJSONObject(1).getString("name"));
+        // A Windows-only card cannot be silently removed when Android is chosen.
+        assertEquals(1,NativePeerSync.chooseAllArenaConflicts(
+            android,windows,baseline,"android").size());
     }
 
     @Test public void conflictAndMissingPeerRowsAreRejected()throws Exception {
