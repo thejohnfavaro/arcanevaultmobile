@@ -212,6 +212,12 @@ public class MainActivity extends Activity {
         } catch(IOException e) {toast("Unable to start local app service: " + e.getMessage());}
     }
 
+    void inspectSetPrinting(JSONObject printing,String setName,String setCode,
+            String source,int quantity){
+        if(nativeController!=null)
+            nativeController.inspectSetPrinting(printing,setName,setCode,source,quantity);
+    }
+
     /** Native-first shell. Preserve legacy WebView and origin recovery. */
     private void showNativeHome() {
         if(nativeController!=null)nativeController.close();
