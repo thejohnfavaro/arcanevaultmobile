@@ -83,6 +83,17 @@ final class NativeManaFilterButton extends FrameLayout {
             (selected?"selected":"not selected")+", tap to toggle");
     }
 
+    /** Same official icon, but semantically a read-only detail glyph rather
+     * than an active card-filter button. */
+    void setReadOnlyDisplay(){
+        setSelected(false);
+        setClickable(false);
+        setFocusable(false);
+        setAlpha(1f);
+        setBackgroundColor(Color.TRANSPARENT);
+        setContentDescription(colorName(symbol)+" mana symbol");
+    }
+
     private void showBitmap(Bitmap bitmap) {
         if(bitmap==null || bitmap.isRecycled())return;
         image.setImageDrawable(new BitmapDrawable(getResources(),bitmap));
