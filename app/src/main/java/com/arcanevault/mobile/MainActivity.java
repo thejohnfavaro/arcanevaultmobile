@@ -1355,7 +1355,18 @@ public class MainActivity extends Activity {
                             .inventoryDelta(local,proposal);
                         int inventoryCount=delta.getInt("changedEntries");
                         if(inventoryCount==0&&!decksChanged&&!artworkChanged) {
-                            runOnUiThread(()->toast("All peer records already match."));
+                            final int selected=decisions.size();
+                            runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                .setTitle("No changes to apply")
+                                .setMessage("This reviewed merge would change 0 Android "+
+                                    "inventory, deck or artwork records. "+
+                                    (selected==0?"No Arena choices were selected.":
+                                    selected+" explicit Arena choices were selected, "+
+                                    "but their records already match the proposed "+
+                                    "Android result.")+
+                                    "\\n\\nNothing was written. A new peer baseline "+
+                                    "has not been confirmed.")
+                                .setPositiveButton("OK",null).show());
                             return;
                         }
                         org.json.JSONArray changes=delta.getJSONArray("changes");
@@ -1472,11 +1483,13 @@ public class MainActivity extends Activity {
                                         .chooseAllArenaConflicts(local,incomingSnapshot,
                                             baseSnapshot,"android");
                                 String bulkInfo="\\n\\n"+windowsAll.size()+
-                                    " conflicting Arena card(s) in this comparison. "+
-                                    "Use Windows for all / Use Android for all "+
-                                    "selects the respective full card records for "+
-                                    "every Arena conflict. Non-Arena conflicts "+
-                                    "are NEVER overridden.";
+                                    " differing shared Arena card record(s). "+
+                                    "Use Windows for all chooses the Windows values "+
+                                    "for every one of these records, including "+
+                                    "Android-only edits; Use Android for all "+
+                                    "retains the Android values. Missing peer "+
+                                    "records are not deleted. Physical cards, "+
+                                    "decks and artwork are never overridden.";
                                 String[] choices={
                                     "Keep Android (this card)",
                                     "Use Windows (this card)",
