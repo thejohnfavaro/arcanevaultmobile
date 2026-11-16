@@ -23,6 +23,33 @@ final class NativePeerCheckpoint {
             throw new IllegalStateException("Cannot create peer checkpoint directory");
         return new File(folder,id.toString()+".json");
     }
+    /** Only confirmed matching checkpoints qualify as remembered peers.
+     * No credentials, transport URLs or implicit auto-sync state are stored. */
+    static String overview(Context context) {
+        File folder=new File(context.getFilesDir(),"peer-checkpoints");
+        File[] files=folder.listFiles((dir,name)->name.matches(
+            "[a-fA-F0-9-]{36}\\.json"));
+        if(files==null||files.length==0)
+            return "No matching Windows/Android peer checkpoint yet. "+
+                "Complete a reviewed sync, then verify the matching baseline.";
+        int verified=0;
+        long newest=0;
+        for(File file:files){
+            try {
+                String name=file.getName().substring(0,36);
+                load(context,name);
+                verified++;
+                newest=Math.max(newest,file.lastModified());
+            }catch(Exception ignored){}
+        }
+        if(verified==0)return "No verified peer checkpoints available.";
+        String date=java.text.DateFormat.getDateTimeInstance(
+            java.text.DateFormat.MEDIUM,java.text.DateFormat.SHORT)
+            .format(new java.util.Date(newest));
+        return verified+" confirmed peer checkpoint(s). Last verified file: "+date+
+            ". Transfers still require a one-time link and explicit review.";
+    }
+
     static boolean exists(Context context,String peerDevice) {
         try{return location(context,peerDevice).isFile();}
         catch(Exception e){return false;}
