@@ -1322,16 +1322,28 @@ public class MainActivity extends Activity {
 
     private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,
             PeerSnapshotLoader baseline) {
+        applyPeerInventorySnapshot(incoming,baseline,
+            new java.util.HashMap<>(),null);
+    }
+
+    private void applyPeerInventorySnapshot(PeerSnapshotLoader incoming,
+            PeerSnapshotLoader baseline,java.util.Map<String,String> decisions,
+            JSONObject reviewedLocal) {
         withPeerData((decks,art)->{
             try {
                 JSONObject local=com.arcanevault.mobile.next.NativePeerSync
                     .export(durable,peerId(),decks,art);
+                if(reviewedLocal!=null&&!NativePeerInventoryApply.canonicalEqual(
+                    reviewedLocal.getJSONObject("data"),local.getJSONObject("data")))
+                    throw new IllegalStateException(
+                        "Android data changed during conflict selection. Review again.");
                 workers.execute(()->{
+                    JSONObject remote=null,original=null;
                     try {
-                        JSONObject remote=incoming.load();
-                        JSONObject original=baseline.load();
+                        remote=incoming.load();
+                        original=baseline.load();
                         JSONObject proposal=com.arcanevault.mobile.next.NativePeerSync
-                            .prepareMerge(local,remote,original);
+                            .prepareMerge(local,remote,original,decisions);
                         JSONObject before=local.getJSONObject("data");
                         JSONObject target=proposal.getJSONObject("candidate");
                         boolean decksChanged=!NativePeerInventoryApply.canonicalEqual(
@@ -1434,10 +1446,51 @@ public class MainActivity extends Activity {
                                 });
                             }).show());
                     } catch(Exception error) {
+                        final JSONObject incomingSnapshot=remote,baseSnapshot=original;
+                        String message=error.getMessage()==null?"":error.getMessage();
+                        String prefix="Conflicting edits: cards/";
+                        if(message.startsWith(prefix) &&
+                            incomingSnapshot!=null&&baseSnapshot!=null){
+                            try{
+                                JSONObject conflict=com.arcanevault.mobile.next.NativePeerSync
+                                    .describeArenaConflict(local,incomingSnapshot,baseSnapshot,
+                                        message.substring(prefix.length()));
+                                String key=conflict.getString("key");
+                                String detail=conflict.getString("name")+
+                                    "\nLast shared baseline: "+conflict.getInt("baseline")+
+                                    "\nAndroid now: "+conflict.getInt("android")+
+                                    "\nWindows now: "+conflict.getInt("windows")+
+                                    "\n\nChoose which CURRENT quantity to retain for "+
+                                    "this card only. Other differences still require "+
+                                    "review. No data changes before final approval.";
+                                runOnUiThread(()->new android.app.AlertDialog.Builder(this)
+                                    .setTitle("Resolve Arena card conflict")
+                                    .setMessage(detail)
+                                    .setNeutralButton("Cancel",null)
+                                    .setNegativeButton("Keep Android",(d,w)->{
+                                        java.util.Map<String,String> next=
+                                            new java.util.HashMap<>(decisions);
+                                        next.put(key,"android");
+                                        applyPeerInventorySnapshot(
+                                            ()->incomingSnapshot,()->baseSnapshot,next,local);
+                                    })
+                                    .setPositiveButton("Use Windows",(d,w)->{
+                                        java.util.Map<String,String> next=
+                                            new java.util.HashMap<>(decisions);
+                                        next.put(key,"windows");
+                                        applyPeerInventorySnapshot(
+                                            ()->incomingSnapshot,()->baseSnapshot,next,local);
+                                    }).show());
+                                return;
+                            }catch(Exception invalid){
+                                message=invalid.getMessage();
+                            }
+                        }
+                        final String rejection=message;
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                             .setTitle("Peer merge rejected")
-                            .setMessage(error.getMessage()+
-                                "\\n\\nNo inventory, deck or artwork data was changed.")
+                            .setMessage(rejection+
+                                "\n\nNo inventory, deck or artwork data was changed.")
                             .setPositiveButton("OK",null).show());
                     }
                 });
