@@ -923,9 +923,8 @@ public class MainActivity extends Activity {
         if(NativePeerCheckpoint.exists(this,incoming.optString("deviceId",""))) {
             new android.app.AlertDialog.Builder(this)
                 .setTitle("Use remembered peer baseline?")
-                .setMessage("An earlier identical peer checkpoint is stored locally. "+
-                    "Use it to prepare this inventory update? You will still review "+
-                    "the three-way result and approve any writes.")
+                .setMessage(NativePeerCheckpoint.description(
+                    this,incoming.optString("deviceId","")))
                 .setNegativeButton("Choose file",(d,w)->selectWirelessBaselineFile())
                 .setNeutralButton("Cancel",(d,w)->pendingWirelessIncoming=null)
                 .setPositiveButton("Use saved checkpoint",(d,w)->{
