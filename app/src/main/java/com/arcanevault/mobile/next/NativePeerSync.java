@@ -168,6 +168,45 @@ public final class NativePeerSync {
         return decisions;
     }
 
+    /** Return deck names for a genuine same-ID concurrent conflict, without
+     * exposing or altering its JSON. A missing deck always needs manual review. */
+    public static JSONObject describeDeckConflict(JSONObject local,JSONObject remote,
+            JSONObject baseline,String id)throws Exception {
+        JSONObject own=require(local),peer=require(remote),base=require(baseline);
+        String key=norm(id);
+        JSONObject a=index("deckLibrary",own.getJSONArray("deckLibrary")).get(key);
+        JSONObject c=index("deckLibrary",peer.getJSONArray("deckLibrary")).get(key);
+        JSONObject b=index("deckLibrary",base.getJSONArray("deckLibrary")).get(key);
+        if(a==null||c==null||equivalent(a,c)||
+                equivalent(a,b)||equivalent(c,b))
+            throw new IllegalArgumentException(
+                "Deck conflict changed; compare again.");
+        return new JSONObject().put("key",key)
+            .put("androidName",a.optString("name",key))
+            .put("windowsName",c.optString("name",key));
+    }
+
+    /** Include only shared differing decks. Never authorize missing-row
+     * deletions, which still fail the three-way merge's tombstone checks. */
+    public static Map<String,String> chooseAllDeckConflicts(
+            JSONObject local,JSONObject remote,JSONObject baseline,
+            String source)throws Exception {
+        if(!"windows".equals(source)&&!"android".equals(source))
+            throw new IllegalArgumentException("Invalid bulk deck choice");
+        JSONObject own=require(local),peer=require(remote),base=require(baseline);
+        Map<String,JSONObject> a=index("deckLibrary",own.getJSONArray("deckLibrary"));
+        Map<String,JSONObject> c=index("deckLibrary",peer.getJSONArray("deckLibrary"));
+        Map<String,String> choices=new HashMap<>();
+        for(String key:new TreeSet<>(a.keySet())) {
+            JSONObject android=a.get(key),windows=c.get(key);
+            if(windows!=null&&!equivalent(android,windows))
+                choices.put(key,source);
+        }
+        if(choices.isEmpty())throw new IllegalArgumentException(
+            "No differing shared decks for bulk selection");
+        return choices;
+    }
+
     /** Stable across Windows and Android JSON object property ordering. */
     private static String canonical(Object value)throws Exception {
         if(value==null||value==JSONObject.NULL)return "null";
@@ -267,9 +306,19 @@ public final class NativePeerSync {
      * independently edited Arena quantities; unresolved conflicts still fail. */
     public static JSONObject prepareMerge(JSONObject local,JSONObject remote,
             JSONObject baseline,Map<String,String> arenaChoices)throws Exception {
-        if(arenaChoices==null)throw new IllegalArgumentException("Missing conflict choices");
+        return prepareMerge(local,remote,baseline,arenaChoices,
+            java.util.Collections.emptyMap());
+    }
+
+    /** Deck choices are separate from Arena names, so equal IDs in different
+     * domains cannot ever authorize an unintended overwrite. */
+    public static JSONObject prepareMerge(JSONObject local,JSONObject remote,
+            JSONObject baseline,Map<String,String> arenaChoices,
+            Map<String,String> deckChoices)throws Exception {
+        if(arenaChoices==null||deckChoices==null)
+            throw new IllegalArgumentException("Missing conflict choices");
         JSONObject own=require(local), peer=require(remote), base=require(baseline);
-        Set<String> usedChoices=new HashSet<>();
+        Set<String> usedChoices=new HashSet<>(),usedDeckChoices=new HashSet<>();
         if(local.getString("deviceId").equals(remote.getString("deviceId")))
             throw new IllegalArgumentException("Peer snapshot belongs to this same device");
         JSONObject proposed=new JSONObject(own.toString());
@@ -289,17 +338,21 @@ public final class NativePeerSync {
                     throw new IllegalArgumentException("Local absence needs tombstone: "+group+"/"+id);
                 boolean ownBase=equivalent(l,old),peerBase=equivalent(r,old);
                 boolean conflict=!equivalent(l,r)&&!ownBase&&!peerBase;
-                String decision=arenaChoices.get(id);
+                String decision=group.equals("cards")?arenaChoices.get(id):
+                    group.equals("deckLibrary")?deckChoices.get(id):null;
                 boolean explicit=decision!=null;
                 if(explicit) {
-                    if(!group.equals("cards")||equivalent(l,r)||
+                    if((!group.equals("cards")&&!group.equals("deckLibrary"))||
+                            equivalent(l,r)||
                             (!decision.equals("android")&&!decision.equals("windows")))
                         throw new IllegalArgumentException(
-                            "Invalid or stale Arena conflict selection: "+id);
+                            "Invalid or stale peer selection: "+group+"/"+id);
                     if(l==null||r==null)
                         throw new IllegalArgumentException(
-                            "Arena removal/identity conflict requires manual review: "+id);
-                    usedChoices.add(id);
+                            "Peer removal/identity conflict requires manual review: "+
+                            group+"/"+id);
+                    if(group.equals("cards"))usedChoices.add(id);
+                    else usedDeckChoices.add(id);
                 } else if(conflict) {
                     throw new IllegalArgumentException("Conflicting edits: "+group+"/"+id);
                 }
@@ -328,9 +381,10 @@ public final class NativePeerSync {
             if(!merged.isEmpty())throw new IllegalArgumentException("Unmatched peer entries");
             proposed.put(group,combined);
         }
-        if(!usedChoices.equals(arenaChoices.keySet()))
+        if(!usedChoices.equals(arenaChoices.keySet())||
+                !usedDeckChoices.equals(deckChoices.keySet()))
             throw new IllegalArgumentException(
-                "A conflict choice no longer matches the current records. Review again.");
+                "A peer choice no longer matches the current records. Review again.");
         JSONObject localArt=own.getJSONObject("preferredArtwork");
         JSONObject baseArt=base.getJSONObject("preferredArtwork");
         JSONObject peerArt=peer.getJSONObject("preferredArtwork");
