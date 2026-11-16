@@ -888,6 +888,55 @@ final class NativeCatalogScreen {
         });
     }
 
+    /** Compact official Scryfall mana glyphs shared by Catalog and Set Progress.
+     * Numeric/hybrid tokens remain literal when no approved SVG is available;
+     * no approximated or duplicate color symbols are invented. */
+    private void showReadOnlyMana(JSONObject metadata){
+        if(metadata==null)return;
+        String mana=metadata.optString("manaCost","");
+        if(!mana.isEmpty()){
+            inspectorContent.addView(text("MANA COST (EXACT)",11,true));
+            LinearLayout glyphs=VaultNativeStyle.row(activity);
+            java.util.regex.Matcher tokens=java.util.regex.Pattern
+                .compile("\\\\{([^{}]{1,16})\\\\}").matcher(mana);
+            int count=0;
+            while(tokens.find()&&count++<24){
+                String symbol=tokens.group(1).toUpperCase(java.util.Locale.ROOT);
+                if(symbol.matches("[WUBRGC]")){
+                    NativeManaFilterButton icon=new NativeManaFilterButton(activity,artwork,symbol);
+                    icon.setReadOnlyDisplay();
+                    glyphs.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));
+                }else{
+                    TextView literal=text("{"+symbol+"}",14,true);
+                    literal.setGravity(Gravity.CENTER);
+                    literal.setContentDescription(symbol+" mana cost");
+                    glyphs.addView(literal,new LinearLayout.LayoutParams(dp(46),dp(40)));
+                }
+            }
+            if(count==0)glyphs.addView(text(mana,14,false));
+            HorizontalScrollView scroll=VaultNativeStyle.horizontalScroll(activity);
+            scroll.setHorizontalScrollBarEnabled(false);
+            scroll.addView(glyphs);
+            inspectorContent.addView(scroll);
+        }
+        JSONArray identity=metadata.optJSONArray("colors");
+        if(identity!=null){
+            inspectorContent.addView(text("COLOR IDENTITY",11,true));
+            LinearLayout glyphs=VaultNativeStyle.row(activity);
+            boolean any=false;
+            for(int i=0;i<identity.length()&&i<5;i++){
+                String code=identity.optString(i,"").toUpperCase(java.util.Locale.ROOT);
+                if(!code.matches("[WUBRG]"))continue;
+                NativeManaFilterButton icon=new NativeManaFilterButton(activity,artwork,code);
+                icon.setReadOnlyDisplay();
+                glyphs.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));
+                any=true;
+            }
+            if(!any)glyphs.addView(text("Colorless",14,false));
+            inspectorContent.addView(glyphs);
+        }
+    }
+
     private void showDetails(String name,String type,String oracle,String rarity,
             String imageUrl,String imageBack,int arenaQty,int physicalQty) {
         showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty,
@@ -921,26 +970,13 @@ final class NativeCatalogScreen {
             inspectorContent.addView(selected);
         }
         if(metadata!=null){
-            StringBuilder extra=new StringBuilder();
-            String mana=metadata.optString("manaCost","");
-            if(!mana.isEmpty())extra.append("Mana cost: ").append(mana).append("\n");
-            if(metadata.has("mv"))extra.append("Mana value: ")
-                .append(metadata.optDouble("mv",0)).append("\n");
-            JSONArray colors=metadata.optJSONArray("colors");
-            if(colors!=null){
-                extra.append("Color identity: ");
-                if(colors.length()==0)extra.append("Colorless");
-                else for(int i=0;i<colors.length();i++){
-                    if(i>0)extra.append(", ");
-                    extra.append(colors.optString(i));
-                }
-                extra.append("\n");
+            if(metadata.has("mv")){
+                TextView mv=text("Mana value: "+metadata.optDouble("mv",0),
+                    13,false);
+                mv.setTextColor(VaultNativeStyle.SUBTEXT);
+                inspectorContent.addView(mv);
             }
-            if(extra.length()>0){
-                TextView metaInfo=text(extra.toString().trim(),13,false);
-                metaInfo.setTextColor(VaultNativeStyle.SUBTEXT);
-                inspectorContent.addView(metaInfo);
-            }
+            showReadOnlyMana(metadata);
         }
         TextView typeLine=text(type,14,true);
         typeLine.setTextColor(VaultNativeStyle.SUBTEXT);
