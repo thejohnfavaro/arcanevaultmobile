@@ -380,10 +380,27 @@ final class CatalogStore extends SQLiteOpenHelper {
     private static String oracle(JSONObject o){String text=str(o,"oracle_text");if(!text.isEmpty())return text;JSONArray faces=o.optJSONArray("card_faces");if(faces==null)return "";StringBuilder b=new StringBuilder();for(int i=0;i<faces.length();i++){JSONObject f=faces.optJSONObject(i);if(f!=null){if(b.length()>0)b.append("\n//\n");b.append(str(f,"oracle_text"));}}return b.toString();}
     private static String colors(JSONObject o){JSONArray a=o.optJSONArray("color_identity");if(a==null)return "";StringBuilder b=new StringBuilder();for(int i=0;i<a.length();i++)b.append(a.optString(i));return b.toString();}
     private static String games(JSONObject o){JSONArray a=o.optJSONArray("games");if(a==null)return "";StringJoiner result=new StringJoiner(",");for(int i=0;i<a.length();i++)result.add(a.optString(i));return result.toString();}
+    private static String manaCost(JSONObject card){
+        String direct=str(card,"mana_cost");
+        if(!direct.isEmpty())return direct;
+        JSONArray faces=card.optJSONArray("card_faces");
+        if(faces==null)return "";
+        StringBuilder combined=new StringBuilder();
+        for(int i=0;i<faces.length();i++){
+            JSONObject face=faces.optJSONObject(i);
+            if(face==null)continue;
+            String cost=str(face,"mana_cost");
+            if(cost.isEmpty())continue;
+            if(combined.length()>0)combined.append(" // ");
+            combined.append(cost);
+        }
+        return combined.toString();
+    }
+
     private void insert(SQLiteDatabase db,JSONObject card){
         String name=str(card,"name"),id=str(card,"id");if(name.isEmpty()||name.length()>300||id.isEmpty())return;
         String game=games(card);boolean arena=Arrays.asList(game.split(",")).contains("arena");
-        ContentValues v=new ContentValues();v.put("name",name);v.put("type",str(card,"type_line"));v.put("oracle",oracle(card));v.put("rarity",str(card,"rarity"));v.put("mv",card.optDouble("cmc",0));v.put("colors",colors(card));v.put("image",image(card));v.put("uri",str(card,"scryfall_uri"));v.put("legalities",card.optJSONObject("legalities")==null?"{}":card.optJSONObject("legalities").toString());v.put("layout",str(card,"layout"));v.put("setcode",str(card,"set"));v.put("arena",arena?1:0);v.put("mana",str(card,"mana_cost"));
+        ContentValues v=new ContentValues();v.put("name",name);v.put("type",str(card,"type_line"));v.put("oracle",oracle(card));v.put("rarity",str(card,"rarity"));v.put("mv",card.optDouble("cmc",0));v.put("colors",colors(card));v.put("image",image(card));v.put("uri",str(card,"scryfall_uri"));v.put("legalities",card.optJSONObject("legalities")==null?"{}":card.optJSONObject("legalities").toString());v.put("layout",str(card,"layout"));v.put("setcode",str(card,"set"));v.put("arena",arena?1:0);v.put("mana",manaCost(card));
         // Prefer Arena-listed artwork when two printings have the same Oracle name.
         try(Cursor exists=db.rawQuery("SELECT arena FROM cards_stage WHERE name=?",new String[]{name})){
             if(!exists.moveToFirst()||(! (exists.getInt(0)==1&&!arena))){db.insertWithOnConflict("cards_stage",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
