@@ -22,6 +22,10 @@ assert.match(activity,/\.setNeutralButton\("Verify & remember baseline"/,
     'Successful peer merge should offer optional matching-checkpoint verification');
 assert.match(activity,/rememberMatchingWirelessBaseline\(/,
     'Checkpoint action must reuse exact-match verification, not blindly advance');
+const nativeShell=fs.readFileSync(
+    'app/src/main/java/com/arcanevault/mobile/NativeCompanionScreen.java','utf8');
+assert.match(nativeShell,/\n    void refresh\(\)\{/,
+    'MainActivity must be able to call the native workspace refresh');
 assert.match(activity,/nativeController\.refresh\(\)/,
     'Verified peer apply should refresh the visible native workspace');
 assert.match(activity,/refreshCollectionValueWidget\(\)/,
