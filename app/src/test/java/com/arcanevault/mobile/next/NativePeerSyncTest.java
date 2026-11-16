@@ -185,7 +185,7 @@ public final class NativePeerSyncTest {
         assertEquals(4,chosen.getJSONObject(1).getInt("qty"));
         assertEquals(2,proposal.getJSONObject("candidate")
             .getJSONArray("physicalCards").length());
-        assertEquals(2L,NativePeerSync.inventoryDelta(android,proposal)
+        assertEquals(3L,NativePeerSync.inventoryDelta(android,proposal)
             .getLong("addedCopies"));
         assertEquals(1L,NativePeerSync.inventoryDelta(android,proposal)
             .getLong("removedCopies"));
