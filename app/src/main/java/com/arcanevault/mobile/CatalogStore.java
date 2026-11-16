@@ -29,7 +29,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     private volatile int indexedPrintings=0;
     private volatile long lastProgressAtMs=0L, downloadedBytes=0L, expectedBytes=0L;
     CatalogStore(Context context) {
-        super(context,"arcane_catalog.db",null,3);
+        super(context,"arcane_catalog.db",null,4);
         application=context.getApplicationContext();
         SQLiteDatabase db=getWritableDatabase();
         total=count(db,"cards");
@@ -38,7 +38,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         phase=total>0?"Ready":"Not downloaded";
     }
     @Override public void onCreate(SQLiteDatabase db){
-        db.execSQL("CREATE TABLE cards(name TEXT PRIMARY KEY COLLATE NOCASE,type TEXT NOT NULL,oracle TEXT NOT NULL,rarity TEXT NOT NULL,mv REAL NOT NULL,colors TEXT NOT NULL,image TEXT NOT NULL,uri TEXT NOT NULL,legalities TEXT NOT NULL,layout TEXT NOT NULL,setcode TEXT NOT NULL,arena INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE cards(name TEXT PRIMARY KEY COLLATE NOCASE,type TEXT NOT NULL,oracle TEXT NOT NULL,rarity TEXT NOT NULL,mv REAL NOT NULL,colors TEXT NOT NULL,image TEXT NOT NULL,uri TEXT NOT NULL,legalities TEXT NOT NULL,layout TEXT NOT NULL,setcode TEXT NOT NULL,arena INTEGER NOT NULL,mana TEXT NOT NULL DEFAULT '')");
         db.execSQL("CREATE TABLE variants(print_id TEXT PRIMARY KEY,name TEXT NOT NULL COLLATE NOCASE,setcode TEXT NOT NULL,setname TEXT NOT NULL,collector TEXT NOT NULL,rarity TEXT NOT NULL,image TEXT NOT NULL,image_back TEXT NOT NULL,art_id TEXT NOT NULL,games TEXT NOT NULL,arena INTEGER NOT NULL,digital INTEGER NOT NULL,promo INTEGER NOT NULL,full_art INTEGER NOT NULL,border TEXT NOT NULL,release TEXT NOT NULL,url TEXT NOT NULL)");
         db.execSQL("CREATE INDEX idx_variants_set ON variants(setcode,name)");
         db.execSQL("CREATE INDEX idx_variants_name ON variants(name COLLATE NOCASE)");
@@ -50,6 +50,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){
         if(oldVersion<2)db.execSQL("CREATE TABLE IF NOT EXISTS physical_ownership(name TEXT PRIMARY KEY COLLATE NOCASE,qty INTEGER NOT NULL)");
         if(oldVersion<3)db.execSQL("CREATE TABLE IF NOT EXISTS physical_printings(name TEXT NOT NULL COLLATE NOCASE,setcode TEXT NOT NULL COLLATE NOCASE,collector TEXT NOT NULL COLLATE NOCASE,print_id TEXT NOT NULL COLLATE NOCASE,qty INTEGER NOT NULL)");
+        if(oldVersion<4)db.execSQL("ALTER TABLE cards ADD COLUMN mana TEXT NOT NULL DEFAULT ''");
     }
     private static final String SET_CACHE_PREF="arcane_set_progress_cache_v1";
     private android.content.SharedPreferences setCache(){
@@ -380,7 +381,7 @@ final class CatalogStore extends SQLiteOpenHelper {
     private void insert(SQLiteDatabase db,JSONObject card){
         String name=str(card,"name"),id=str(card,"id");if(name.isEmpty()||name.length()>300||id.isEmpty())return;
         String game=games(card);boolean arena=Arrays.asList(game.split(",")).contains("arena");
-        ContentValues v=new ContentValues();v.put("name",name);v.put("type",str(card,"type_line"));v.put("oracle",oracle(card));v.put("rarity",str(card,"rarity"));v.put("mv",card.optDouble("cmc",0));v.put("colors",colors(card));v.put("image",image(card));v.put("uri",str(card,"scryfall_uri"));v.put("legalities",card.optJSONObject("legalities")==null?"{}":card.optJSONObject("legalities").toString());v.put("layout",str(card,"layout"));v.put("setcode",str(card,"set"));v.put("arena",arena?1:0);
+        ContentValues v=new ContentValues();v.put("name",name);v.put("type",str(card,"type_line"));v.put("oracle",oracle(card));v.put("rarity",str(card,"rarity"));v.put("mv",card.optDouble("cmc",0));v.put("colors",colors(card));v.put("image",image(card));v.put("uri",str(card,"scryfall_uri"));v.put("legalities",card.optJSONObject("legalities")==null?"{}":card.optJSONObject("legalities").toString());v.put("layout",str(card,"layout"));v.put("setcode",str(card,"set"));v.put("arena",arena?1:0);v.put("mana",str(card,"mana_cost"));
         // Prefer Arena-listed artwork when two printings have the same Oracle name.
         try(Cursor exists=db.rawQuery("SELECT arena FROM cards_stage WHERE name=?",new String[]{name})){
             if(!exists.moveToFirst()||(! (exists.getInt(0)==1&&!arena))){db.insertWithOnConflict("cards_stage",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
@@ -811,11 +812,11 @@ final class CatalogStore extends SQLiteOpenHelper {
         List<String> qargs=new ArrayList<>(args);qargs.add(Integer.toString(size));qargs.add(Integer.toString(page*size));JSONArray rows=new JSONArray();
         try(Cursor r=db.rawQuery("SELECT c.name,c.type,c.oracle,c.rarity,c.mv,c.colors,c.image,c.uri,c.legalities,c.layout,c.setcode,"+quantity+",c.arena,COALESCE(ao.qty,0),COALESCE(po.qty,0),"+
             "COALESCE((SELECT v.image_back FROM variants v WHERE v.name=c.name "+
-            "AND v.image=c.image AND v.image_back!='' LIMIT 1),'')"+from+" ORDER BY "+order+" LIMIT ? OFFSET ?",qargs.toArray(new String[0]))){
+            "AND v.image=c.image AND v.image_back!='' LIMIT 1),''),c.mana"+from+" ORDER BY "+order+" LIMIT ? OFFSET ?",qargs.toArray(new String[0]))){
             while(r.moveToNext()){
                 JSONObject meta=new JSONObject().put("type",r.getString(1)).put("oracle",r.getString(2)).put("rarity",r.getString(3)).put("mv",r.getDouble(4)).put("image",r.getString(6)).put("url",r.getString(7)).put("legalities",new JSONObject(r.getString(8))).put("layout",r.getString(9)).put("set_",r.getString(10)).put("arena",r.getInt(12)>0);
                 JSONArray ci=new JSONArray();for(char ch:r.getString(5).toCharArray())ci.put(String.valueOf(ch));meta.put("colors",ci);
-                meta.put("imageBack",r.getString(15));
+                meta.put("imageBack",r.getString(15));meta.put("manaCost",r.getString(16));
                 rows.put(new JSONObject().put("name",r.getString(0)).put("qty",r.getInt(11))
                     .put("arenaQty",r.getInt(13)).put("physicalQty",r.getInt(14)).put("sets",new JSONArray().put(r.getString(10))).put("tags",new JSONArray()).put("typeHint","").put("meta",meta));
             }
