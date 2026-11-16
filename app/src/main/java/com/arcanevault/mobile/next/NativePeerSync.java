@@ -202,8 +202,8 @@ public final class NativePeerSync {
             if(windows!=null&&!equivalent(android,windows))
                 choices.put(key,source);
         }
-        if(choices.isEmpty())throw new IllegalArgumentException(
-            "No differing shared decks for bulk selection");
+        // An empty deck category is valid when a combined Arena+deck choice
+        // is made. It never creates or authorizes a nonexistent deck update.
         return choices;
     }
 
