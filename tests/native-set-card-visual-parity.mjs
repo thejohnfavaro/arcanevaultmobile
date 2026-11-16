@@ -96,4 +96,10 @@ assert.match(catalogStore,/ALTER TABLE cards ADD COLUMN mana/,
  'Existing Android catalogs need a non-destructive mana-cost migration');
 assert.match(catalogStore,/meta\.put\("manaCost",r\.getString\(16\)\)/,
  'Search results must carry the indexed exact mana cost');
+assert.match(source,/COLLECTION-WIDE SET COVERAGE/,
+ 'Set overview must surface aggregate owned and missing coverage');
+assert.match(source,/totalCoverage-verifiedCoverage/,
+ 'Aggregate count must use cached verified set coverage, not guessed quantity');
+assert.match(catalogStore,/\.put\("totalCards",snapshot\.optInt\("totalCards",-1\)\)/,
+ 'Filtering cached sets must retain collection-wide overview totals');
 console.log('PASS: visual set-card parity, cached cover art, icons and completion safety');
