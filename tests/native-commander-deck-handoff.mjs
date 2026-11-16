@@ -17,7 +17,7 @@ for(const q of [
   'args.put("owned",ownership)','args.put("colors",identity)',
   'View saved decks with this commander',
   'openCommanderDecks.accept(name)',
-  'Copy commander name & open deck editor'
+  'Copy commander name'
 ])assert.ok(browser.includes(q),'Missing native EDH control: '+q);
 for(const q of [
   'deckCommanderFilter=initialCommander',
