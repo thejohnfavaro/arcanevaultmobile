@@ -41,4 +41,18 @@ assert.match(nativeMirror,/static void saveObserved\(/,
 assert.match(main,/NativeDeckArtworkMirror\.saveObserved\(/);
 assert.match(main,/Use Windows for all Arena \+ saved decks/);
 assert.match(main,/Use Android for all Arena \+ saved decks/);
+assert.match(checkpoint,/static String description\(Context context,String peerDevice\)/,
+ 'Peer baseline reuse should identify its verified date and revision');
+assert.match(main,/NativePeerCheckpoint\.description\(/,
+ 'Peer sync should explain which checkpoint will be reused');
+assert.match(nativeMirror,/static byte\[\] exportVerified\(Context context\)/,
+ 'Native recovery copy must be verified before user export');
+assert.match(main,/NativeDeckArtworkMirror\.exportVerified\(this\)/,
+ 'Recovery export must use the verified copy, not stale unvalidated data');
+assert.match(data,/Export verified deck\/artwork recovery copy/,
+ 'Data and Sync must expose explicit deck and artwork recovery export');
+assert.match(delta,/public static String describeSafe\(/,
+ 'Record-level delta summary must fail safely to full snapshot');
+assert.match(main,/NativePeerDeltaManifest\s*\n\s*\.describeSafe\(original,remote\)/,
+ 'Reviewed full-snapshot sync must display informational delta counts');
 console.log('PASS: Android offline peer snapshot and no-write reconciliation wire-up');
