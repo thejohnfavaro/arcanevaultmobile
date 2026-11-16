@@ -3,6 +3,7 @@ package com.arcanevault.mobile.next;
 import static org.junit.Assert.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.Map;
 import org.junit.Test;
 
 public final class NativePeerSyncTest {
@@ -154,6 +155,59 @@ public final class NativePeerSyncTest {
             NativePeerSync.prepareMerge(android,windows,baseline,
                 java.util.Collections.singletonMap("other card","windows"));
             fail("A decision for an unrelated identity must be rejected");
+        }catch(IllegalArgumentException expected){}
+    }
+
+    @Test public void bulkWindowsAuthorityIncludesAndroidOnlyArenaEdits()
+            throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",2);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",3);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",2);
+        // Lightning Bolt changed ONLY on Android. A Windows-for-all
+        // choice must still restore Windows' baseline quantity.
+        for(JSONObject data:new JSONObject[]{baseline,android,windows}){
+            int qty=data==baseline?1:data==android?2:4;
+            data.getJSONObject("data").getJSONArray("cards").put(
+                new JSONObject().put("name","Andromedanautomatons").put("qty",qty));
+        }
+        windows.getJSONObject("data").getJSONArray("physicalCards").put(
+            new JSONObject().put("name","Counterspell").put("qty",1)
+                .put("set","2XM").put("number","47")
+                .put("scryfallId","22222222-2222-4222-8222-222222222222"));
+        String original=android.toString();
+        Map<String,String> useWindows=NativePeerSync.chooseAllArenaConflicts(
+            android,windows,baseline,"windows");
+        assertEquals(2,useWindows.size());
+        JSONObject proposal=NativePeerSync.prepareMerge(
+            android,windows,baseline,useWindows);
+        JSONArray chosen=proposal.getJSONObject("candidate").getJSONArray("cards");
+        assertEquals(2,chosen.getJSONObject(0).getInt("qty"));
+        assertEquals(4,chosen.getJSONObject(1).getInt("qty"));
+        assertEquals(2,proposal.getJSONObject("candidate")
+            .getJSONArray("physicalCards").length());
+        assertEquals(2L,NativePeerSync.inventoryDelta(android,proposal)
+            .getLong("addedCopies"));
+        assertEquals(1L,NativePeerSync.inventoryDelta(android,proposal)
+            .getLong("removedCopies"));
+        assertFalse(proposal.getBoolean("safeToAutoApply"));
+        assertEquals(original,android.toString());
+        Map<String,String> useAndroid=NativePeerSync.chooseAllArenaConflicts(
+            android,windows,baseline,"android");
+        JSONObject keep=NativePeerSync.prepareMerge(
+            android,windows,baseline,useAndroid);
+        assertEquals(3,keep.getJSONObject("candidate")
+            .getJSONArray("cards").getJSONObject(0).getInt("qty"));
+        assertEquals(2,keep.getJSONObject("candidate")
+            .getJSONArray("cards").getJSONObject(1).getInt("qty"));
+        try {
+            NativePeerSync.chooseAllArenaConflicts(android,windows,baseline,"sum");
+            fail("Unapproved bulk authority");
+        }catch(IllegalArgumentException expected){}
+        // Deletions cannot be silently authorized by a blanket choice.
+        windows.getJSONObject("data").put("cards",new JSONArray());
+        try {
+            NativePeerSync.chooseAllArenaConflicts(android,windows,baseline,"windows");
+            fail("Implicit remote deletion must be rejected");
         }catch(IllegalArgumentException expected){}
     }
 
