@@ -18,4 +18,14 @@ assert.match(workspace,/catalog\.refreshDirtySetProgress\(source\)/,'Background 
 assert.match(workspace,/refreshing\.contains\(code\.toLowerCase/,'Show pending state on affected tile only');
 assert.match(workspace,/previous value shown/,'Do not fake zero during revaluation');
 assert.match(shell,/pendingSetFromWidget=set/,'Selected set bypasses overview queue');
+assert.match(store,/COUNT\(DISTINCT collector COLLATE NOCASE\)/,
+ 'Physical completion must count paper collector-number slots like Windows');
+assert.match(store,/p\.print_id!='' AND /,
+ 'Only explicit recognized IDs can authorize verified printing ownership');
+assert.match(store,/unique_slot\.digital=0/,
+ 'Fallback identities must not credit digital-only editions');
+assert.match(store,/slotMetricVersion",2/,
+ 'Prior name-based progress caches must not survive the metric change');
+assert.match(store,/snapshot\.put\("ownedCards",aggregateOwned\)/,
+ 'Incremental refresh must update the collection-wide totals');
 console.log('PASS: granular Set Progress cache invalidation, previous-value UI and index safety');
