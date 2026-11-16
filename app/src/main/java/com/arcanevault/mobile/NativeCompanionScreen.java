@@ -280,6 +280,21 @@ final class NativeCompanionScreen {
         finally{pendingSetFromWidget="";}
     }
 
+    /** Set card rows enter the existing full Catalog inspector. Returning
+     * restores the set detail instead of discarding the navigation context. */
+    void inspectSetPrinting(JSONObject printing,String setName,String setCode,
+            String source,int quantity){
+        if(closed)return;
+        show("catalog");
+        if(nativeCatalog==null)return;
+        nativeCatalog.inspectSetPrinting(printing,setName,source,quantity,()->{
+            if(closed)return;
+            show("sets");
+            if(workspace!=null)
+                workspace.openSetFromCatalog(setCode,setName,source);
+        });
+    }
+
     private void show(String next){
         if(closed)return;
         if(workspace!=null && workspace.confirmLeave(()->show(next)))return;
