@@ -17,23 +17,26 @@ assert.match(activity,/NativePeerSync\s*\n\s*\.prepareMerge\(local,remote,origin
     'Three-way peer merge must pass explicit, scoped conflict decisions');
 assert.match(activity,/\.describeArenaConflict\(local,incomingSnapshot,baseSnapshot,/,
     'Conflicting Arena cards must display verified baseline/Android/Windows quantities');
-assert.match(activity,/\.setTitle\("Resolve Arena card conflict"\)/);
+assert.match(activity,/\.setTitle\(heading\)/,
+    'Compact conflict title should show card and quantities');
 assert.match(activity,/\.setItems\(choices,/,
-    'Peer conflict resolution must expose all four choice options');
+    'Conflict choices must be a visible list-only mobile dialog');
+const dialogSource=activity.slice(activity.indexOf('String heading=conflict.getString("name")'),
+    activity.indexOf('return;',activity.indexOf('String heading=conflict.getString("name")')));
+assert.doesNotMatch(dialogSource,/\.setMessage\(/,
+    'Do not add a large message pane that hides the list on mobile');
 for(const choice of [
-    'Keep Android (this card)',
-    'Use Windows (this card)',
-    'Use Android for all Arena conflicts',
-    'Use Windows for all Arena conflicts'
-]) assert.ok(activity.includes(choice),'Missing peer-conflict choice: '+choice);
+    'Keep Android for this card',
+    'Use Windows for this card',
+    'Use Android for all ',
+    'Use Windows for all '
+]) assert.ok(dialogSource.includes(choice),'Missing visible peer-conflict choice: '+choice);
 assert.match(activity,/\.chooseAllArenaConflicts\(local,incomingSnapshot,/,
     'Bulk choices must be validated against both snapshots and the baseline');
 assert.match(activity,/next\.putAll\(androidAll\)/);
 assert.match(activity,/next\.putAll\(windowsAll\)/);
 assert.match(activity,/No changes to apply/,
     'A no-op peer proposal must not be reported as a completed sync');
-assert.match(activity,/differing shared Arena card record\(s\)/,
-    'Bulk authority must explain that it covers all differing shared Arena records');
 assert.match(activity,/NativePeerInventoryApply\.applyInventoryPart\(/);
 assert.match(screen,/Scan QR & review Windows changes/);
 assert.match(screen,/baseline and explicit confirmation/);
