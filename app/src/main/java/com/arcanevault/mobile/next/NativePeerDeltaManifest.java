@@ -86,6 +86,30 @@ public final class NativePeerDeltaManifest {
         return records;
     }
 
+    /** Informational only. The full-snapshot merge and approval are always
+     * authoritative; a malformed delta must never turn into an implicit
+     * authorization or prevent the safe full-snapshot fallback. */
+    public static String describeSafe(JSONObject baseline,JSONObject received){
+        try{
+            JSONObject comparison=compare(baseline,received);
+            JSONObject groups=comparison.getJSONObject("groups");
+            StringBuilder summary=new StringBuilder("Windows since baseline: ")
+                .append(comparison.getInt("changedEntries"))
+                .append(" changed record(s) [");
+            String[] names={"cards","physicalCards","deckLibrary","preferredArtwork"};
+            String[] labels={"Arena","Physical","Decks","Artwork"};
+            for(int i=0;i<names.length;i++){
+                if(i>0)summary.append(" · ");
+                summary.append(labels[i]).append(' ')
+                    .append(groups.getJSONArray(names[i]).length());
+            }
+            return summary.append(']').toString();
+        }catch(Exception unsupported){
+            return "Record-level difference summary unavailable. "+
+                "Full-snapshot verification remains in effect.";
+        }
+    }
+
     /** Returns only changed identities and revision hashes, not card contents.
      * A changed key means transfer is needed, never authorization to delete.
      */
