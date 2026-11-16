@@ -117,6 +117,46 @@ public final class NativePeerSyncTest {
             .getJSONObject(0).getInt("qty"));
         assertEquals(localBefore,local.toString());
     }
+    @Test public void explicitlyChosenArenaConflictIsScopedAndBackedByBaseline()throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",2);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",3);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",4);
+        windows.getJSONObject("data").getJSONArray("physicalCards").put(
+            new JSONObject().put("name","Counterspell").put("qty",1)
+                .put("set","2XM").put("number","47")
+                .put("scryfallId","22222222-2222-4222-8222-222222222222"));
+        JSONObject conflict=NativePeerSync.describeArenaConflict(
+            android,windows,baseline,"lightning bolt");
+        assertEquals(2,conflict.getInt("baseline"));
+        assertEquals(3,conflict.getInt("android"));
+        assertEquals(4,conflict.getInt("windows"));
+        String before=android.toString();
+        JSONObject keepAndroid=NativePeerSync.prepareMerge(android,windows,baseline,
+            java.util.Collections.singletonMap("lightning bolt","android"));
+        assertEquals(3,keepAndroid.getJSONObject("candidate")
+            .getJSONArray("cards").getJSONObject(0).getInt("qty"));
+        assertEquals(2,keepAndroid.getJSONObject("candidate")
+            .getJSONArray("physicalCards").length());
+        JSONObject useWindows=NativePeerSync.prepareMerge(android,windows,baseline,
+            java.util.Collections.singletonMap("lightning bolt","windows"));
+        assertEquals(4,useWindows.getJSONObject("candidate")
+            .getJSONArray("cards").getJSONObject(0).getInt("qty"));
+        JSONObject delta=NativePeerSync.inventoryDelta(android,useWindows);
+        assertEquals(2L,delta.getLong("addedCopies"));
+        assertEquals(before,android.toString());
+        assertFalse(useWindows.getBoolean("safeToAutoApply"));
+        try {
+            NativePeerSync.prepareMerge(android,windows,baseline,
+                java.util.Collections.singletonMap("lightning bolt","add both"));
+            fail("Unapproved automatic quantity arithmetic must be rejected");
+        }catch(IllegalArgumentException expected){}
+        try {
+            NativePeerSync.prepareMerge(android,windows,baseline,
+                java.util.Collections.singletonMap("other card","windows"));
+            fail("A decision for an unrelated identity must be rejected");
+        }catch(IllegalArgumentException expected){}
+    }
+
     @Test public void conflictAndMissingPeerRowsAreRejected()throws Exception {
         JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",4);
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",5);
