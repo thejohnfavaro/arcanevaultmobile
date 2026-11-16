@@ -18,5 +18,15 @@ assert.match(activity,/\.setItems\(choices,/,
     'Saved baseline picker must remain a compact list of choices');
 assert.match(activity,/Use this only if it is the last/);
 assert.match(activity,/NativePeerCheckpoint\.exists\(this,incoming\.optString/);
+assert.match(activity,/\.setNeutralButton\("Verify & remember baseline"/,
+    'Successful peer merge should offer optional matching-checkpoint verification');
+assert.match(activity,/rememberMatchingWirelessBaseline\(/,
+    'Checkpoint action must reuse exact-match verification, not blindly advance');
+assert.match(activity,/nativeController\.refresh\(\)/,
+    'Verified peer apply should refresh the visible native workspace');
+assert.match(activity,/refreshCollectionValueWidget\(\)/,
+    'Verified peer apply should update collection value presentation');
+assert.match(activity,/\.append\("\\nCopies to add: \+"/,
+    'Final peer preview must use real line breaks, not literal escaped text');
 assert.match(activity,/PEER_WIRELESS_BASE_PICK/);
 console.log('PASS: USB peer baseline discovery uses in-app snapshots with explicit common-state confirmation and manual fallback');
