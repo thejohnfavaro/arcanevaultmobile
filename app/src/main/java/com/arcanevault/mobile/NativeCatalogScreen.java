@@ -848,20 +848,7 @@ final class NativeCatalogScreen {
         final int token=inspectorRequest;
         worker.execute(()->{
             try {
-                Map<String,String> args=new HashMap<>();
-                args.put("q",name);args.put("source","both");args.put("size","120");
-                JSONObject result=catalog.search(args);
-                JSONArray rows=result.getJSONArray("cards");
-                JSONObject found=null;
-                for(int i=0;i<rows.length();i++){
-                    JSONObject candidate=rows.optJSONObject(i);
-                    if(candidate!=null&&name.equalsIgnoreCase(candidate.optString("name",""))){
-                        found=candidate;break;
-                    }
-                }
-                if(found==null)throw new IllegalStateException(
-                    "Card metadata is not indexed yet. Refresh Scryfall catalog.");
-                JSONObject row=found;
+                JSONObject row=catalog.cardDetails(name);
                 JSONObject exactPrinting=printing;
                 if("physical".equals(source)&&!printing.optString("id","").isEmpty()){
                     Map<String,String> variantArgs=new HashMap<>();
