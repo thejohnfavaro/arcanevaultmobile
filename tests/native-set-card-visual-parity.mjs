@@ -76,4 +76,24 @@ assert.match(source,/Released /,
  'Set Progress overview must show release data without opening a set');
 assert.match(source,/verified set entries/,
  'Overview must show verified ownership and missing coverage');
+assert.match(catalogInspector,/catalog\.search\(args\)/,
+ 'External Set Progress card inspection must fetch rich local card metadata');
+assert.match(catalogInspector,/catalog\.variants\(variantArgs\)/,
+ 'Exact printing information must come from the local Scryfall printings catalog');
+assert.match(catalogInspector,/Mana cost: /,
+ 'Full card inspector should show exact casting mana cost when cached');
+assert.match(catalogInspector,/Color identity: /,
+ 'Inspector should show Scryfall color identity separately from mana cost');
+assert.match(catalogInspector,/FORMAT LEGALITIES \(cached\)/,
+ 'Inspector must show available format legalities');
+assert.match(catalogInspector,/ORACLE TEXT/,
+ 'Shared inspector must retain readable oracle text');
+assert.match(companion,/workspace\.openSetFromCatalog\(/,
+ 'Back navigation must restore original Set Progress detail view');
+const catalogStore=fs.readFileSync(
+ 'app/src/main/java/com/arcanevault/mobile/CatalogStore.java','utf8');
+assert.match(catalogStore,/ALTER TABLE cards ADD COLUMN mana/,
+ 'Existing Android catalogs need a non-destructive mana-cost migration');
+assert.match(catalogStore,/meta\.put\("manaCost",r\.getString\(16\)\)/,
+ 'Search results must carry the indexed exact mana cost');
 console.log('PASS: visual set-card parity, cached cover art, icons and completion safety');
