@@ -74,8 +74,8 @@ assert.match(catalogInspector,/FORMAT LEGALITIES \(cached\)/,
  'Set and Catalog inspectors should expose cached format legality metadata');
 assert.match(source,/Released /,
  'Set Progress overview must show release data without opening a set');
-assert.match(source,/verified set entries/,
- 'Overview must show verified ownership and missing coverage');
+assert.match(source,/paper collector slots/,
+ 'Overview must label Windows-style verified paper collector slot coverage');
 assert.match(catalogInspector,/catalog\.cardDetails\(name\)/,
  'Set Progress must use an exact, unambiguous on-device card metadata lookup');
 assert.match(catalogInspector,/catalog\.variants\(variantArgs\)/,
