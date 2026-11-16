@@ -862,6 +862,21 @@ final class NativeCatalogScreen {
                 if(found==null)throw new IllegalStateException(
                     "Card metadata is not indexed yet. Refresh Scryfall catalog.");
                 JSONObject row=found;
+                JSONObject exactPrinting=printing;
+                if("physical".equals(source)&&!printing.optString("id","").isEmpty()){
+                    Map<String,String> variantArgs=new HashMap<>();
+                    variantArgs.put("name",name);
+                    JSONArray variants=catalog.variants(variantArgs).getJSONArray("variants");
+                    for(int i=0;i<variants.length();i++){
+                        JSONObject variant=variants.optJSONObject(i);
+                        if(variant!=null&&printing.optString("id","")
+                                .equalsIgnoreCase(variant.optString("id",""))){
+                            exactPrinting=variant;
+                            break;
+                        }
+                    }
+                }
+                final JSONObject selected=exactPrinting;
                 ui.post(()->{
                     if(disposed||activity.isFinishing()||token!=inspectorRequest)return;
                     JSONObject meta=row.optJSONObject("meta");
@@ -869,7 +884,7 @@ final class NativeCatalogScreen {
                     showDetails(name,meta.optString("type",""),meta.optString("oracle",""),
                         meta.optString("rarity",""),meta.optString("image",""),
                         meta.optString("imageBack",""),row.optInt("arenaQty",0),
-                        row.optInt("physicalQty",0),printing,setName,source,
+                        row.optInt("physicalQty",0),selected,setName,source,
                         confirmedQty,meta,returnToSet);
                 });
             }catch(Exception error){
@@ -912,13 +927,18 @@ final class NativeCatalogScreen {
             TextView selected=text(edition+"\n"+(source.equals("physical")?
                 "Confirmed edition copies: ":"Arena copies: ")+selectedCopies+
                 (source.equals("physical")?
-                "\nPrinting ID: "+printing.optString("id",""):""),13,true);
+                "\nPrinting ID: "+printing.optString("id","")+
+                (printing.optString("released","").isEmpty()?"": 
+                    "\nPrinting released: "+printing.optString("released","")):""),13,true);
             selected.setTextColor(VaultNativeStyle.PRIMARY);
             inspectorContent.addView(selected);
         }
         if(metadata!=null){
             StringBuilder extra=new StringBuilder();
-            if(metadata.has("mv"))extra.append("Mana value: ").append(metadata.optDouble("mv",0)).append("\n");
+            String mana=metadata.optString("manaCost","");
+            if(!mana.isEmpty())extra.append("Mana cost: ").append(mana).append("\n");
+            if(metadata.has("mv"))extra.append("Mana value: ")
+                .append(metadata.optDouble("mv",0)).append("\n");
             JSONArray colors=metadata.optJSONArray("colors");
             if(colors!=null){
                 extra.append("Color identity: ");
