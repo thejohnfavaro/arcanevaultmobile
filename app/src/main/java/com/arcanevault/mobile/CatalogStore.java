@@ -1299,36 +1299,46 @@ final class CatalogStore extends SQLiteOpenHelper {
                 "JOIN ownership o ON o.name=v.name COLLATE NOCASE AND o.qty>0 "+
                 "WHERE v.arena=1 GROUP BY v.setcode";
         }else{
-            // Split the lookup by identity: SQLite can use the print_id primary
-            // key instead of evaluating a broad OR across all variants.
-            ownedSql="SELECT m.setcode,COUNT(DISTINCT m.name) FROM ("+
-                "SELECT v.setcode,v.name FROM physical_printings p "+
-                "JOIN variants v ON v.print_id=p.print_id COLLATE NOCASE "+
-                "WHERE p.qty>0 AND p.print_id!='' "+
+            // Match Windows collector-slot semantics: a slot is a distinct
+            // paper collector number, not a unique name or printing ID.
+            // Explicit UUID ownership is accepted only for indexed paper
+            // printings; missing IDs use uniquely identifiable set+collector
+            // hints, and NEVER use name-only guesses.
+            String paper="v.digital=0 AND instr(',' || lower(replace(v.games,' ','')) || ',', ',paper,')>0 ";
+            ownedSql="SELECT verified.setcode,COUNT(DISTINCT verified.collector) "+
+                "FROM ("+
+                "SELECT v.setcode,v.collector FROM physical_printings p "+
+                "JOIN variants v ON p.print_id=v.print_id COLLATE NOCASE "+
+                "WHERE p.qty>0 AND p.print_id!='' AND "+paper+
+                "AND trim(v.collector)!='' "+
                 "UNION "+
-                "SELECT v.setcode,v.name FROM physical_printings p "+
-                "JOIN variants v ON v.setcode=p.setcode COLLATE NOCASE "+
+                "SELECT v.setcode,v.collector FROM physical_printings p "+
+                "JOIN variants v ON p.print_id='' "+
+                "AND v.setcode=p.setcode COLLATE NOCASE "+
                 "AND v.collector=p.collector COLLATE NOCASE "+
+                "AND v.name=p.name COLLATE NOCASE "+
                 "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
-                "AND (p.print_id='' OR NOT EXISTS "+
-                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE)) "+
-                "UNION "+
-                "SELECT v.setcode,v.name FROM physical_printings p "+
-                "JOIN variants v ON v.setname=p.setcode COLLATE NOCASE "+
-                "AND v.collector=p.collector COLLATE NOCASE "+
-                "WHERE p.qty>0 AND p.setcode!='' AND p.collector!='' "+
-                "AND (p.print_id='' OR NOT EXISTS "+
-                "(SELECT 1 FROM variants vi WHERE vi.print_id=p.print_id COLLATE NOCASE))"+
-                ") m GROUP BY m.setcode";
-
+                "AND "+paper+
+                "AND (SELECT COUNT(*) FROM variants unique_slot "+
+                "WHERE unique_slot.setcode=p.setcode COLLATE NOCASE "+
+                "AND unique_slot.collector=p.collector COLLATE NOCASE "+
+                "AND unique_slot.name=p.name COLLATE NOCASE "+
+                "AND unique_slot.digital=0 "+
+                "AND instr(',' || lower(replace(unique_slot.games,' ','')) || ',', ',paper,')>0)=1"+
+                ") verified GROUP BY verified.setcode";
         }
         try(Cursor c=db.rawQuery(ownedSql,null)){
             while(c.moveToNext())ownedBySet.put(c.getString(0),c.getInt(1));
         }
-        String sql="SELECT setcode,MAX(setname),COUNT(DISTINCT name),"+
+        String sql="SELECT setcode,MAX(setname),"+
+            ("arena".equals(source)?"COUNT(DISTINCT name)":
+                "COUNT(DISTINCT collector COLLATE NOCASE)")+","+
             "MIN(CASE WHEN length(release)=10 AND release GLOB '????-??-??' "+
             "THEN release END) FROM variants "+
-            ("arena".equals(source)?"WHERE arena=1 ":"")+
+            ("arena".equals(source)?"WHERE arena=1 ":
+                "WHERE digital=0 AND "+
+                "instr(',' || lower(replace(games,' ','')) || ',', ',paper,')>0 "+
+                "AND trim(collector)!='' ")+
             "GROUP BY setcode ORDER BY MAX(setname) COLLATE NOCASE";
         int totalCards=0,ownedCards=0;
         try(Cursor c=db.rawQuery(sql,null)){
