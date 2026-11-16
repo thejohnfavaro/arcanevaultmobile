@@ -557,6 +557,12 @@ final class NativeWorkspaceScreen {
             (cached?" · saved snapshot":" · snapshot ready"));
     }
 
+    void openSetFromCatalog(String code,String title,String source){
+        if(closed)return;
+        if("arena".equals(source)||"physical".equals(source))setSource=source;
+        showSet(code,title,0);
+    }
+
     private void showSet(String set,String title,int pageNumber){
         screenState="set-details";
         if(setOverviewFilters!=null)setOverviewFilters.setVisibility(View.GONE);
@@ -625,7 +631,8 @@ final class NativeWorkspaceScreen {
                         row(name+(source.equals("physical")?" · #"+collector:""),
                             (qty>0?"Owned ×"+qty:"Missing")+
                                 " · "+p.optString("rarity",""),
-                            ()->showSetCardPreview(p,title,source,qty));
+                            ()->((MainActivity)activity).inspectSetPrinting(
+                                p,title,set,source,qty));
                     }
                     if((source.equals("physical") && (pageNumber+1)*48<response.optInt("total",0)) ||
                         (source.equals("arena") && response.optBoolean("hasMore",false)))
@@ -633,54 +640,6 @@ final class NativeWorkspaceScreen {
                     status.setText(title+" · "+(source.equals("physical")?"Physical printings":"Arena card names"));
                 });
             }catch(Exception e){ui.post(()->{if(!closed)status.setText("Set details unavailable: "+e.getMessage());});}
-        });
-    }
-
-    /** Print-specific read-only preview from the same verified set row.
-     * The art is fetched only when opened, through the official cache.
-     * Set filters are hidden while browsing a set, avoiding overlapping UI. */
-    private void showSetCardPreview(JSONObject printing,String setName,
-            String source,int qty){
-        if(closed||activity.isFinishing())return;
-        String name=printing.optString("name","Unknown card");
-        String collector=printing.optString("collectorNumber","");
-        String imageUrl=printing.optString("image","");
-        LinearLayout body=VaultNativeStyle.column(activity);
-        body.setPadding(dp(18),dp(8),dp(18),dp(8));
-        ImageView picture=new ImageView(activity);
-        picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        picture.setAdjustViewBounds(true);
-        // Keep metadata visible even on compact phones.
-        if(!imageUrl.isEmpty())
-            body.addView(picture,new LinearLayout.LayoutParams(-1,dp(265)));
-        TextView details=VaultNativeStyle.label(activity,
-            setName+(source.equals("physical")?" · #"+collector:"")+
-            "\n"+(source.equals("physical")?"Confirmed physical copies: ":"Arena copies: ")+qty+
-            (source.equals("physical")?
-                "\nPrinting ID: "+printing.optString("id",""):
-                "\nArena ownership is counted by card name."),
-            13,VaultNativeStyle.TEXT,false);
-        details.setTextIsSelectable(true);
-        body.addView(details);
-        AlertDialog dialog=new AlertDialog.Builder(activity)
-            .setTitle(name).setView(body).setPositiveButton("Close",null).create();
-        dialog.show();
-        if(imageUrl.isEmpty())return;
-        setArtWorkers.execute(()->{
-            try{
-                byte[] data=artwork.get(imageUrl);
-                Bitmap bmp=BitmapFactory.decodeByteArray(data,0,data.length);
-                if(bmp==null)return;
-                ui.post(()->{
-                    if(!closed&&dialog.isShowing())picture.setImageBitmap(bmp);
-                });
-            }catch(Exception ignored){
-                ui.post(()->{
-                    if(!closed&&dialog.isShowing()){
-                        body.removeView(picture);
-                    }
-                });
-            }
         });
     }
 
