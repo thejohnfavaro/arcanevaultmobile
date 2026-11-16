@@ -289,9 +289,14 @@ final class NativeCompanionScreen {
         if(nativeCatalog==null)return;
         nativeCatalog.inspectSetPrinting(printing,setName,source,quantity,()->{
             if(closed)return;
-            show("sets");
-            if(workspace!=null)
-                workspace.openSetFromCatalog(setCode,setName,source);
+            // This returns through an existing navigation edge, not a new
+            // visit to Catalog. Do not create a Back-button loop.
+            restoringHistory=true;
+            try{
+                show("sets");
+                if(workspace!=null)
+                    workspace.openSetFromCatalog(setCode,setName,source);
+            }finally{restoringHistory=false;}
         });
     }
 
