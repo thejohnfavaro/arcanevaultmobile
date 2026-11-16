@@ -1353,6 +1353,7 @@ public class MainActivity extends Activity {
                         original=baseline.load();
                         JSONObject proposal=com.arcanevault.mobile.next.NativePeerSync
                             .prepareMerge(local,remote,original,decisions,deckDecisions);
+                        final JSONObject receivedPeer=remote;
                         JSONObject before=local.getJSONObject("data");
                         JSONObject target=proposal.getJSONObject("candidate");
                         boolean decksChanged=!NativePeerInventoryApply.canonicalEqual(
@@ -1433,8 +1434,14 @@ public class MainActivity extends Activity {
                                                                 .setMessage("Reviewed inventory/deck/artwork changes "+
                                                                     "have been written and verified.\\n\\n"+
                                                                     "Pre-sync full backup: "+finalBackup+
-                                                                    "\\n\\nConfirm a new matching baseline "+
-                                                                    "on both devices before future merges.")
+                                                                    "\\n\\nOptional: Verify & remember baseline "+
+                                                                    "checks whether Android now exactly matches "+
+                                                                    "the received Windows snapshot. It saves a "+
+                                                                    "checkpoint only if they match; Windows "+
+                                                                    "still needs its own confirmation.")
+                                                                .setNeutralButton("Verify & remember baseline",
+                                                                    (d,w)->rememberMatchingWirelessBaseline(
+                                                                        receivedPeer))
                                                                 .setPositiveButton("OK",null).show();
                                                         } else {
                                                             new android.app.AlertDialog.Builder(this)
