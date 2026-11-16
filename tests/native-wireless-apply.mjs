@@ -35,6 +35,17 @@ assert.match(activity,/\.chooseAllArenaConflicts\(local,incomingSnapshot,/,
     'Bulk choices must be validated against both snapshots and the baseline');
 assert.match(activity,/next\.putAll\(androidAll\)/);
 assert.match(activity,/next\.putAll\(windowsAll\)/);
+assert.match(activity,/\.describeDeckConflict\(local,incomingSnapshot,baseSnapshot,/,
+    'Saved-deck conflicts must have a separate validated review');
+assert.match(activity,/\.chooseAllDeckConflicts\(local,incomingSnapshot,/,
+    'Bulk saved-deck choices must not be inferred from Arena choices');
+for(const choice of [
+    'Keep Android for this deck',
+    'Use Windows for this deck',
+    'Use Android for all ',
+    'Use Windows for all '
+]) assert.ok(activity.includes(choice),'Missing reviewed deck choice: '+choice);
+assert.match(activity,/\.prepareMerge\(local,remote,original,decisions,deckDecisions\)/);
 assert.match(activity,/No changes to apply/,
     'A no-op peer proposal must not be reported as a completed sync');
 assert.match(activity,/NativePeerInventoryApply\.applyInventoryPart\(/);
