@@ -898,7 +898,7 @@ final class NativeCatalogScreen {
             inspectorContent.addView(text("MANA COST (EXACT)",11,true));
             LinearLayout glyphs=VaultNativeStyle.row(activity);
             java.util.regex.Matcher tokens=java.util.regex.Pattern
-                .compile("\\\\{([^{}]{1,16})\\\\}").matcher(mana);
+                .compile("\\{([^{}]{1,16})\\}").matcher(mana);
             int count=0;
             while(tokens.find()&&count++<24){
                 String symbol=tokens.group(1).toUpperCase(java.util.Locale.ROOT);
