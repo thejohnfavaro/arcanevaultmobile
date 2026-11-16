@@ -226,12 +226,9 @@ final class NativeCompanionScreen {
             addSecondaryTab("Deck Library","decks");
             addSecondaryTab("EDH Lab","edh lab");
         } else if(primary.equals("sync")){
+            // The old WebView UI is retired. Its hidden storage bridge
+            // remains available for existing decks/artwork until migrated.
             addSecondaryTab("Data & Sync","data & sync");
-            Button legacy=button("Settings & legacy",false);
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
-            lp.rightMargin=dp(7);
-            secondaryTabs.addView(legacy,lp);
-            legacy.setOnClickListener(v->{closeCatalog();openLegacy.run();});
         }
         secondaryScroll.setVisibility(secondaryTabs.getChildCount()==0?View.GONE:View.VISIBLE);
     }
