@@ -135,9 +135,9 @@ public final class NativePeerSync {
             .put("windows",quantity(r));
     }
 
-    /** Select every genuinely divergent Arena card after checking the shared
-     * baseline. This is only a reviewed proposal, never permission to apply.
-     * Unrelated physical/deck/artwork conflicts retain their normal safeguards. */
+    /** Select every differing Arena card present on both devices.
+     * Never delete missing records or bypass physical, deck and artwork checks.
+     * This is only a reviewed proposal, not permission to apply. */
     public static Map<String,String> chooseAllArenaConflicts(
             JSONObject local,JSONObject remote,JSONObject baseline,
             String source)throws Exception {
@@ -152,8 +152,10 @@ public final class NativePeerSync {
         Map<String,String> decisions=new HashMap<>();
         for(String key:all){
             JSONObject android=a.get(key),before=b.get(key),windows=c.get(key);
-            if(equivalent(android,windows)||equivalent(android,before)||
-                    equivalent(windows,before))continue;
+            // A bulk authority choice covers EVERY differing shared Arena
+            // record, including local-only edits. Otherwise "Use Windows for
+            // all" can silently preserve Android data and return a no-op.
+            if(equivalent(android,windows))continue;
             // Deletions never get silently approved by a blanket decision.
             if(android==null||windows==null)
                 throw new IllegalArgumentException(
@@ -287,20 +289,24 @@ public final class NativePeerSync {
                 boolean ownBase=equivalent(l,old),peerBase=equivalent(r,old);
                 boolean conflict=!equivalent(l,r)&&!ownBase&&!peerBase;
                 String decision=arenaChoices.get(id);
-                if(conflict) {
-                    if(!group.equals("cards")||decision==null)
-                        throw new IllegalArgumentException("Conflicting edits: "+group+"/"+id);
-                    if(!decision.equals("android")&&!decision.equals("windows"))
-                        throw new IllegalArgumentException("Invalid Arena conflict selection");
+                boolean explicit=decision!=null;
+                if(explicit) {
+                    if(!group.equals("cards")||equivalent(l,r)||
+                            (!decision.equals("android")&&!decision.equals("windows")))
+                        throw new IllegalArgumentException(
+                            "Invalid or stale Arena conflict selection: "+id);
                     if(l==null||r==null)
                         throw new IllegalArgumentException(
                             "Arena removal/identity conflict requires manual review: "+id);
                     usedChoices.add(id);
+                } else if(conflict) {
+                    throw new IllegalArgumentException("Conflicting edits: "+group+"/"+id);
                 }
                 JSONObject chosen;
-                if(conflict && decision.equals("windows")){
-                    incoming++;
-                    chosen=r;
+                if(explicit){
+                    chosen="windows".equals(decision)?r:l;
+                    if("windows".equals(decision))incoming++;
+                    else if(!equivalent(l,r))onlyLocal++;
                 } else if(ownBase&&!peerBase){
                     incoming++;
                     chosen=r;
