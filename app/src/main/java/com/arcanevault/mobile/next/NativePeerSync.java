@@ -156,10 +156,11 @@ public final class NativePeerSync {
             // record, including local-only edits. Otherwise "Use Windows for
             // all" can silently preserve Android data and return a no-op.
             if(equivalent(android,windows))continue;
-            // Deletions never get silently approved by a blanket decision.
-            if(android==null||windows==null)
-                throw new IllegalArgumentException(
-                    "Arena removal/identity conflict requires manual review: "+key);
+            // Missing rows can be legitimate additions or unresolved removals.
+            // They are deliberately NOT included in bulk authority decisions:
+            // prepareMerge applies safe additions and still rejects removals
+            // that lack a signed tombstone. Do not block review of other cards.
+            if(android==null||windows==null)continue;
             decisions.put(key,source);
         }
         if(decisions.isEmpty())
