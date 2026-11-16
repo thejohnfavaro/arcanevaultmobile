@@ -989,10 +989,9 @@ public class MainActivity extends Activity {
                 " · "+files[i].getName();
         choices[files.length]="Browse for a snapshot in another location…";
         new android.app.AlertDialog.Builder(this)
-            .setTitle("Choose your shared sync baseline")
-            .setMessage("Arcane Vault found "+files.length+" locally saved snapshots. "+
-                "Choose the snapshot representing the last state both devices "+
-                "agreed on, not simply the newest backup.")
+            .setTitle("Select last shared baseline ("+files.length+" saved)")
+            // List-only avoids Android hiding snapshot choices below a long
+            // message panel. Each selection still requires confirmation.
             .setItems(choices,(dialog,which)->{
                 if(which==files.length)selectWirelessBaselineFileManually();
                 else confirmSavedSyncBaseline(files[which]);
@@ -1032,7 +1031,7 @@ public class MainActivity extends Activity {
                 "snapshot is not necessarily a valid common baseline.")
             .setNegativeButton("Other snapshot",(d,w)->showSavedSyncBaselineOptions())
             .setNeutralButton("Cancel",(d,w)->pendingWirelessIncoming=null)
-            .setPositiveButton("Use this baseline",(d,w)->confirmSavedSyncBaseline(suggested))
+            .setPositiveButton("Use this baseline",(d,w)->applyWithSavedSyncBaseline(suggested))
             .show();
     }
 
@@ -1144,9 +1143,11 @@ public class MainActivity extends Activity {
         startActivityForResult(pick,PEER_PICK);
     }
     void refreshAfterPeerInventory() {
-        // Existing Legacy tools cache inventory in JavaScript memory; reload
-        // their current origin after a native commit so they cannot continue
-        // displaying an obsolete pre-sync snapshot.
+        // Refresh the visible native workspace immediately after a verified
+        // sync (the workspace's confirmLeave still protects unsaved edits).
+        // Keep the WebView bridge coherent until deck/artwork migration is complete.
+        if(nativeController!=null)nativeController.refresh();
+        refreshCollectionValueWidget();
         if(browser!=null && appUrl!=null && browser.getUrl()!=null &&
             browser.getUrl().startsWith(appUrl))browser.reload();
     }
@@ -1380,19 +1381,19 @@ public class MainActivity extends Activity {
                         org.json.JSONArray changes=delta.getJSONArray("changes");
                         StringBuilder preview=new StringBuilder()
                             .append("Inventory entries: ").append(inventoryCount)
-                            .append("\\nCopies to add: +").append(delta.getLong("addedCopies"))
-                            .append("\\nCopies to remove: -").append(delta.getLong("removedCopies"))
-                            .append("\\nSaved decks: ").append(decksChanged?"Update":"Unchanged")
-                            .append("\\nPreferred artwork: ").append(artworkChanged?"Update":"Unchanged")
-                            .append("\\nLocal-only edits preserved: ")
-                            .append(proposal.optInt("localChanges",0)).append("\\n\\n");
+                            .append("\nCopies to add: +").append(delta.getLong("addedCopies"))
+                            .append("\nCopies to remove: -").append(delta.getLong("removedCopies"))
+                            .append("\nSaved decks: ").append(decksChanged?"Update":"Unchanged")
+                            .append("\nPreferred artwork: ").append(artworkChanged?"Update":"Unchanged")
+                            .append("\nLocal-only edits preserved: ")
+                            .append(proposal.optInt("localChanges",0)).append("\n\n");
                         for(int i=0;i<Math.min(10,changes.length());i++){
                             JSONObject entry=changes.getJSONObject(i);
                             long quantity=entry.getLong("delta");
                             preview.append(quantity>0?"+":"").append(quantity)
-                                .append("  ").append(entry.optString("name","Unknown")).append("\\n");
+                                .append("  ").append(entry.optString("name","Unknown")).append("\n");
                         }
-                        preview.append("\\nThis is a reviewed, opt-in merge. A full verified "+
+                        preview.append("\nThis is a reviewed, opt-in merge. A full verified "+
                             "Android snapshot is saved BEFORE ANY write. Inventory uses "+
                             "its existing crash-recovery journal. Deck/artwork updates "+
                             "use WebView storage with readback verification. If the app "+
