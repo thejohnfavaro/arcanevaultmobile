@@ -1935,6 +1935,8 @@ final class NativeWorkspaceScreen {
         });
         }
         if(syncSection.equals("devices")) {
+        row("Remembered peer checkpoints",
+            NativePeerCheckpoint.overview(activity),null);
         row("PC ↔ Android collection and deck sync",
             "Compare Windows and Android against their shared baseline, then review "+
             "inventory, saved-deck, and artwork differences before applying them to Android.",null);
