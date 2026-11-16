@@ -746,6 +746,46 @@ final class CatalogStore extends SQLiteOpenHelper {
         return "";
     }
 
+    /** Exact-name local lookup for cross-workspace card inspection.
+     * A broad LIKE search may return hundreds of cards mentioning a name
+     * before the actual exact card is encountered. This query cannot guess
+     * a printing and never mutates owned inventory. */
+    JSONObject cardDetails(String name)throws Exception {
+        if(name==null||name.isBlank()||name.length()>300)
+            throw new IllegalArgumentException("Invalid card name");
+        String sql="SELECT c.name,c.type,c.oracle,c.rarity,c.mv,c.colors,"+
+            "c.image,c.uri,c.legalities,c.layout,c.setcode,c.arena,c.mana,"+
+            "COALESCE((SELECT SUM(qty) FROM ownership a WHERE a.name=c.name),0),"+
+            "COALESCE((SELECT SUM(qty) FROM physical_ownership p "+
+                "WHERE p.name=c.name),0),"+
+            "COALESCE((SELECT v.image_back FROM variants v "+
+                "WHERE v.name=c.name AND v.image=c.image "+
+                "AND v.image_back!='' LIMIT 1),'') "+
+            "FROM cards c WHERE c.name=? COLLATE NOCASE LIMIT 1";
+        try(Cursor row=getReadableDatabase().rawQuery(sql,new String[]{name})){
+            if(!row.moveToFirst())throw new IllegalStateException(
+                "Card metadata is not indexed. Refresh the local Scryfall catalog.");
+            JSONObject meta=new JSONObject()
+                .put("type",row.getString(1)).put("oracle",row.getString(2))
+                .put("rarity",row.getString(3)).put("mv",row.getDouble(4))
+                .put("image",row.getString(6)).put("url",row.getString(7))
+                .put("legalities",new JSONObject(row.getString(8)))
+                .put("layout",row.getString(9)).put("set_",row.getString(10))
+                .put("arena",row.getInt(11)>0)
+                .put("manaCost",row.getString(12))
+                .put("imageBack",row.getString(15));
+            JSONArray identity=new JSONArray();
+            String colors=row.getString(5);
+            if(colors!=null)for(int i=0;i<colors.length();i++)
+                identity.put(String.valueOf(colors.charAt(i)));
+            meta.put("colors",identity);
+            return new JSONObject().put("name",row.getString(0))
+                .put("arenaQty",row.getInt(13))
+                .put("physicalQty",row.getInt(14))
+                .put("meta",meta);
+        }
+    }
+
     JSONObject search(Map<String,String> p)throws Exception{
         String scope=get(p,"scope"),color=get(p,"colors"),role=get(p,"role"),sort=get(p,"sort"),arena=get(p,"arena");
         // Legacy web callers omit source: keep Arena semantics for compatibility.
