@@ -50,6 +50,26 @@ final class NativePeerCheckpoint {
             ". Transfers still require a one-time link and explicit review.";
     }
 
+    static String description(Context context,String peerDevice) {
+        try {
+            JSONObject snapshot=load(context,peerDevice);
+            File file=location(context,peerDevice);
+            String when=java.text.DateFormat.getDateTimeInstance(
+                java.text.DateFormat.MEDIUM,java.text.DateFormat.SHORT)
+                .format(new java.util.Date(file.lastModified()));
+            String revision=snapshot.optString("revision","");
+            String shortRevision=revision.length()>=12?revision.substring(0,12):"unknown";
+            return "Verified checkpoint: "+when+"\\nPeer: "+
+                peerDevice.substring(0,Math.min(8,peerDevice.length()))+
+                "…\\nRevision: "+shortRevision+
+                "\\nThe checkpoint permits comparison only. Review and approve"+
+                " changes before applying them.";
+        }catch(Exception invalid){
+            return "The saved peer checkpoint cannot be validated. "+
+                "Choose a known shared baseline file instead.";
+        }
+    }
+
     static boolean exists(Context context,String peerDevice) {
         try{return location(context,peerDevice).isFile();}
         catch(Exception e){return false;}
