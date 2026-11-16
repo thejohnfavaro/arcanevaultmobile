@@ -243,6 +243,52 @@ public final class NativePeerSyncTest {
             android,windows,baseline,"android").size());
     }
 
+    @Test public void deckConflictIsReviewedIndependentlyFromArenaAuthority()
+            throws Exception {
+        JSONObject base=peer("00000000-0000-4000-8000-000000000702",2);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",3);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",4);
+        base.getJSONObject("data").getJSONArray("deckLibrary")
+            .getJSONObject(0).put("name","Baseline Deck");
+        android.getJSONObject("data").getJSONArray("deckLibrary")
+            .getJSONObject(0).put("name","Android Deck");
+        windows.getJSONObject("data").getJSONArray("deckLibrary")
+            .getJSONObject(0).put("name","Windows Deck");
+        String old=android.toString();
+        Map<String,String> cards=NativePeerSync.chooseAllArenaConflicts(
+            android,windows,base,"windows");
+        Map<String,String> decks=NativePeerSync.chooseAllDeckConflicts(
+            android,windows,base,"windows");
+        assertEquals("windows",decks.get("deck_1"));
+        JSONObject description=NativePeerSync.describeDeckConflict(
+            android,windows,base,"deck_1");
+        assertEquals("Android Deck",description.getString("androidName"));
+        assertEquals("Windows Deck",description.getString("windowsName"));
+        try{
+            NativePeerSync.prepareMerge(android,windows,base,cards);
+            fail("Arena approval must not authorize saved deck overwrite");
+        }catch(IllegalArgumentException expected){
+            assertTrue(expected.getMessage().contains("deckLibrary"));
+        }
+        JSONObject proposal=NativePeerSync.prepareMerge(
+            android,windows,base,cards,decks);
+        assertEquals("Windows Deck",proposal.getJSONObject("candidate")
+            .getJSONArray("deckLibrary").getJSONObject(0).getString("name"));
+        assertEquals(4,proposal.getJSONObject("candidate")
+            .getJSONArray("cards").getJSONObject(0).getInt("qty"));
+        assertFalse(proposal.getBoolean("safeToAutoApply"));
+        assertEquals(old,android.toString());
+        JSONObject retain=NativePeerSync.prepareMerge(android,windows,base,cards,
+            NativePeerSync.chooseAllDeckConflicts(android,windows,base,"android"));
+        assertEquals("Android Deck",retain.getJSONObject("candidate")
+            .getJSONArray("deckLibrary").getJSONObject(0).getString("name"));
+        try{
+            NativePeerSync.prepareMerge(android,windows,base,cards,
+                java.util.Collections.singletonMap("not-this-deck","windows"));
+            fail("Unrelated deck choice must not authorize write");
+        }catch(IllegalArgumentException expected){}
+    }
+
     @Test public void conflictAndMissingPeerRowsAreRejected()throws Exception {
         JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",4);
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",5);
