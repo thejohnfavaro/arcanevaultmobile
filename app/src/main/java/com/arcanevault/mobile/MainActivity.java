@@ -1483,14 +1483,20 @@ public class MainActivity extends Activity {
                                     }).show());
                                 return;
                             }catch(Exception invalid){
-                                message=invalid.getMessage();
+                                message="Arena conflict was detected but its quantities "+
+                                    "could not be validated safely. Original error: "+
+                                    error.getMessage()+"; conflict detail: "+
+                                    invalid.getMessage();
                             }
                         }
                         final String rejection=message;
                         runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                            .setTitle("Peer merge rejected")
+                            .setTitle("Peer merge rejected · sync handler 2.1.46")
                             .setMessage(rejection+
-                                "\n\nNo inventory, deck or artwork data was changed.")
+                                "\n\nNo inventory, deck or artwork data was changed."+
+                                "\nIf this dialog shows handler 2.1.46, send its "+
+                                "full details for a targeted repair. Otherwise "+
+                                "the installed app does not contain this handler.")
                             .setPositiveButton("OK",null).show());
                     }
                 });
