@@ -68,6 +68,33 @@ final class NativeDeckArtworkMirror {
         content.getJSONArray("decks");content.getJSONObject("preferredArtwork");
         return envelope;
     }
+    /** Surface only verifiable recovery metadata, never raw saved decks. */
+    static String overview(Context context){
+        try{
+            JSONObject envelope=read(context);
+            JSONObject data=new JSONObject(envelope.getString("payload"));
+            long when=envelope.getLong("capturedUtc");
+            String date=java.text.DateFormat.getDateTimeInstance(
+                java.text.DateFormat.MEDIUM,java.text.DateFormat.SHORT)
+                .format(new java.util.Date(when));
+            return "Last verified native safety copy: "+date+
+                "\nSaved decks: "+data.getJSONArray("decks").length()+
+                " · preferred artwork entries: "+
+                data.getJSONObject("preferredArtwork").length()+
+                "\nThe live deck library is still authoritative. "+
+                "This copy is for recovery/export and is never silently restored.";
+        }catch(Exception failure){
+            return "No valid native deck/artwork safety copy yet. "+
+                "A copy is created after a successful live-library read.";
+        }
+    }
+    static byte[] exportVerified(Context context)throws Exception {
+        JSONObject checked=read(context);
+        byte[] bytes=checked.toString().getBytes(StandardCharsets.UTF_8);
+        if(bytes.length>LIMIT)throw new IllegalStateException("Mirror export exceeds size limit");
+        return bytes;
+    }
+
     static boolean existsVerified(Context context) {
         try{read(context);return true;}catch(Exception ignored){return false;}
     }
