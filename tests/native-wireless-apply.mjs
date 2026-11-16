@@ -18,8 +18,18 @@ assert.match(activity,/NativePeerSync\s*\n\s*\.prepareMerge\(local,remote,origin
 assert.match(activity,/\.describeArenaConflict\(local,incomingSnapshot,baseSnapshot,/,
     'Conflicting Arena cards must display verified baseline/Android/Windows quantities');
 assert.match(activity,/\.setTitle\("Resolve Arena card conflict"\)/);
-assert.match(activity,/\.setNegativeButton\("Keep Android"/);
-assert.match(activity,/\.setPositiveButton\("Use Windows"/);
+assert.match(activity,/\.setItems\(choices,/,
+    'Peer conflict resolution must expose all four choice options');
+for(const choice of [
+    'Keep Android (this card)',
+    'Use Windows (this card)',
+    'Use Android for all Arena conflicts',
+    'Use Windows for all Arena conflicts'
+]) assert.ok(activity.includes(choice),'Missing peer-conflict choice: '+choice);
+assert.match(activity,/\.chooseAllArenaConflicts\(local,incomingSnapshot,/,
+    'Bulk choices must be validated against both snapshots and the baseline');
+assert.match(activity,/next\.putAll\(androidAll\)/);
+assert.match(activity,/next\.putAll\(windowsAll\)/);
 assert.match(activity,/NativePeerInventoryApply\.applyInventoryPart\(/);
 assert.match(screen,/Scan QR & review Windows changes/);
 assert.match(screen,/baseline and explicit confirmation/);
