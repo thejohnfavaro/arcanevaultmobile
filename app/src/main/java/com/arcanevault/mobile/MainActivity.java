@@ -1467,13 +1467,6 @@ public class MainActivity extends Activity {
                                     .describeArenaConflict(local,incomingSnapshot,baseSnapshot,
                                         message.substring(prefix.length()));
                                 String key=conflict.getString("key");
-                                String detail=conflict.getString("name")+
-                                    "\nLast shared baseline: "+conflict.getInt("baseline")+
-                                    "\nAndroid now: "+conflict.getInt("android")+
-                                    "\nWindows now: "+conflict.getInt("windows")+
-                                    "\n\nChoose which CURRENT quantity to retain for "+
-                                    "this card only. Other differences still require "+
-                                    "review. No data changes before final approval.";
                                 java.util.Map<String,String> windowsAll=
                                     com.arcanevault.mobile.next.NativePeerSync
                                         .chooseAllArenaConflicts(local,incomingSnapshot,
@@ -1482,26 +1475,24 @@ public class MainActivity extends Activity {
                                     com.arcanevault.mobile.next.NativePeerSync
                                         .chooseAllArenaConflicts(local,incomingSnapshot,
                                             baseSnapshot,"android");
-                                String bulkInfo="\\n\\n"+windowsAll.size()+
-                                    " differing shared Arena card record(s). "+
-                                    "Use Windows for all chooses the Windows values "+
-                                    "for every one of these records, including "+
-                                    "Android-only edits; Use Android for all "+
-                                    "retains the Android values. Cards found on "+
-                                    "only one device are excluded from bulk "+
-                                    "selection: safe additions remain eligible, "+
-                                    "while ambiguous removals still block apply. "+
-                                    "Physical cards, decks and artwork are "+
-                                    "never overridden.";
+                                // Use a list-only AlertDialog. Mixing setMessage
+                                // with setItems lets Android's message panel
+                                // obscure the choices on smaller screens.
+                                String heading=conflict.getString("name")+
+                                    "\nBaseline "+conflict.getInt("baseline")+
+                                    " · Android "+conflict.getInt("android")+
+                                    " · Windows "+conflict.getInt("windows")+
+                                    "\n"+windowsAll.size()+" differing Arena cards";
                                 String[] choices={
-                                    "Keep Android (this card)",
-                                    "Use Windows (this card)",
-                                    "Use Android for all Arena conflicts",
-                                    "Use Windows for all Arena conflicts"
+                                    "Keep Android for this card ("+
+                                        conflict.getInt("android")+")",
+                                    "Use Windows for this card ("+
+                                        conflict.getInt("windows")+")",
+                                    "Use Android for all "+androidAll.size()+" differences",
+                                    "Use Windows for all "+windowsAll.size()+" differences"
                                 };
                                 runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                                    .setTitle("Resolve Arena card conflict")
-                                    .setMessage(detail+bulkInfo)
+                                    .setTitle(heading)
                                     .setItems(choices,(dialog,which)->{
                                         java.util.Map<String,String> next=
                                             new java.util.HashMap<>(decisions);
