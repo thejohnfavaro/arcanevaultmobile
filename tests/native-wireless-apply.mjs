@@ -13,8 +13,8 @@ assert.match(activity,/JSONObject remote=null,original=null;/,
     'Keep incoming snapshot available when a conflict needs review');
 assert.match(activity,/remote=incoming\.load\(\)/,
     'Read incoming peer snapshot after declaring its retained reference');
-assert.match(activity,/NativePeerSync\s*\n\s*\.prepareMerge\(local,remote,original,decisions\)/,
-    'Three-way peer merge must pass explicit, scoped conflict decisions');
+assert.match(activity,/NativePeerSync\s*\n\s*\.prepareMerge\(local,remote,original,decisions,deckDecisions\)/,
+    'Three-way peer merge must pass independently scoped Arena and deck decisions');
 assert.match(activity,/\.describeArenaConflict\(local,incomingSnapshot,baseSnapshot,/,
     'Conflicting Arena cards must display verified baseline/Android/Windows quantities');
 assert.match(activity,/\.setTitle\(heading\)/,
