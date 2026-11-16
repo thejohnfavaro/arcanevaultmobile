@@ -531,6 +531,17 @@ final class NativeWorkspaceScreen {
         int allSets=sets.length();
         boolean missingOwned=filtered.isEmpty()&&allSets>0&&hide;
         content.removeAllViews();
+        int totalCoverage=result.optInt("totalCards",-1);
+        int verifiedCoverage=result.optInt("ownedCards",-1);
+        if(totalCoverage>0&&verifiedCoverage>=0){
+            double percent=100d*verifiedCoverage/totalCoverage;
+            row("COLLECTION-WIDE SET COVERAGE",
+                verifiedCoverage+" / "+totalCoverage+" "+
+                    ("arena".equals(source)?"Arena card names":"catalog set entries")+
+                    " · "+String.format(java.util.Locale.US,"%.1f%%",percent)+
+                    " covered · "+Math.max(0,totalCoverage-verifiedCoverage)+" missing",
+                null);
+        }
         TextView hint=VaultNativeStyle.label(activity,
             "arena".equals(source)?
                 "Arena ownership is tracked by card name, not verified physical edition.":
