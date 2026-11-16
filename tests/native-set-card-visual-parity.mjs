@@ -80,10 +80,12 @@ assert.match(catalogInspector,/catalog\.cardDetails\(name\)/,
  'Set Progress must use an exact, unambiguous on-device card metadata lookup');
 assert.match(catalogInspector,/catalog\.variants\(variantArgs\)/,
  'Exact printing information must come from the local Scryfall printings catalog');
-assert.match(catalogInspector,/Mana cost: /,
- 'Full card inspector should show exact casting mana cost when cached');
-assert.match(catalogInspector,/Color identity: /,
- 'Inspector should show Scryfall color identity separately from mana cost');
+assert.match(catalogInspector,/MANA COST \(EXACT\)/,
+ 'Full card inspector should show exact casting mana symbols when cached');
+assert.match(catalogInspector,/COLOR IDENTITY/,
+ 'Inspector should show official color identity symbols separately from mana cost');
+assert.match(catalogInspector,/icon\.setReadOnlyDisplay\(\)/,
+ 'Card details must reuse icons without turning them into active filters');
 assert.match(catalogInspector,/FORMAT LEGALITIES \(cached\)/,
  'Inspector must show available format legalities');
 assert.match(catalogInspector,/ORACLE TEXT/,
