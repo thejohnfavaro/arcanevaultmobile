@@ -237,7 +237,12 @@ final class CatalogStore extends SQLiteOpenHelper {
         if(!"physical".equals(source)&&!"arena".equals(source))return null;
         try{
             String json=setCache().getString("overview_"+source,null);
-            return json==null?null:filterSetOverview(new JSONObject(json),query);
+            if(json==null)return null;
+            JSONObject snapshot=new JSONObject(json);
+            // v2 changed physical progress from distinct card names to paper
+            // collector-number slots. Never render the older cached totals.
+            if(snapshot.optInt("slotMetricVersion",0)!=2)return null;
+            return filterSetOverview(snapshot,query);
         }catch(Exception error){
             android.util.Log.w("ArcaneVault","Set snapshot unavailable",error);
             return null;
@@ -1359,6 +1364,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             }
         }
         JSONObject snapshot=new JSONObject().put("sets",rows)
+            .put("slotMetricVersion",2)
             .put("count",rows.length()).put("totalCards",totalCards)
             .put("ownedCards",ownedCards).put("source",source);
         // The dataset itself is persisted, not only the last page/filter.
