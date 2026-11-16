@@ -1510,13 +1510,23 @@ public class MainActivity extends Activity {
                                     " · Android "+conflict.getInt("android")+
                                     " · Windows "+conflict.getInt("windows")+
                                     "\n"+windowsAll.size()+" differing Arena cards";
+                                java.util.Map<String,String> androidDeckBulk=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllDeckConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"android");
+                                java.util.Map<String,String> windowsDeckBulk=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllDeckConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"windows");
                                 String[] choices={
                                     "Keep Android for this card ("+
                                         conflict.getInt("android")+")",
                                     "Use Windows for this card ("+
                                         conflict.getInt("windows")+")",
                                     "Use Android for all "+androidAll.size()+" differences",
-                                    "Use Windows for all "+windowsAll.size()+" differences"
+                                    "Use Windows for all "+windowsAll.size()+" differences",
+                                    "Use Android for all Arena + saved decks",
+                                    "Use Windows for all Arena + saved decks"
                                 };
                                 runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                                     .setTitle(heading)
@@ -1529,10 +1539,17 @@ public class MainActivity extends Activity {
                                             next.putAll(androidAll);
                                         }else if(which==3){
                                             next.putAll(windowsAll);
-                                        }else return;
+                                        }else if(which!=4&&which!=5)return;
+                                        java.util.Map<String,String> combinedDecks=
+                                            new java.util.HashMap<>(deckDecisions);
+                                        if(which==4||which==5){
+                                            next.putAll(which==4?androidAll:windowsAll);
+                                            combinedDecks.putAll(which==4?
+                                                androidDeckBulk:windowsDeckBulk);
+                                        }
                                         applyPeerInventorySnapshot(
                                             ()->incomingSnapshot,()->baseSnapshot,
-                                            next,deckDecisions,local);
+                                            next,combinedDecks,local);
                                     })
                                     .setNegativeButton("Cancel",null).show());
                                 return;
