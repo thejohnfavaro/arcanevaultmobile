@@ -30,6 +30,10 @@ assert.match(activity,/\.chooseAllArenaConflicts\(local,incomingSnapshot,/,
     'Bulk choices must be validated against both snapshots and the baseline');
 assert.match(activity,/next\.putAll\(androidAll\)/);
 assert.match(activity,/next\.putAll\(windowsAll\)/);
+assert.match(activity,/No changes to apply/,
+    'A no-op peer proposal must not be reported as a completed sync');
+assert.match(activity,/differing shared Arena card record\(s\)/,
+    'Bulk authority must explain that it covers all differing shared Arena records');
 assert.match(activity,/NativePeerInventoryApply\.applyInventoryPart\(/);
 assert.match(screen,/Scan QR & review Windows changes/);
 assert.match(screen,/baseline and explicit confirmation/);
