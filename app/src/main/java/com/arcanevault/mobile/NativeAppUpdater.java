@@ -53,8 +53,16 @@ final class NativeAppUpdater {
                 ui.post(() -> {
                     if (activity.isFinishing() || activity.isDestroyed()) return;
                     if (release == null) {
-                        new AlertDialog.Builder(activity).setTitle("Arcane Vault is up to date")
-                            .setMessage("No newer signed Android release is available.")
+                        String installed=BuildConfig.VERSION_NAME;
+                        new AlertDialog.Builder(activity)
+                            .setTitle("No newer published APK found")
+                            .setMessage("Installed Android version: "+installed+
+                                "\n\nThe updater checks published, signed APK releases "+
+                                "with verified checksums. New GitHub source commits "+
+                                "and passing debug builds do not count as installable "+
+                                "updates. If you expect a later version, check the "+
+                                "Android Signed Release workflow or the releases page "+
+                                "for a failed or unpublished release.")
                             .setPositiveButton("OK", null).show();
                         return;
                     }
