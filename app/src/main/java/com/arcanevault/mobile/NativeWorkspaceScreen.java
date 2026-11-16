@@ -1120,6 +1120,49 @@ final class NativeWorkspaceScreen {
                     }catch(Exception error){info("Import rejected: "+error.getMessage());}
                 }).show();
         });
+        // Smart Mana edits the UNSAVED draft on one tap, without altering
+        // saved deck data, spells, existing nonbasics or either ownership pool.
+        Button smartMana=VaultNativeStyle.button(activity,
+            "Smart Mana — Optimize Now",true);
+        fields.addView(smartMana,new LinearLayout.LayoutParams(-1,dp(48)));
+        smartMana.setOnClickListener(v->{
+            final String original=lines.getText().toString();
+            final int current=deckPageGeneration;
+            smartMana.setEnabled(false);
+            status.setText("Smart Mana: checking owned shock and untapped lands…");
+            executor.execute(()->{
+                try{
+                    JSONArray physical=new JSONArray(prefs.getString(
+                        "vault_physicalCollectionV1","[]"));
+                    JSONArray arenaCards=new JSONArray(prefs.getString(
+                        "vault_cards","[]"));
+                    NativeSmartMana.Plan plan=NativeSmartMana.analyze(
+                        catalog,deck,original,physical,arenaCards);
+                    String updated=NativeSmartMana.apply(original,plan);
+                    ui.post(()->{
+                        if(closed||current!=deckPageGeneration)return;
+                        smartMana.setEnabled(true);
+                        if(!original.equals(lines.getText().toString())){
+                            status.setText("Draft changed; run Smart Mana again.");
+                            return;
+                        }
+                        if(plan.swaps.isEmpty()){
+                            status.setText(plan.summary());
+                            return;
+                        }
+                        lines.setText(updated);
+                        status.setText(plan.summary()+" · UNSAVED draft only. "+
+                            "Review & Save remains separate.");
+                    });
+                }catch(Exception error){
+                    ui.post(()->{
+                        if(closed||current!=deckPageGeneration)return;
+                        smartMana.setEnabled(true);
+                        status.setText("Smart Mana made no changes: "+error.getMessage());
+                    });
+                }
+            });
+        });
         // Owned substitutions are staged only in the existing unsaved editor.
         // Every approval rechecks inventory, legality and the draft itself.
         Button planSubstitutions=VaultNativeStyle.button(activity,
