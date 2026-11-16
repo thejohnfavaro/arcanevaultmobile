@@ -59,10 +59,10 @@ final class NativePeerCheckpoint {
                 .format(new java.util.Date(file.lastModified()));
             String revision=snapshot.optString("revision","");
             String shortRevision=revision.length()>=12?revision.substring(0,12):"unknown";
-            return "Verified checkpoint: "+when+"\\nPeer: "+
+            return "Verified checkpoint: "+when+"\nPeer: "+
                 peerDevice.substring(0,Math.min(8,peerDevice.length()))+
-                "…\\nRevision: "+shortRevision+
-                "\\nThe checkpoint permits comparison only. Review and approve"+
+                "…\nRevision: "+shortRevision+
+                "\nThe checkpoint permits comparison only. Review and approve"+
                 " changes before applying them.";
         }catch(Exception invalid){
             return "The saved peer checkpoint cannot be validated. "+
