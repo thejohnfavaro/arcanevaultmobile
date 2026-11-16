@@ -23,4 +23,22 @@ assert.match(peer,/preferredArtwork/);
 assert.match(peer,/Duplicate /,'Duplicate identities should stop sync');
 assert.match(peer,/safeToAutoApply",false/,'No silent auto-overwrite');
 assert.doesNotMatch(peer,/\.commit\(\)|\.apply\(\)|INSERT INTO|DELETE FROM/,'Preview contract must not write inventory');
+const checkpoint=fs.readFileSync(
+  'app/src/main/java/com/arcanevault/mobile/NativePeerCheckpoint.java','utf8');
+const delta=fs.readFileSync(
+  'app/src/main/java/com/arcanevault/mobile/next/NativePeerDeltaManifest.java','utf8');
+const nativeMirror=fs.readFileSync(
+  'app/src/main/java/com/arcanevault/mobile/NativeDeckArtworkMirror.java','utf8');
+assert.match(checkpoint,/static String overview\(Context context\)/,
+  'Device sync should display only validated checkpoint metadata');
+assert.match(data,/NativePeerCheckpoint\.overview\(activity\)/);
+assert.match(delta,/public static JSONObject compare\(JSONObject base,JSONObject current\)/,
+  'Differential protocol must remain a read-only manifest');
+assert.match(delta,/baseRevision/);
+assert.match(delta,/targetRevision/);
+assert.match(nativeMirror,/static void saveObserved\(/,
+  'Native mirror must be a verified observation, not an unchecked authority switch');
+assert.match(main,/NativeDeckArtworkMirror\.saveObserved\(/);
+assert.match(main,/Use Windows for all Arena \+ saved decks/);
+assert.match(main,/Use Android for all Arena \+ saved decks/);
 console.log('PASS: Android offline peer snapshot and no-write reconciliation wire-up');
