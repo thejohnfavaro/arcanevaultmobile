@@ -1433,7 +1433,11 @@ public class MainActivity extends Activity {
                             .append("\nSaved decks: ").append(decksChanged?"Update":"Unchanged")
                             .append("\nPreferred artwork: ").append(artworkChanged?"Update":"Unchanged")
                             .append("\nLocal-only edits preserved: ")
-                            .append(proposal.optInt("localChanges",0)).append("\n\n");
+                            .append(proposal.optInt("localChanges",0))
+                            .append("\n")
+                            .append(com.arcanevault.mobile.next.NativePeerDeltaManifest
+                                .describeSafe(original,remote))
+                            .append("\n\n");
                         for(int i=0;i<Math.min(10,changes.length());i++){
                             JSONObject entry=changes.getJSONObject(i);
                             long quantity=entry.getLong("delta");
