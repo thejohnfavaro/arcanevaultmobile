@@ -33,6 +33,22 @@ public final class NativePeerDeltaManifestTest {
         assertEquals(2,base.getJSONObject("data").getJSONArray("cards")
             .getJSONObject(0).getInt("qty"));
     }
+    @Test public void safeDescriptionRemainsReadOnlyAndFallsBackOnBadRecords()
+            throws Exception {
+        JSONObject base=snapshot(2,null),now=snapshot(4,"Artificial Anomaly");
+        String summary=NativePeerDeltaManifest.describeSafe(base,now);
+        assertTrue(summary.contains("2 changed record(s)"));
+        assertTrue(summary.contains("Arena 2"));
+        assertTrue(summary.contains("Decks 0"));
+        JSONObject malformed=new JSONObject(now.toString());
+        malformed.getJSONObject("data").getJSONArray("cards")
+            .put(new JSONObject().put("name","Lightning Bolt").put("qty",999));
+        assertTrue(NativePeerDeltaManifest.describeSafe(base,malformed)
+            .contains("Full-snapshot verification remains in effect"));
+        assertEquals(2,base.getJSONObject("data").getJSONArray("cards")
+            .getJSONObject(0).getInt("qty"));
+    }
+
     @Test public void missingRecordIsNotAnAutomaticDeletion()throws Exception {
         JSONObject old=snapshot(2,"Artificial Anomaly"),now=snapshot(2,null);
         JSONArray delta=NativePeerDeltaManifest.compare(old,now)
