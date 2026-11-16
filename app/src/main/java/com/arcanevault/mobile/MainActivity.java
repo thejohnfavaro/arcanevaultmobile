@@ -1463,24 +1463,43 @@ public class MainActivity extends Activity {
                                     "\n\nChoose which CURRENT quantity to retain for "+
                                     "this card only. Other differences still require "+
                                     "review. No data changes before final approval.";
+                                java.util.Map<String,String> windowsAll=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllArenaConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"windows");
+                                java.util.Map<String,String> androidAll=
+                                    com.arcanevault.mobile.next.NativePeerSync
+                                        .chooseAllArenaConflicts(local,incomingSnapshot,
+                                            baseSnapshot,"android");
+                                String bulkInfo="\\n\\n"+windowsAll.size()+
+                                    " conflicting Arena card(s) in this comparison. "+
+                                    "Use Windows for all / Use Android for all "+
+                                    "selects the respective full card records for "+
+                                    "every Arena conflict. Non-Arena conflicts "+
+                                    "are NEVER overridden.";
+                                String[] choices={
+                                    "Keep Android (this card)",
+                                    "Use Windows (this card)",
+                                    "Use Android for all Arena conflicts",
+                                    "Use Windows for all Arena conflicts"
+                                };
                                 runOnUiThread(()->new android.app.AlertDialog.Builder(this)
                                     .setTitle("Resolve Arena card conflict")
-                                    .setMessage(detail)
-                                    .setNeutralButton("Cancel",null)
-                                    .setNegativeButton("Keep Android",(d,w)->{
+                                    .setMessage(detail+bulkInfo)
+                                    .setItems(choices,(dialog,which)->{
                                         java.util.Map<String,String> next=
                                             new java.util.HashMap<>(decisions);
-                                        next.put(key,"android");
+                                        if(which==0)next.put(key,"android");
+                                        else if(which==1)next.put(key,"windows");
+                                        else if(which==2){
+                                            next.putAll(androidAll);
+                                        }else if(which==3){
+                                            next.putAll(windowsAll);
+                                        }else return;
                                         applyPeerInventorySnapshot(
                                             ()->incomingSnapshot,()->baseSnapshot,next,local);
                                     })
-                                    .setPositiveButton("Use Windows",(d,w)->{
-                                        java.util.Map<String,String> next=
-                                            new java.util.HashMap<>(decisions);
-                                        next.put(key,"windows");
-                                        applyPeerInventorySnapshot(
-                                            ()->incomingSnapshot,()->baseSnapshot,next,local);
-                                    }).show());
+                                    .setNegativeButton("Cancel",null).show());
                                 return;
                             }catch(Exception invalid){
                                 message="Arena conflict was detected but its quantities "+
