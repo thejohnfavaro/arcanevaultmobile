@@ -833,11 +833,116 @@ final class NativeCatalogScreen {
         inspectorContent.addView(art,params);
     }
 
+    /** Enter the exact same full Catalog inspector from Set Progress.
+     * The set row supplies verified printing ownership; card metadata comes
+     * from the on-device catalog rather than a second reduced dialog. */
+    void inspectSetPrinting(JSONObject printing,String setName,String source,
+            int confirmedQty,Runnable returnToSet) {
+        String name=printing.optString("name","").trim();
+        if(name.isEmpty()){status.setText("Printing has no card name");return;}
+        openInspector(name);
+        inspectorBack=returnToSet;
+        inspectorContent.addView(text("Loading official card details…",14,false));
+        final int token=inspectorRequest;
+        worker.execute(()->{
+            try {
+                Map<String,String> args=new HashMap<>();
+                args.put("q",name);args.put("source","both");args.put("size","120");
+                JSONObject result=catalog.search(args);
+                JSONArray rows=result.getJSONArray("cards");
+                JSONObject found=null;
+                for(int i=0;i<rows.length();i++){
+                    JSONObject candidate=rows.optJSONObject(i);
+                    if(candidate!=null&&name.equalsIgnoreCase(candidate.optString("name",""))){
+                        found=candidate;break;
+                    }
+                }
+                if(found==null)throw new IllegalStateException(
+                    "Card metadata is not indexed yet. Refresh Scryfall catalog.");
+                JSONObject row=found;
+                ui.post(()->{
+                    if(disposed||activity.isFinishing()||token!=inspectorRequest)return;
+                    JSONObject meta=row.optJSONObject("meta");
+                    if(meta==null)meta=new JSONObject();
+                    showDetails(name,meta.optString("type",""),meta.optString("oracle",""),
+                        meta.optString("rarity",""),meta.optString("image",""),
+                        meta.optString("imageBack",""),row.optInt("arenaQty",0),
+                        row.optInt("physicalQty",0),printing,setName,source,
+                        confirmedQty,meta,returnToSet);
+                });
+            }catch(Exception error){
+                ui.post(()->{
+                    if(disposed||token!=inspectorRequest)return;
+                    inspectorContent.removeAllViews();
+                    Button back=VaultNativeStyle.button(activity,"← Back to set",false);
+                    inspectorContent.addView(back);
+                    back.setOnClickListener(v->returnToSet.run());
+                    inspectorContent.addView(text(
+                        "Card details unavailable: "+error.getMessage(),14,false));
+                });
+            }
+        });
+    }
+
     private void showDetails(String name,String type,String oracle,String rarity,
             String imageUrl,String imageBack,int arenaQty,int physicalQty) {
+        showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty,
+            null,"","",0,null,null);
+    }
+
+    private void showDetails(String name,String type,String oracle,String rarity,
+            String imageUrl,String imageBack,int arenaQty,int physicalQty,
+            JSONObject printing,String setName,String source,int selectedCopies,
+            JSONObject metadata,Runnable returnToSet) {
         openInspector(name);
-        inspectorBack=null;
-        addInspectorArtwork(name,imageUrl,imageBack);
+        inspectorBack=returnToSet;
+        if(returnToSet!=null){
+            Button back=(Button)inspectorContent.getChildAt(0);
+            back.setText("← Back to set");
+        }
+        String front=printing!=null?printing.optString("image",imageUrl):imageUrl;
+        String backArt=printing!=null?printing.optString("imageBack",imageBack):imageBack;
+        addInspectorArtwork(name,front,backArt);
+        if(printing!=null){
+            String edition=source.equals("physical")?
+                setName+" · #"+printing.optString("collectorNumber",""):
+                setName+" · Arena card-name coverage";
+            TextView selected=text(edition+"\n"+(source.equals("physical")?
+                "Confirmed edition copies: ":"Arena copies: ")+selectedCopies+
+                (source.equals("physical")?
+                "\nPrinting ID: "+printing.optString("id",""):""),13,true);
+            selected.setTextColor(VaultNativeStyle.PRIMARY);
+            inspectorContent.addView(selected);
+        }
+        if(metadata!=null){
+            StringBuilder extra=new StringBuilder();
+            if(metadata.has("mv"))extra.append("Mana value: ").append(metadata.optDouble("mv",0)).append("\n");
+            JSONArray colors=metadata.optJSONArray("colors");
+            if(colors!=null){
+                extra.append("Color identity: ");
+                if(colors.length()==0)extra.append("Colorless");
+                else for(int i=0;i<colors.length();i++){
+                    if(i>0)extra.append(", ");
+                    extra.append(colors.optString(i));
+                }
+                extra.append("\n");
+            }
+            JSONObject legalities=metadata.optJSONObject("legalities");
+            if(legalities!=null&&legalities.length()>0){
+                extra.append("\nFORMAT LEGALITIES (cached)\n");
+                java.util.ArrayList<String> formats=new java.util.ArrayList<>();
+                for(java.util.Iterator<String> it=legalities.keys();it.hasNext();)formats.add(it.next());
+                java.util.Collections.sort(formats);
+                for(String format:formats)
+                    extra.append(format).append(": ")
+                        .append(legalities.optString(format,"unknown")).append("\n");
+            }
+            if(extra.length()>0){
+                TextView metaInfo=text(extra.toString().trim(),13,false);
+                metaInfo.setTextColor(VaultNativeStyle.SUBTEXT);
+                inspectorContent.addView(metaInfo);
+            }
+        }
         TextView typeLine=text(type,14,true);
         typeLine.setTextColor(VaultNativeStyle.SUBTEXT);
         inspectorContent.addView(typeLine);
