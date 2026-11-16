@@ -351,16 +351,18 @@ final class NativeCommanderBrowserScreen {
             "View saved decks with this commander",true);
         savedDecks.setOnClickListener(v->openCommanderDecks.accept(name));
         addRow(preview,savedDecks);
-        Button legacy=VaultNativeStyle.button(activity,
-            "Copy commander name & open deck editor",false);
-        legacy.setOnClickListener(v->{
+        Button copyName=VaultNativeStyle.button(activity,
+            "Copy commander name",false);
+        copyName.setOnClickListener(v->{
             ClipboardManager clip=(ClipboardManager)
                 activity.getSystemService(Context.CLIPBOARD_SERVICE);
             if(clip!=null)clip.setPrimaryClip(ClipData.newPlainText(
                 "Commander",name));
-            openLegacy.run();
+            android.widget.Toast.makeText(activity,
+                "Commander copied. Open Deck Library to edit a deck.",
+                android.widget.Toast.LENGTH_SHORT).show();
         });
-        addRow(preview,legacy);
+        addRow(preview,copyName);
         previewScroll.post(()->previewScroll.scrollTo(0,0));
     }
     private void loadRowArt(ImageView view,String url){
