@@ -21,6 +21,9 @@
 - Paired-device baseline prompts hid which checkpoint they were about to use.
 - Native saved-deck recovery mirror could not be inspected or exported.
 
+## Removed
+- No former data stores, collections, decks or sync mechanisms removed; this release retains backward compatibility.
+
 ## Remaining work
 - Differential **transport and apply** are not switched on: Windows and Android must first negotiate base revisions, tombstone rules, payload checksums and fallback semantics.
 - A full authoritative native saved-deck/artwork storage cutover is not yet enabled; the verified mirror is a recovery safeguard.
