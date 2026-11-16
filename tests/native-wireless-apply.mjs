@@ -9,8 +9,17 @@ assert.match(activity,/NativeWirelessPeerClient\s*\n\s*\.receive\(link\)/);
 assert.match(activity,/chooseWirelessApplyBaseline\(remote\)/);
 assert.match(activity,/pendingWirelessIncoming=null;/);
 assert.match(activity,/applyPeerInventorySnapshot\(\(\)->received,data\.getData\(\)\)/);
-assert.match(activity,/JSONObject remote=incoming\.load\(\)/);
-assert.match(activity,/NativePeerSync\s*\n\s*\.prepareMerge\(local,remote,original\)/);
+assert.match(activity,/JSONObject remote=null,original=null;/,
+    'Keep incoming snapshot available when a conflict needs review');
+assert.match(activity,/remote=incoming\.load\(\)/,
+    'Read incoming peer snapshot after declaring its retained reference');
+assert.match(activity,/NativePeerSync\s*\n\s*\.prepareMerge\(local,remote,original,decisions\)/,
+    'Three-way peer merge must pass explicit, scoped conflict decisions');
+assert.match(activity,/\.describeArenaConflict\(local,incomingSnapshot,baseSnapshot,/,
+    'Conflicting Arena cards must display verified baseline/Android/Windows quantities');
+assert.match(activity,/\.setTitle\("Resolve Arena card conflict"\)/);
+assert.match(activity,/\.setNegativeButton\("Keep Android"/);
+assert.match(activity,/\.setPositiveButton\("Use Windows"/);
 assert.match(activity,/NativePeerInventoryApply\.applyInventoryPart\(/);
 assert.match(screen,/Scan QR & review Windows changes/);
 assert.match(screen,/baseline and explicit confirmation/);
