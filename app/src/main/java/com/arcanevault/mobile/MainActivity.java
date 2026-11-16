@@ -1070,6 +1070,36 @@ public class MainActivity extends Activity {
      * This is a local reference/recovery snapshot, NOT a confirmed common
      * Windows/Android baseline. Retain every previous snapshot.
      */
+    /** Save an existing hash-verified native recovery copy through Android's
+     * document picker. Never restore or replace the live deck authority. */
+    void exportNativeDeckArtworkMirror(){
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Export native deck recovery copy?")
+            .setMessage(NativeDeckArtworkMirror.overview(this)+
+                "\n\nThis is a recovery file, not a complete collection backup."+
+                " Use Save Sync Snapshot for inventory plus decks and artwork.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Export verified copy",(d,w)->new Thread(()->{
+                try{
+                    byte[] bytes=NativeDeckArtworkMirror.exportVerified(this);
+                    runOnUiThread(()->{
+                        pendingExport=bytes;
+                        Intent picker=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        picker.addCategory(Intent.CATEGORY_OPENABLE);
+                        picker.setType("application/json");
+                        picker.putExtra(Intent.EXTRA_TITLE,
+                            "ArcaneVault-Deck-Artwork-Recovery-"+java.time.LocalDate.now()+".json");
+                        try{startActivityForResult(picker,FILE_SAVE);}
+                        catch(Exception error){
+                            pendingExport=null;toast("Could not open the export destination");
+                        }
+                    });
+                }catch(Exception error){
+                    runOnUiThread(()->toast("Recovery copy unavailable: "+error.getMessage()));
+                }
+            },"ArcaneVault-Mirror-Export").start()).show();
+    }
+
     void createSyncSnapshot() {
         withPeerData((decks,art)->{
             try {
