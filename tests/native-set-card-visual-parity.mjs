@@ -46,4 +46,20 @@ assert.match(source,/tile\.setScaleType\(ImageView\.ScaleType\.FIT_CENTER\)/,
  'Native ImageView must not stretch rendered text or symbols');
 assert.doesNotMatch(source,/tile\.setScaleType\(ImageView\.ScaleType\.FIT_XY\)/,
  'Stretched image cards distort typography');
+// Set drill-down must have its own usable viewport, without the overview
+// controls occupying half the screen or a text-only card inspector.
+assert.match(source,/setOverviewFilters\.setVisibility\(View\.GONE\)/,
+ 'Hide overview sorting and source controls in set detail');
+assert.match(source,/setOverviewSearch\.setVisibility\(View\.GONE\)/,
+ 'Hide overview set search in set detail');
+assert.match(source,/setOverviewFilters\.setVisibility\(View\.VISIBLE\)/,
+ 'Restore overview controls on return to sets');
+assert.match(source,/setOverviewSearch\.setVisibility\(View\.VISIBLE\)/,
+ 'Restore overview search on return to sets');
+assert.match(source,/showSetCardPreview\(p,title,source,qty\)/,
+ 'Set card rows must open an actual printing-aware preview');
+assert.match(source,/artwork\.get\(imageUrl\)/,
+ 'Set card previews use bounded official artwork cache');
+assert.match(source,/Printing ID: /,
+ 'Owned physical printing identity must remain visible');
 console.log('PASS: visual set-card parity, cached cover art, icons and completion safety');
