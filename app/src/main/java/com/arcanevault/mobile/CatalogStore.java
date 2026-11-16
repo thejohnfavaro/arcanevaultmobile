@@ -227,6 +227,8 @@ final class CatalogStore extends SQLiteOpenHelper {
                 shown.put(set);
         }
         return new JSONObject().put("sets",shown).put("count",shown.length())
+            .put("totalCards",snapshot.optInt("totalCards",-1))
+            .put("ownedCards",snapshot.optInt("ownedCards",-1))
             .put("source",snapshot.optString("source",""))
             .put("cached",true);
     }
