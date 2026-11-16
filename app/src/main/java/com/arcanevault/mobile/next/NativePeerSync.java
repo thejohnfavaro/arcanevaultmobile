@@ -163,8 +163,9 @@ public final class NativePeerSync {
             if(android==null||windows==null)continue;
             decisions.put(key,source);
         }
-        if(decisions.isEmpty())
-            throw new IllegalArgumentException("No unresolved Arena conflicts to choose");
+        // A zero-difference category is valid for a combined review.
+        // Missing rows still remain outside these choices and retain the
+        // existing three-way tombstone checks in prepareMerge.
         return decisions;
     }
 
