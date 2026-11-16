@@ -206,12 +206,8 @@ public final class NativePeerSyncTest {
         // Missing rows are excluded from bulk authority, not used as
         // permission to delete. The actual merge still rejects the absence.
         windows.getJSONObject("data").put("cards",new JSONArray());
-        try {
-            NativePeerSync.chooseAllArenaConflicts(android,windows,baseline,"windows");
-            fail("No shared record should be eligible for a bulk choice");
-        }catch(IllegalArgumentException expected){
-            assertTrue(expected.getMessage().contains("No unresolved"));
-        }
+        assertEquals(0,NativePeerSync.chooseAllArenaConflicts(
+            android,windows,baseline,"windows").size());
         try {
             NativePeerSync.prepareMerge(android,windows,baseline);
             fail("Implicit remote deletion must still be rejected");
