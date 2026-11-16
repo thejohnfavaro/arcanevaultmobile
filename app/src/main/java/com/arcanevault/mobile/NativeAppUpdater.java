@@ -53,7 +53,13 @@ final class NativeAppUpdater {
                 ui.post(() -> {
                     if (activity.isFinishing() || activity.isDestroyed()) return;
                     if (release == null) {
-                        String installed=BuildConfig.VERSION_NAME;
+                        String installed;
+                        try {
+                            installed=activity.getPackageManager()
+                                .getPackageInfo(activity.getPackageName(),0).versionName;
+                        } catch(android.content.pm.PackageManager.NameNotFoundException ignored) {
+                            installed="unknown";
+                        }
                         new AlertDialog.Builder(activity)
                             .setTitle("No newer published APK found")
                             .setMessage("Installed Android version: "+installed+
