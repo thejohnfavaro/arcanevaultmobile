@@ -168,7 +168,7 @@ final class NativeCompanionScreen {
     private String primaryScope(){
         if(scope.equals("physical")||scope.equals("arena")||scope.equals("sets"))
             return "collection";
-        if(scope.equals("decks")||scope.equals("edh lab"))return "decks";
+        if(scope.equals("decks")||scope.equals("edh lab")||scope.equals("analytics"))return "decks";
         if(scope.equals("shortlist"))return "catalog";
         if(scope.equals("data & sync"))return "sync";
         return scope;
@@ -224,6 +224,7 @@ final class NativeCompanionScreen {
             }
         } else if(primary.equals("decks")){
             addSecondaryTab("Deck Library","decks");
+            addSecondaryTab("Deck Analytics","analytics");
             addSecondaryTab("EDH Lab","edh lab");
         } else if(primary.equals("sync")){
             // The old WebView UI is retired. Its hidden storage bridge
@@ -318,6 +319,12 @@ final class NativeCompanionScreen {
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
                 scope.equals("decks")?"Saved deck library":
                 scope.equals("shortlist")?"Cards saved for later":"Backups, sync and recovery");
+            return;
+        }
+        if(scope.equals("analytics")){
+            stage.addView(NativeMatchAnalyticsScreen.create(activity,prefs),
+                new FrameLayout.LayoutParams(-1,-1));
+            subtitle.setText("Verified Arena results from Windows sync");
             return;
         }
         if(scope.equals("edh lab")){
