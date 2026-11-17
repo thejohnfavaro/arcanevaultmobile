@@ -1833,9 +1833,30 @@ public class MainActivity extends Activity {
                         }
                         if(changes.length()>10)message.append("\n… and ")
                             .append(changes.length()-10).append(" more");
-                        runOnUiThread(()->new android.app.AlertDialog.Builder(this)
-                            .setTitle("Windows / Android peer comparison")
-                            .setMessage(message.toString()).setPositiveButton("Close",null).show());
+                        // Analytics are optional read-only presentation metadata.
+                        // A separate confirmation keeps them outside inventory merge.
+                        JSONObject pendingAnalytics=null;
+                        if(remote.has("matchAnalytics"))
+                            pendingAnalytics=NativeMatchAnalyticsSnapshot.fromPeer(remote);
+                        final JSONObject reviewedAnalytics=pendingAnalytics;
+                        runOnUiThread(()->{
+                            android.app.AlertDialog.Builder dialog=new android.app.AlertDialog.Builder(this)
+                                .setTitle("Windows / Android peer comparison")
+                                .setMessage(message.toString()+
+                                    (reviewedAnalytics==null?"":"\n\nWindows match analytics are available for read-only import."))
+                                .setPositiveButton("Close",null);
+                            if(reviewedAnalytics!=null)
+                                dialog.setNeutralButton("Import analytics",(d,w)->{
+                                    boolean saved=durable.edit().putString(
+                                        NativeMatchAnalyticsSnapshot.PREF_KEY,
+                                        reviewedAnalytics.toString()).commit();
+                                    if(saved){
+                                        toast("Read-only Arena analytics imported");
+                                        if(nativeController!=null)nativeController.refresh();
+                                    }else toast("Analytics could not be saved; retry import");
+                                });
+                            dialog.show();
+                        });
                     }catch(Exception error){runOnUiThread(()->toast(
                         "Could not preview peer file: "+error.getMessage()));}
                 });
