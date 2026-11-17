@@ -24,15 +24,19 @@ final class NativeMatchAnalyticsScreen {
     private final SharedPreferences prefs;
     private final LinearLayout root;
     private final LinearLayout output;
-    private final Spinner deck=new Spinner(null);
-    private final Spinner comparison=new Spinner(null);
-    private final Spinner queue=new Spinner(null);
-    private final Spinner period=new Spinner(null);
+    private final Spinner deck;
+    private final Spinner comparison;
+    private final Spinner queue;
+    private final Spinner period;
     private JSONObject data;
     private boolean preparing;
 
     private NativeMatchAnalyticsScreen(Activity context,SharedPreferences saved){
         activity=context;prefs=saved;
+        deck=new Spinner(activity);
+        comparison=new Spinner(activity);
+        queue=new Spinner(activity);
+        period=new Spinner(activity);
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(18),dp(14),dp(18),dp(14));
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
