@@ -1836,13 +1836,21 @@ public class MainActivity extends Activity {
                         // Analytics are optional read-only presentation metadata.
                         // A separate confirmation keeps them outside inventory merge.
                         JSONObject pendingAnalytics=null;
-                        if(remote.has("matchAnalytics"))
-                            pendingAnalytics=NativeMatchAnalyticsSnapshot.fromPeer(remote);
+                        String analyticsWarning="";
+                        if(remote.has("matchAnalytics")) {
+                            try {
+                                pendingAnalytics=NativeMatchAnalyticsSnapshot.fromPeer(remote);
+                            } catch(Exception invalidAnalytics) {
+                                analyticsWarning="\\n\\nOptional match analytics were rejected: "+
+                                    invalidAnalytics.getMessage();
+                            }
+                        }
                         final JSONObject reviewedAnalytics=pendingAnalytics;
+                        final String optionalWarning=analyticsWarning;
                         runOnUiThread(()->{
                             android.app.AlertDialog.Builder dialog=new android.app.AlertDialog.Builder(this)
                                 .setTitle("Windows / Android peer comparison")
-                                .setMessage(message.toString()+
+                                .setMessage(message.toString()+optionalWarning+
                                     (reviewedAnalytics==null?"":"\n\nWindows match analytics are available for read-only import."))
                                 .setPositiveButton("Close",null);
                             if(reviewedAnalytics!=null)
