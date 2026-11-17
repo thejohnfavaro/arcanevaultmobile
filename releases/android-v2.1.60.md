@@ -5,7 +5,7 @@
 - Primary/secondary deck comparison, Arena format filtering and 30/90-day or lifetime filters.
 - Optional Windows-to-Android match analytics import from a reviewed Windows peer file. Tap **Data & Sync → Preview peer file → Import analytics** to save an explicitly confirmed local read-only copy.
 - Validated bounded analytics payload with a maximum of 2,000 confirmed outcomes and strict recorded-result formats.
-- JVM regression coverage for parsing, selective import, format filters and time range behavior.
+- JVM regression coverage for parsing, selective import, UTC week boundaries, format filters and time range behavior.
 
 ## Changed
 - Deck Analytics is driven solely by existing Windows confirmed match records embedded as optional presentation-only metadata in the peer envelope. The existing native collection, Arena inventory and deck records are unaffected.
