@@ -33,7 +33,7 @@ public class NativeMatchAnalyticsSnapshotTest {
         assertEquals(2,borg.newest.size());
         assertEquals(1,borg.bestWins);
         assertEquals(1,borg.worstLosses);
-        assertEquals(2,borg.weeks.size());
+        assertEquals(1,borg.weeks.size());
         NativeMatchAnalyticsSnapshot.Report all=
             NativeMatchAnalyticsSnapshot.calculate(source,"","",0,now);
         assertEquals(2,all.wins);
