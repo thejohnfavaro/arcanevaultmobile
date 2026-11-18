@@ -93,6 +93,14 @@ public final class NativePeerSync {
         return data;
     }
 
+    /** Validate all required peer fields before a saved checkpoint can be
+     * shown as usable. This is structural verification, NOT authenticated
+     * pairing, and never permits automatic merge. */
+    public static String verifiedPeerDevice(JSONObject envelope)throws Exception {
+        require(envelope);
+        return verifiedDeviceId(envelope.getString("deviceId"));
+    }
+
     private static String norm(String value){
         return value==null?"":value.trim().toLowerCase(Locale.ROOT);
     }
