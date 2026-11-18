@@ -68,6 +68,23 @@ public final class NativePeerSyncTest {
         }catch(IllegalArgumentException expected){}
     }
 
+    @Test public void optionalAnalyticsCannotChangeInventoryReviewAndBadPeerIdIsRejected()
+            throws Exception {
+        JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
+        JSONObject remote=peer("00000000-0000-4000-8000-000000000702",4);
+        remote.put("matchAnalytics",new JSONObject().put("schema",1)
+            .put("records",new JSONArray().put(new JSONObject()
+                .put("deckName","Test").put("result","win"))));
+        JSONObject review=NativePeerSync.preview(local,remote);
+        assertEquals(0,review.getJSONArray("changes").length());
+        assertEquals(4,review.getInt("equal"));
+        remote.put("deviceId","000-000-4000-8000-000000000702");
+        try{
+            NativePeerSync.preview(local,remote);
+            fail("Peer previews must not accept a noncanonical identity");
+        }catch(IllegalArgumentException expected){}
+    }
+
     @Test public void identicalPeerIsNoop()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject other=peer("00000000-0000-4000-8000-000000000702",4);
