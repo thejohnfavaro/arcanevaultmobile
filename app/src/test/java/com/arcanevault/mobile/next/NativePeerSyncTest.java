@@ -85,6 +85,27 @@ public final class NativePeerSyncTest {
         }catch(IllegalArgumentException expected){}
     }
 
+    @Test public void checkpointEnvelopeMustValidateSchemaAndExpectedIdentity()
+            throws Exception {
+        JSONObject original=peer("00000000-0000-4000-8000-000000000702",4);
+        assertEquals("00000000-0000-4000-8000-000000000702",
+            NativePeerSync.verifiedPeerDevice(original));
+        JSONObject wrongFormat=new JSONObject(original.toString());
+        wrongFormat.put("format","not-a-peer");
+        try{
+            NativePeerSync.verifiedPeerDevice(wrongFormat);
+            fail("Invalid checkpoint format cannot be trusted");
+        }catch(IllegalArgumentException expected){}
+        JSONObject damaged=new JSONObject(original.toString());
+        damaged.getJSONObject("data").remove("physicalCards");
+        try{
+            NativePeerSync.verifiedPeerDevice(damaged);
+            fail("Incomplete checkpoint cannot count as verified");
+        }catch(org.json.JSONException expected){}
+        assertEquals("00000000-0000-4000-8000-000000000702",
+            NativePeerSync.verifiedPeerDevice(original));
+    }
+
     @Test public void identicalPeerIsNoop()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject other=peer("00000000-0000-4000-8000-000000000702",4);
