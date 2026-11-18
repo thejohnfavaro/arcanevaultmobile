@@ -25,6 +25,20 @@ public final class NativePeerSync {
     public static final int MAX_BYTES=30*1024*1024;
     private NativePeerSync() {}
 
+    /** Stable peer identities are never repaired by generating a new UUID.
+     * Losing the original ID would silently sever saved sync baselines. */
+    public static String verifiedDeviceId(String value) {
+        if (value == null || !value.matches(
+            "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))
+            throw new IllegalArgumentException(
+                "Saved peer device identity is invalid; restore it before syncing");
+        UUID uuid=UUID.fromString(value);
+        if (uuid.equals(new UUID(0,0)))
+            throw new IllegalArgumentException(
+                "Saved peer device identity must not be empty");
+        return uuid.toString();
+    }
+
     private static String hash(byte[] content)throws Exception {
         byte[] digest=MessageDigest.getInstance("SHA-256").digest(content);
         StringBuilder value=new StringBuilder();
@@ -40,9 +54,7 @@ public final class NativePeerSync {
 
     public static JSONObject export(SharedPreferences storage,String deviceId,
             String deckJson,String artworkJson)throws Exception {
-        if(deviceId==null||deviceId.isEmpty()||
-            new UUID(0,0).equals(UUID.fromString(deviceId)))
-            throw new IllegalArgumentException("Invalid stable device identifier");
+        String verifiedId=verifiedDeviceId(deviceId);
         JSONArray physical=parseRows(storage.getString("vault_physicalCollectionV1","[]"));
         JSONArray arena=parseRows(storage.getString("vault_cards","[]"));
         JSONArray decks=parseRows(deckJson);
@@ -54,7 +66,7 @@ public final class NativePeerSync {
         byte[] source=data.toString().getBytes(StandardCharsets.UTF_8);
         if(source.length>MAX_BYTES)throw new IllegalArgumentException("Peer snapshot too large");
         return new JSONObject().put("format",FORMAT).put("schema",SCHEMA)
-            .put("deviceId",UUID.fromString(deviceId).toString())
+            .put("deviceId",verifiedId)
             .put("revision",hash(source)).put("createdUtc",System.currentTimeMillis())
             .put("data",data);
     }
