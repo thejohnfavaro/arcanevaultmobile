@@ -510,13 +510,17 @@ public class MainActivity extends Activity {
                 }
             });
     }
-    private String peerId() {
+    private synchronized String peerId() {
         String id=durable.getString("peer_sync_device_id_v1",null);
-        if(id!=null)return id;
+        if(id!=null) {
+            // A corrupted UUID is a recoverable storage problem, not a reason
+            // to pretend this phone is a new peer and invalidate its baseline.
+            return com.arcanevault.mobile.next.NativePeerSync.verifiedDeviceId(id);
+        }
         id=java.util.UUID.randomUUID().toString();
         if(!durable.edit().putString("peer_sync_device_id_v1",id).commit())
             throw new IllegalStateException("Could not save device identity");
-        return id;
+        return com.arcanevault.mobile.next.NativePeerSync.verifiedDeviceId(id);
     }
     /** The Windows ADB bridge targets this Activity explicitly and delivers
      * the one-time localhost token. The user must approve the direction here
