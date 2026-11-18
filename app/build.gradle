@@ -6,8 +6,8 @@ android {
   applicationId 'com.arcanevault.mobile'
   minSdk 26
   targetSdk 35
-  versionCode 117
-  versionName '2.1.61'
+  versionCode 118
+  versionName '2.1.62'
  }
  // Signing material is supplied by GitHub Actions secrets (or local environment).
  // Never commit the keystore, its password, or its alias/password to the repository.
