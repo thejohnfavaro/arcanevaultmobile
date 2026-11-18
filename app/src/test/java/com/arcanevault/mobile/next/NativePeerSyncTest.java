@@ -47,6 +47,27 @@ public final class NativePeerSyncTest {
         }
     }
 
+    @Test public void stablePeerDeviceIdMustNotBeReplacedOrSilentlyNormalized()
+            throws Exception {
+        String original="00000000-0000-4000-8000-000000000701";
+        assertEquals(original,NativePeerSync.verifiedDeviceId(original));
+        assertEquals(original,NativePeerSync.verifiedDeviceId(
+            original.toUpperCase(java.util.Locale.ROOT)));
+        for(String invalid:new String[]{
+                "", "broken", "0-0-4000-8000-000000000701",
+                "00000000-0000-0000-0000-000000000000",
+                "00000000-0000-4000-8000-000000000701extra"}) {
+            try{
+                NativePeerSync.verifiedDeviceId(invalid);
+                fail("Peer identity must reject "+invalid);
+            } catch(IllegalArgumentException expected){}
+        }
+        try{
+            NativePeerSync.verifiedDeviceId(null);
+            fail("Missing identity must not be accepted");
+        }catch(IllegalArgumentException expected){}
+    }
+
     @Test public void identicalPeerIsNoop()throws Exception{
         JSONObject local=peer("00000000-0000-4000-8000-000000000701",4);
         JSONObject other=peer("00000000-0000-4000-8000-000000000702",4);
