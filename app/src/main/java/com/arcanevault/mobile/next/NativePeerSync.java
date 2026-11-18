@@ -65,17 +65,21 @@ public final class NativePeerSync {
             .put("source","arcane-vault-android-peer-snapshot");
         byte[] source=data.toString().getBytes(StandardCharsets.UTF_8);
         if(source.length>MAX_BYTES)throw new IllegalArgumentException("Peer snapshot too large");
-        return new JSONObject().put("format",FORMAT).put("schema",SCHEMA)
+        JSONObject envelope=new JSONObject().put("format",FORMAT).put("schema",SCHEMA)
             .put("deviceId",verifiedId)
             .put("revision",hash(source)).put("createdUtc",System.currentTimeMillis())
             .put("data",data);
+        if(envelope.toString().getBytes(StandardCharsets.UTF_8).length>MAX_BYTES)
+            throw new IllegalArgumentException("Complete peer envelope exceeds 30 MiB");
+        return envelope;
     }
 
     private static JSONObject require(JSONObject root)throws Exception {
+        if(root==null||root.toString().getBytes(StandardCharsets.UTF_8).length>MAX_BYTES)
+            throw new IllegalArgumentException("Peer snapshot exceeds 30 MiB");
         if(!FORMAT.equals(root.optString("format",""))||root.optInt("schema")!=SCHEMA)
             throw new IllegalArgumentException("Unsupported Arcane Vault peer file");
-        UUID peer=UUID.fromString(root.getString("deviceId"));
-        if(peer.equals(new UUID(0,0)))throw new IllegalArgumentException("Invalid peer ID");
+        verifiedDeviceId(root.getString("deviceId"));
         String revision=root.getString("revision");
         if(!revision.matches("[a-fA-F0-9]{64}"))
             throw new IllegalArgumentException("Missing peer revision");
