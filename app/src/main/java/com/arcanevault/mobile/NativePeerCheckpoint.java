@@ -80,7 +80,8 @@ final class NativePeerCheckpoint {
             throw new IllegalStateException("Peer checkpoint missing or too large");
         JSONObject snapshot=new JSONObject(
             new String(java.nio.file.Files.readAllBytes(file.toPath()),StandardCharsets.UTF_8));
-        if(!peerDevice.equalsIgnoreCase(snapshot.getString("deviceId")))
+        String actualDevice=NativePeerSync.verifiedPeerDevice(snapshot);
+        if(!peerDevice.equalsIgnoreCase(actualDevice))
             throw new IllegalStateException("Peer checkpoint identity mismatch");
         return snapshot;
     }
