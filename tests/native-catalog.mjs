@@ -12,7 +12,8 @@ assert.match(native,/NativeArtworkQuality\.load\(artwork,imageUrl,/,'Official ar
 assert.match(fs.readFileSync('app/src/main/java/com/arcanevault/mobile/NativeArtworkQuality.java','utf8'),
   /BitmapFactory\.decodeByteArray/,'Shared loader decodes bounded official image bytes');
 assert.match(native,/new AlertDialog\.Builder\(activity\)/,'Native inspector replaces HTML card details');
-assert.match(native,/options\.put\("size","40"\)/,'Bounded native catalog page size');
+assert.match(native,/options\.put\("size",Integer\.toString\(selectedPageSize\)\)/,'Configurable bounded native catalog page size');
+assert.match(native,/pageSize!=20&&pageSize!=40&&pageSize!=80/,'Only safe 20, 40, and 80 row pages');
 assert.match(shell,/new NativeCatalogScreen\(activity, catalog, artwork, prefs\)/);
 assert.match(shell,/destinations=\{"home","catalog","collection","decks","sync"\}/);
 assert.match(shell,/addSecondaryTab\("EDH Lab","edh lab"\)/);
