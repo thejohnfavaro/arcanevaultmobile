@@ -40,5 +40,5 @@ assert.match(native,/options.put\("scope",scope\)/);
 assert.match(native,/buildQuickManaFilters\(\)/);
 assert.match(native,/NativeManaFilterButton\(activity,artwork,color\)/);
 assert.match(native,/advancedFilters.addView\(quickFilters,0\)/);
-assert.match(native,/updateIdentityButtons\(\);page=0;schedule\(\)/);
+assert.match(native,/updateIdentityButtons\(\);(?:inventory\.edit\(\)\.putString\(PREF_COLOR,exactColorIdentity\)\.apply\(\);)?page=0;schedule\(\)/);
 console.log('PASS: Android catalog defaults to Physical + Owned and provides quick official mana toggles');
