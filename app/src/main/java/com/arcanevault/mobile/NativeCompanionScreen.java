@@ -346,7 +346,7 @@ final class NativeCompanionScreen {
         tabs.setVisibility(atTable?View.GONE:View.VISIBLE);
         secondaryScroll.setVisibility(atTable?View.GONE:secondaryScroll.getVisibility());
         if(atTable){
-            tabletop=new NativeTabletopScreen(activity,()->leaveTabletop());
+            tabletop=new NativeTabletopScreen(activity,()->leaveTabletop(),deckLoader);
             stage.addView(tabletop.view(),new FrameLayout.LayoutParams(-1,-1));
             return;
         }
