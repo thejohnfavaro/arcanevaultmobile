@@ -77,6 +77,7 @@ final class NativeCatalogScreen {
     private static final String PREF_SOURCE="native_catalog_source_v2";
     private static final String PREF_OWNED="native_catalog_owned_v2";
     private static final String PREF_VIEW="native_catalog_view_mode_v2";
+    private static final String PREF_PAGE_SIZE="native_catalog_page_size_v2";
     private static final String PREF_COLOR="native_catalog_color_v2";
     private boolean onlyOwnedPhysicalPrintings = false;
     private String setCode="",typeFilter="",oracleFilter="",rarityFilter="",roleFilter="",sortMode="",oracleMatch="all";
@@ -107,6 +108,7 @@ final class NativeCatalogScreen {
     private LinearLayout sourceFilters, ownershipFilters;
     private Button[] sourceShortcuts;
     private int page = 0;
+    private int pageSize=40;
     private volatile boolean disposed;
     private boolean filtersReady=false;
 
@@ -117,6 +119,8 @@ final class NativeCatalogScreen {
         this.artwork = artwork;
         artGrid=inventory.getBoolean(PREF_COMPACT_GRID,true);
         viewMode=Math.max(0,Math.min(2,inventory.getInt(PREF_VIEW,artGrid?0:1)));
+        pageSize=inventory.getInt(PREF_PAGE_SIZE,40);
+        if(pageSize!=20&&pageSize!=40&&pageSize!=80)pageSize=40;
         artGrid=viewMode==0;
         String restoredSource=inventory.getString(PREF_SOURCE,"physical");
         source=restoredSource.equals("arena")||restoredSource.equals("both")?restoredSource:"physical";
@@ -407,6 +411,14 @@ final class NativeCatalogScreen {
         filterPicker("SORT BY",SORT_NAMES,SORT_VALUES,value->sortMode=value);
         Button reset=VaultNativeStyle.button(activity,"Reset advanced filters",false);
         advancedFilters.addView(reset,new LinearLayout.LayoutParams(-1,dp(42)));
+        Button count=VaultNativeStyle.button(activity,"Cards per page: "+pageSize+"  ▾",false);
+        advancedFilters.addView(count,new LinearLayout.LayoutParams(-1,dp(42)));
+        count.setOnClickListener(v->{
+            pageSize=pageSize==20?40:pageSize==40?80:20;
+            inventory.edit().putInt(PREF_PAGE_SIZE,pageSize).apply();
+            count.setText("Cards per page: "+pageSize+"  ▾");
+            page=0;schedule();
+        });
         reset.setOnClickListener(v->{
             setCode="";typeFilter="";oracleFilter="";oracleMatch="all";rarityFilter="";roleFilter="";
             sortMode="";exactColorIdentity="";manaValueMin="";manaValueMax="";
@@ -470,6 +482,7 @@ final class NativeCatalogScreen {
             selectedMvMin=manaValueMin,selectedMvMax=manaValueMax;
         final boolean printingMode=onlyOwnedPhysicalPrintings && "physical".equals(src);
         final int selectedPage=page;
+        final int selectedPageSize=pageSize;
         status.setText("Searching your catalog…");
         worker.execute(() -> {
             try {
@@ -486,7 +499,7 @@ final class NativeCatalogScreen {
                 // All Cards searches the full catalog and ownership across both inventories.
                 options.put("arena","");
                 options.put("page",Integer.toString(selectedPage));
-                options.put("size","40");
+                options.put("size",Integer.toString(selectedPageSize));
                 // All 40 record rows are fetched in one query and retained for
                 // back/forward navigation. Never reuse a stale filter result.
                 String cacheKey=new java.util.TreeMap<>(options).toString()+
@@ -522,7 +535,7 @@ final class NativeCatalogScreen {
         JSONArray rows=response.optJSONArray("cards");
         if(rows==null)return;
         final java.util.ArrayList<String> urls=new java.util.ArrayList<>();
-        for(int i=0;i<rows.length()&&i<40;i++){
+        for(int i=0;i<rows.length()&&i<80;i++){
             JSONObject item=rows.optJSONObject(i);
             if(item==null)continue;
             JSONObject imageData=printingMode?item.optJSONObject("printing"):
@@ -678,7 +691,7 @@ final class NativeCatalogScreen {
         pager.addView(back,new LinearLayout.LayoutParams(0,dp(48),1));
         pager.addView(next,new LinearLayout.LayoutParams(0,dp(48),1));
         back.setEnabled(selectedPage>0);
-        next.setEnabled((selectedPage+1)*40<total);
+        next.setEnabled((selectedPage+1)*pageSize<total);
         back.setOnClickListener(v -> { page=Math.max(0,page-1); schedule();
             browseScroll.post(()->browseScroll.smoothScrollTo(0,0)); });
         next.setOnClickListener(v -> { page++; schedule();
@@ -803,7 +816,7 @@ final class NativeCatalogScreen {
         LinearLayout card=VaultNativeStyle.row(activity);
         card.setPadding(dp(10),dp(10),dp(12),dp(10));
         VaultNativeStyle.surface(activity,card,false);
-        if(hasOfficialArt(imageUrl)){
+        if(viewMode!=2&&hasOfficialArt(imageUrl)){
             FrameLayout art=flippableArt(name,imageUrl,
                 printing.optString("imageBack",""),dp(66),dp(93));
             LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
