@@ -47,6 +47,26 @@ public final class TabletopSessionTest {
         assertEquals(45,restored.life[1]);
     }
 
+    @Test public void colorSelectionIsUndoableAndRemainsIsolated(){
+        TabletopSession game=new TabletopSession(4,40);
+        game.setColor(0,5);
+        assertEquals(5,game.colors[0]);
+        assertEquals(1,game.colors[1]);
+        assertTrue(game.undo());
+        assertEquals(0,game.colors[0]);
+    }
+
+    @Test public void commanderDamageReversesWithoutTouchingOtherSources(){
+        TabletopSession game=new TabletopSession(4,40);
+        game.changeCommanderDamage(2,0,5);
+        game.changeCommanderDamage(2,1,8);
+        game.changeCommanderDamage(2,0,-3);
+        assertEquals(2,game.damage[2][0]);
+        assertEquals(8,game.damage[2][1]);
+        assertEquals(30,game.life[2]);
+        assertEquals(40,game.life[0]);
+    }
+
     @Test public void guardsCounterAndSourceBounds(){
         TabletopSession game=new TabletopSession(2,40);
         try{game.changeCommanderDamage(0,0,1);fail("Self damage accepted");}
