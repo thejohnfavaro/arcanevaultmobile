@@ -37,6 +37,8 @@ final class NativeCompanionScreen {
     private final FrameLayout stage;
     private final TextView subtitle;
     private final LinearLayout tabs;
+    private final LinearLayout brand;
+    private final Button catalogShortlist;
     private final HorizontalScrollView secondaryScroll;
     private final LinearLayout secondaryTabs;
     private final Handler ui=new Handler(Looper.getMainLooper());
@@ -74,7 +76,7 @@ final class NativeCompanionScreen {
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
         root.setPadding(0,dp(14),0,0);
 
-        LinearLayout brand=VaultNativeStyle.row(activity);
+        brand=VaultNativeStyle.row(activity);
         brand.setPadding(dp(20),dp(6),dp(20),dp(10));
         TextView mark=VaultNativeStyle.label(activity,"◆",26,VaultNativeStyle.GOLD,true);
         brand.addView(mark);
@@ -84,6 +86,11 @@ final class NativeCompanionScreen {
         subtitle=VaultNativeStyle.label(activity,"Your collection. Anywhere.",12,VaultNativeStyle.SUBTEXT,false);
         titles.addView(subtitle);
         brand.addView(titles);
+        brand.addView(catalogShortlist,new LinearLayout.LayoutParams(dp(44),dp(38)));
+        catalogShortlist.setVisibility(View.GONE);
+        catalogShortlist=VaultNativeStyle.button(activity,"☆",false);
+        catalogShortlist.setContentDescription("Open My Shortlist");
+        catalogShortlist.setOnClickListener(v->show("shortlist"));
         root.addView(brand);
 
         // The main workspaces are always reachable at the bottom of the screen.
@@ -231,7 +238,8 @@ final class NativeCompanionScreen {
             // remains available for existing decks/artwork until migrated.
             addSecondaryTab("Data & Sync","data & sync");
         }
-        secondaryScroll.setVisibility(secondaryTabs.getChildCount()==0?View.GONE:View.VISIBLE);
+        secondaryScroll.setVisibility(primary.equals("catalog")?View.GONE:
+            secondaryTabs.getChildCount()==0?View.GONE:View.VISIBLE);
     }
 
     private void addSecondaryTab(String label,String target){
@@ -257,6 +265,9 @@ final class NativeCompanionScreen {
         scope="decks";query="";visibleCount=PAGE_SIZE;
         drawTabs();
         drawSecondaryTabs();
+        brand.setPadding(dp(14),dp(1),dp(14),dp(3));
+        brand.setVisibility(primaryScope().equals("catalog")?View.GONE:View.VISIBLE);
+        catalogShortlist.setVisibility(primaryScope().equals("catalog")?View.VISIBLE:View.GONE);
         stage.removeAllViews();
         workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,
             deckLoader,deckSaver,"decks",commanderName);
