@@ -245,6 +245,7 @@ final class NativeTabletopScreen {
         commander.setContentDescription("Commander damage to "+session.names[i]);
         Button color=counterButton(utilities,"◉",()->persist(()->session.nextColor(i)));
         color.setContentDescription("Change "+session.names[i]+" panel color");
+        color.setOnLongClickListener(v->{chooseColor(i);return true;});
         panel.addView(utilities,new LinearLayout.LayoutParams(-1,dp(landscape?47:56)));
         boolean danger=session.poison[i]>=10;
         for(int j=0;j<session.players;j++)
@@ -255,6 +256,14 @@ final class NativeTabletopScreen {
             panel.addView(warning);
         }
         return panel;
+    }
+    private void chooseColor(int i){
+        final String[] names={"Amber","Rose","Lavender","Blue","Teal","Orange","Silver","Pink"};
+        new AlertDialog.Builder(activity).setTitle("Panel color · "+session.names[i])
+            .setSingleChoiceItems(names,session.colors[i],(dialog,choice)->{
+                persist(()->session.setColor(i,choice));
+                dialog.dismiss();
+            }).setNegativeButton("Cancel",null).show();
     }
     private void rename(int i){
         EditText input=new EditText(activity);
@@ -304,13 +313,21 @@ final class NativeTabletopScreen {
                     (amount>=21?" · threshold reached":""));
             };
             refresh.run();
-            counterButton(controls,"−1",()->{
+            Button minus=counterButton(controls,"−1",()->{
                 persist(()->session.changeCommanderDamage(recipient,attacker,-1),false);
                 refresh.run();
             });
-            counterButton(controls,"+1",()->{
+            Button plus=counterButton(controls,"+1",()->{
                 persist(()->session.changeCommanderDamage(recipient,attacker,1),false);
                 refresh.run();
+            });
+            minus.setOnLongClickListener(v->{
+                persist(()->session.changeCommanderDamage(recipient,attacker,-5),false);
+                refresh.run();return true;
+            });
+            plus.setOnLongClickListener(v->{
+                persist(()->session.changeCommanderDamage(recipient,attacker,5),false);
+                refresh.run();return true;
             });
             list.addView(controls,new LinearLayout.LayoutParams(-1,dp(58)));
         }
