@@ -88,11 +88,11 @@ final class NativeCompanionScreen {
         subtitle=VaultNativeStyle.label(activity,"Your collection. Anywhere.",12,VaultNativeStyle.SUBTEXT,false);
         titles.addView(subtitle);
         brand.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
-        brand.addView(catalogShortlist,new LinearLayout.LayoutParams(dp(44),dp(38)));
-        catalogShortlist.setVisibility(View.GONE);
         catalogShortlist=VaultNativeStyle.button(activity,"☆",false);
         catalogShortlist.setContentDescription("Open My Shortlist");
         catalogShortlist.setOnClickListener(v->show("shortlist"));
+        brand.addView(catalogShortlist,new LinearLayout.LayoutParams(dp(44),dp(38)));
+        catalogShortlist.setVisibility(View.GONE);
         root.addView(brand);
 
         // The main workspaces are always reachable at the bottom of the screen.
