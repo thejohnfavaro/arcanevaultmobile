@@ -62,7 +62,12 @@ final class TabletopSession {
         life[recipient]-=delta;
     }
     void nextColor(int index){
-        player(index);saveUndo();colors[index]=(colors[index]+1)%COLORS.length;
+        player(index);setColor(index,(colors[index]+1)%COLORS.length);
+    }
+    void setColor(int index,int color){
+        player(index);range(color,0,COLORS.length-1);
+        if(colors[index]==color)return;
+        saveUndo();colors[index]=color;
     }
     void rename(int index,String value){
         player(index);String trimmed=value==null?"":value.trim();
