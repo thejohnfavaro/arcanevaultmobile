@@ -17,6 +17,7 @@ import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import java.security.SecureRandom;
 
 /**
  * Dedicated offline tabletop surface. Uses a separate preference file,
@@ -29,6 +30,7 @@ final class NativeTabletopScreen {
     private final SharedPreferences prefs;
     private final Runnable exit;
     private final LinearLayout root;
+    private final SecureRandom tableRandom=new SecureRandom();
     private TabletopSession session;
     private boolean closed;
     private boolean sessionDirty;
@@ -156,13 +158,10 @@ final class NativeTabletopScreen {
         undo.setEnabled(session.canUndo());
         toolbar.addView(undo,new LinearLayout.LayoutParams(0,dp(42),1));
         undo.setOnClickListener(v->persist(()->session.undo()));
-        Button newGame=button("New Game");
-        toolbar.addView(newGame,new LinearLayout.LayoutParams(0,dp(42),1));
-        newGame.setOnClickListener(v->new AlertDialog.Builder(activity)
-            .setTitle("Replace current game?")
-            .setMessage("Your current tabletop game will be replaced. Collections and decks are unaffected.")
-            .setNegativeButton("Cancel",null)
-            .setPositiveButton("New Game",(d,w)->setup()).show());
+        Button tools=button("⚄ Table Tools");
+        tools.setContentDescription("Dice, coin flip, starting player, new game");
+        toolbar.addView(tools,new LinearLayout.LayoutParams(0,dp(42),1));
+        tools.setOnClickListener(v->openTableTools());
         root.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(50)));
 
         // Two opposing panels for 2 players; responsive four-player grid.
@@ -194,6 +193,78 @@ final class NativeTabletopScreen {
         }
         root.addView(field,new LinearLayout.LayoutParams(-1,0,1));
     }
+    /** Results are transient, and never change the saved game or history. */
+    private void openTableTools(){
+        if(closed||session==null)return;
+        LinearLayout content=VaultNativeStyle.column(activity);
+        content.setPadding(dp(12),dp(10),dp(12),dp(12));
+        TextView result=label("Choose a tool below",19,true);
+        result.setGravity(Gravity.CENTER);
+        result.setMinHeight(dp(72));
+        result.setContentDescription("Table tool result");
+        content.addView(result,new LinearLayout.LayoutParams(-1,dp(78)));
+
+        Button first=button("Choose starting player");
+        first.setMinHeight(dp(54));
+        content.addView(first,new LinearLayout.LayoutParams(-1,dp(56)));
+        first.setOnClickListener(v->{
+            int choice=TabletopRandomizer.chooseStartingPlayer(session.players,tableRandom);
+            result.setText(session.names[choice]+" goes first!");
+        });
+
+        Button coin=button("Flip coin");
+        coin.setMinHeight(dp(54));
+        content.addView(coin,new LinearLayout.LayoutParams(-1,dp(56)));
+        coin.setOnClickListener(v->result.setText(
+            "Coin flip: "+TabletopRandomizer.flipCoin(tableRandom)));
+
+        LinearLayout diceRow=VaultNativeStyle.row(activity);
+        for(int sides:new int[]{6,20}){
+            Button die=button("Roll D"+sides);
+            die.setMinHeight(dp(54));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(56),1);
+            lp.setMargins(dp(2),0,dp(2),0);
+            diceRow.addView(die,lp);
+            die.setOnClickListener(v->{
+                TabletopRandomizer.Roll roll=TabletopRandomizer.roll(1,sides,tableRandom);
+                result.setText("D"+sides+" → "+roll.total);
+            });
+        }
+        content.addView(diceRow,new LinearLayout.LayoutParams(-1,dp(58)));
+
+        Button twoDice=button("Roll 2D6");
+        twoDice.setMinHeight(dp(54));
+        content.addView(twoDice,new LinearLayout.LayoutParams(-1,dp(56)));
+        twoDice.setOnClickListener(v->{
+            TabletopRandomizer.Roll roll=TabletopRandomizer.roll(2,6,tableRandom);
+            result.setText("2D6 → "+roll.total+" ("+roll.detail()+")");
+        });
+
+        TextView note=label("Rolls do not change counters or saved games.",12,false);
+        note.setTextColor(VaultNativeStyle.SUBTEXT);
+        note.setGravity(Gravity.CENTER);
+        content.addView(note,new LinearLayout.LayoutParams(-1,dp(32)));
+
+        android.widget.ScrollView scroll=VaultNativeStyle.scroll(activity);
+        scroll.addView(content);
+        AlertDialog dialog=new AlertDialog.Builder(activity)
+            .setTitle("Table Tools")
+            .setView(scroll)
+            .setNegativeButton("Close",null)
+            .setPositiveButton("New Game",null)
+            .create();
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(v->new AlertDialog.Builder(activity)
+                .setTitle("Replace current game?")
+                .setMessage("Start a new tabletop game? Your current saved game will remain intact until you select and confirm a new game.")
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Choose players",(confirm,w)->{
+                    dialog.dismiss();
+                    setup();
+                }).show()));
+        dialog.show();
+    }
+
     private View playerPanel(int i,boolean landscape){
         int background=TabletopSession.COLORS[session.colors[i]];
         LinearLayout panel=VaultNativeStyle.column(activity);
