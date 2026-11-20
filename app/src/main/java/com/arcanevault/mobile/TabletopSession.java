@@ -72,11 +72,17 @@ final class TabletopSession {
         saveUndo();names[index]=trimmed;
     }
     boolean undo(){
+        try {
         if(history.isEmpty())return false;
         apply(new JSONObject(history.removeLast()));
         return true;
+    
+        } catch(org.json.JSONException error){
+            throw new IllegalArgumentException("Invalid tabletop session JSON",error);
+        }
     }
     JSONObject snapshot(){
+        try {
         JSONObject root=new JSONObject();
         JSONArray people=new JSONArray();
         for(int i=0;i<players;i++){
@@ -88,8 +94,13 @@ final class TabletopSession {
         root.put("version",VERSION).put("players",players)
             .put("startingLife",startingLife).put("people",people);
         return root;
+    
+        } catch(org.json.JSONException error){
+            throw new IllegalArgumentException("Invalid tabletop session JSON",error);
+        }
     }
     private void apply(JSONObject state){
+        try {
         if(state.optInt("version")!=VERSION||state.optInt("players")!=players||
             state.optInt("startingLife")!=startingLife)
             throw new IllegalArgumentException("Session schema mismatch");
@@ -112,13 +123,23 @@ final class TabletopSession {
             }
             names[i]=name;life[i]=l;poison[i]=p;colors[i]=c;
         }
+    
+        } catch(org.json.JSONException error){
+            throw new IllegalArgumentException("Invalid tabletop session JSON",error);
+        }
     }
     JSONObject encode(){
+        try {
         JSONArray previous=new JSONArray();
         for(String item:history)previous.put(new JSONObject(item));
         return new JSONObject().put("session",snapshot()).put("undo",previous);
+    
+        } catch(org.json.JSONException error){
+            throw new IllegalArgumentException("Invalid tabletop session JSON",error);
+        }
     }
     static TabletopSession decode(String data){
+        try {
         JSONObject encoded=new JSONObject(data);
         JSONObject current=encoded.getJSONObject("session");
         int n=current.getInt("players"),start=current.getInt("startingLife");
@@ -136,5 +157,9 @@ final class TabletopSession {
             }
         }
         return state;
+    
+        } catch(org.json.JSONException error){
+            throw new IllegalArgumentException("Invalid tabletop session JSON",error);
+        }
     }
 }
