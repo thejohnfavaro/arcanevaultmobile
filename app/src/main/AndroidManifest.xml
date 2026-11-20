@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
  <uses-permission android:name="android.permission.INTERNET" />
  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
- <application android:label="Arcane Vault" android:icon="@drawable/arcane_vault_icon" android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="true" android:allowBackup="true">
+ <application android:label="Arcane Vault" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="true" android:allowBackup="true">
  <provider android:name=".NativeBackupProvider" android:authorities="com.arcanevault.mobile.backups" android:exported="false" android:grantUriPermissions="true" />
  <provider android:name=".VerifiedUpdateProvider" android:authorities="com.arcanevault.mobile.updates" android:exported="false" android:grantUriPermissions="true" />
  <receiver android:name=".VaultCollectionValueWidget" android:label="@string/widget_collection_value_label" android:exported="true">
