@@ -210,16 +210,34 @@ final class NativeTabletopScreen {
         TextView total=VaultNativeStyle.label(activity,Integer.toString(session.life[i]),64,Color.BLACK,true);
         total.setGravity(Gravity.CENTER);
         total.setAutoSizeTextTypeUniformWithConfiguration(32,86,2,1);
-        panel.addView(total,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout life=VaultNativeStyle.row(activity);
-        Button subtract=counterButton(life,"−",()->persist(()->session.changeLife(i,-1)));
-        Button add=counterButton(life,"+",()->persist(()->session.changeLife(i,1)));
+        LinearLayout life=landscape?VaultNativeStyle.column(activity):VaultNativeStyle.row(activity);
+        Button subtract=button("−");
+        Button add=button("+");
+        for(Button control:new Button[]{subtract,add}){
+            control.setTextSize(22);
+            control.setMinHeight(dp(42));
+            LinearLayout.LayoutParams lp=landscape?
+                new LinearLayout.LayoutParams(-1,0,1):
+                new LinearLayout.LayoutParams(0,dp(55),1);
+            lp.setMargins(dp(2),dp(1),dp(2),dp(1));
+            life.addView(control,lp);
+        }
+        subtract.setOnClickListener(v->persist(()->session.changeLife(i,-1)));
+        add.setOnClickListener(v->persist(()->session.changeLife(i,1)));
         subtract.setContentDescription("Subtract one life from "+session.names[i]);
         add.setContentDescription("Add one life to "+session.names[i]);
         // Long press provides a deliberate five-life adjustment.
         subtract.setOnLongClickListener(v->{persist(()->session.changeLife(i,-5));return true;});
         add.setOnLongClickListener(v->{persist(()->session.changeLife(i,5));return true;});
-        panel.addView(life,new LinearLayout.LayoutParams(-1,dp(56)));
+        if(landscape){
+            LinearLayout main=VaultNativeStyle.row(activity);
+            main.addView(total,new LinearLayout.LayoutParams(0,-1,2));
+            main.addView(life,new LinearLayout.LayoutParams(0,-1,1));
+            panel.addView(main,new LinearLayout.LayoutParams(-1,0,1));
+        }else{
+            panel.addView(total,new LinearLayout.LayoutParams(-1,0,1));
+            panel.addView(life,new LinearLayout.LayoutParams(-1,dp(57)));
+        }
         LinearLayout utilities=VaultNativeStyle.row(activity);
         Button poison=counterButton(utilities,"☠ "+session.poison[i],()->poisonDialog(i));
         poison.setContentDescription("Poison counters for "+session.names[i]+": "+session.poison[i]);
@@ -227,7 +245,7 @@ final class NativeTabletopScreen {
         commander.setContentDescription("Commander damage to "+session.names[i]);
         Button color=counterButton(utilities,"◉",()->persist(()->session.nextColor(i)));
         color.setContentDescription("Change "+session.names[i]+" panel color");
-        panel.addView(utilities,new LinearLayout.LayoutParams(-1,dp(56)));
+        panel.addView(utilities,new LinearLayout.LayoutParams(-1,dp(landscape?47:56)));
         boolean danger=session.poison[i]>=10;
         for(int j=0;j<session.players;j++)
             if(j!=i&&session.damage[i][j]>=21)danger=true;
