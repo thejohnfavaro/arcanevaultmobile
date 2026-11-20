@@ -164,6 +164,25 @@ final class NativeTabletopScreen {
         tools.setOnClickListener(v->openTableTools());
         root.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(50)));
 
+        // Keep turn and game history controls visible without leaving the table.
+        LinearLayout turnBar=VaultNativeStyle.row(activity);
+        turnBar.setPadding(dp(7),0,dp(7),dp(3));
+        Button current=button("Round "+session.round+" · "+session.names[session.activePlayer]);
+        current.setTextSize(12);
+        current.setContentDescription("Round "+session.round+", "+session.names[session.activePlayer]+
+            " is active. Tap to choose starting player.");
+        turnBar.addView(current,new LinearLayout.LayoutParams(0,dp(42),2));
+        current.setOnClickListener(v->chooseCurrentPlayer());
+        Button next=button("Next →");
+        next.setContentDescription("End current turn and advance to next player");
+        turnBar.addView(next,new LinearLayout.LayoutParams(0,dp(42),1));
+        next.setOnClickListener(v->persist(()->session.nextTurn()));
+        Button recent=button("History");
+        recent.setContentDescription("Review recent tabletop counter and turn changes");
+        turnBar.addView(recent,new LinearLayout.LayoutParams(0,dp(42),1));
+        recent.setOnClickListener(v->showHistory());
+        root.addView(turnBar,new LinearLayout.LayoutParams(-1,dp(46)));
+
         // Two opposing panels for 2 players; responsive four-player grid.
         // One device orientation change reflows panels; state is independent.
         int orientation=activity.getResources().getConfiguration().orientation;
@@ -193,7 +212,7 @@ final class NativeTabletopScreen {
         }
         root.addView(field,new LinearLayout.LayoutParams(-1,0,1));
     }
-    /** Results are transient, and never change the saved game or history. */
+    /** Dice and coin flips are transient; selecting a starting player explicitly saves the turn. */
     private void openTableTools(){
         if(closed||session==null)return;
         LinearLayout content=VaultNativeStyle.column(activity);
@@ -209,7 +228,8 @@ final class NativeTabletopScreen {
         content.addView(first,new LinearLayout.LayoutParams(-1,dp(56)));
         first.setOnClickListener(v->{
             int choice=TabletopRandomizer.chooseStartingPlayer(session.players,tableRandom);
-            result.setText(session.names[choice]+" goes first!");
+            persist(()->session.setStartingPlayer(choice),false);
+            result.setText(session.names[choice]+" starts · Round 1");
         });
 
         Button coin=button("Flip coin");
@@ -240,7 +260,7 @@ final class NativeTabletopScreen {
             result.setText("2D6 → "+roll.total+" ("+roll.detail()+")");
         });
 
-        TextView note=label("Rolls do not change counters or saved games.",12,false);
+        TextView note=label("Dice and coins are display-only. Starting player changes turn order.",12,false);
         note.setTextColor(VaultNativeStyle.SUBTEXT);
         note.setGravity(Gravity.CENTER);
         content.addView(note,new LinearLayout.LayoutParams(-1,dp(32)));
@@ -262,16 +282,54 @@ final class NativeTabletopScreen {
                     dialog.dismiss();
                     setup();
                 }).show()));
+        dialog.setOnDismissListener(d->{
+            if(sessionDirty&&!closed){sessionDirty=false;render();}
+        });
         dialog.show();
+    }
+
+    private void chooseCurrentPlayer(){
+        if(closed||session==null)return;
+        String[] roster=session.names.clone();
+        new AlertDialog.Builder(activity).setTitle("Choose starting player")
+            .setMessage("This resets turn tracking to Round 1. Life, commander damage, poison, and game history are preserved.")
+            .setSingleChoiceItems(roster,session.activePlayer,(dialog,choice)->{
+                persist(()->session.setStartingPlayer(choice));
+                dialog.dismiss();
+            })
+            .setNegativeButton("Cancel",null).show();
+    }
+
+    private void showHistory(){
+        if(closed||session==null)return;
+        java.util.List<String> events=session.recentEvents(30);
+        LinearLayout content=VaultNativeStyle.column(activity);
+        content.setPadding(dp(14),dp(8),dp(14),dp(10));
+        if(events.isEmpty()){
+            TextView empty=label("No changes recorded yet. Life, poison, commander damage, and turns will appear here.",14,false);
+            empty.setTextColor(VaultNativeStyle.SUBTEXT);
+            content.addView(empty);
+        }else for(String event:events){
+            TextView line=label(event,14,false);
+            line.setPadding(dp(5),dp(8),dp(5),dp(8));
+            content.addView(line,new LinearLayout.LayoutParams(-1,-2));
+        }
+        ScrollView scroll=VaultNativeStyle.scroll(activity);
+        scroll.addView(content);
+        new AlertDialog.Builder(activity).setTitle("Game History · newest first")
+            .setView(scroll)
+            .setPositiveButton("Done",null).show();
     }
 
     private View playerPanel(int i,boolean landscape){
         int background=TabletopSession.COLORS[session.colors[i]];
         LinearLayout panel=VaultNativeStyle.column(activity);
         panel.setPadding(dp(5),dp(4),dp(5),dp(4));
-        panel.setBackground(VaultNativeStyle.rounded(activity,background,Color.TRANSPARENT,14));
+        panel.setBackground(VaultNativeStyle.rounded(activity,background,
+            session.activePlayer==i?Color.BLACK:Color.TRANSPARENT,14));
         panel.setGravity(Gravity.CENTER);
-        TextView name=VaultNativeStyle.label(activity,session.names[i],15,Color.BLACK,true);
+        TextView name=VaultNativeStyle.label(activity,
+            (session.activePlayer==i?"▶ ":"")+session.names[i],15,Color.BLACK,true);
         name.setGravity(Gravity.CENTER);
         name.setMaxLines(1);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
