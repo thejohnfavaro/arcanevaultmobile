@@ -991,7 +991,9 @@ final class NativeCatalogScreen {
         TextView rulesHeader=text("ORACLE TEXT",11,true);
         rulesHeader.setTextColor(VaultNativeStyle.GOLD);
         oraclePanel.addView(rulesHeader);
-        TextView rules=text(oracle.isEmpty()?"No rules text":oracle,15,false);
+        TextView rules=NativeOracleSymbols.render(activity,artwork,
+            oracle.isEmpty()?"No rules text":oracle,15);
+        rules.setTextColor(VaultNativeStyle.TEXT);
         rules.setLineSpacing(dp(3),1f);
         oraclePanel.addView(rules);
         VaultNativeStyle.margin(inspectorContent,oraclePanel,10,activity);
