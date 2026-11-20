@@ -28,7 +28,7 @@ final class NativeDeckFit {
         }
     }
     private static String normalized(String name){
-        return name==null?"":name.trim().toLowerCase(Locale.ROOT);
+        return NativeArenaCardName.key(name);
     }
     static boolean arenaFormat(String format){
         String value=normalized(format);
