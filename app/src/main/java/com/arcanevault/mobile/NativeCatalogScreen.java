@@ -74,14 +74,23 @@ final class NativeCatalogScreen {
     // Open the Android catalog on the cards users physically own.
     // Switching to Arena, All or Missing remains an explicit in-session choice.
     private String source = "physical", owned = "owned", query = "";
+    private static final String PREF_SOURCE="native_catalog_source_v2";
+    private static final String PREF_OWNED="native_catalog_owned_v2";
+    private static final String PREF_VIEW="native_catalog_view_mode_v2";
+    private static final String PREF_COLOR="native_catalog_color_v2";
     private boolean onlyOwnedPhysicalPrintings = false;
     private String setCode="",typeFilter="",oracleFilter="",rarityFilter="",roleFilter="",sortMode="",oracleMatch="all";
     private String manaValueMin="",manaValueMax="";
     private String exactColorIdentity="";
     private boolean advancedOpen=false;
     private boolean artGrid=true;
+    private int viewMode=0; // 0 compact art, 1 detailed list, 2 text-only
+    private LinearLayout manaRow;
+    private boolean colorsOpen=false;
+    private Button colorToggle;
     private static final String PREF_COMPACT_GRID="native_catalog_compact_grid_v1";
     private Button viewModeButton;
+    private LinearLayout searchRow,toolRow;
     private LinearLayout advancedFilters;
     private LinearLayout quickFilters;
     private Button advancedButton;
@@ -96,6 +105,7 @@ final class NativeCatalogScreen {
         "Sacrifice","Tokens","Graveyard Hate","Finisher","Equipment"};
     private Button printingFilter;
     private LinearLayout sourceFilters, ownershipFilters;
+    private Button[] sourceShortcuts;
     private int page = 0;
     private volatile boolean disposed;
     private boolean filtersReady=false;
@@ -106,15 +116,21 @@ final class NativeCatalogScreen {
         this.inventory = inventory;
         this.artwork = artwork;
         artGrid=inventory.getBoolean(PREF_COMPACT_GRID,true);
+        viewMode=Math.max(0,Math.min(2,inventory.getInt(PREF_VIEW,artGrid?0:1)));
+        artGrid=viewMode==0;
+        String restoredSource=inventory.getString(PREF_SOURCE,"physical");
+        source=restoredSource.equals("arena")||restoredSource.equals("both")?restoredSource:"physical";
+        String restoredOwned=inventory.getString(PREF_OWNED,"owned");
+        owned=restoredOwned.equals("all")||restoredOwned.equals("unowned")?restoredOwned:"owned";
+        exactColorIdentity=inventory.getString(PREF_COLOR,"");
+        if(!exactColorIdentity.matches("C|[WUBRG]{0,5}"))exactColorIdentity="";
         layout = new LinearLayout(activity);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(18),dp(12),dp(18),dp(10));
+        layout.setPadding(dp(12),dp(3),dp(12),dp(6));
         layout.setBackgroundColor(VaultNativeStyle.BACKGROUND);
-        TextView title = text("Card Catalog",26,true);
-        layout.addView(title);
-        status = text("Searching on-device Scryfall catalog…",12,false);
+        status = text("Searching catalog…",11,false);
         status.setTextColor(MUTED);
-        layout.addView(status);
+        status.setPadding(dp(3),dp(2),dp(3),dp(4));
         search = new EditText(activity);
         search.setSingleLine(true);
         search.setTextColor(TEXT);
@@ -122,8 +138,15 @@ final class NativeCatalogScreen {
         search.setHint("Search cards, types, abilities…");
         VaultNativeStyle.search(activity,search);
         LinearLayout.LayoutParams searchParams=new LinearLayout.LayoutParams(-1,dp(48));
-        searchParams.topMargin=dp(12);searchParams.bottomMargin=dp(12);
-        layout.addView(search,searchParams);
+        searchParams.topMargin=dp(3);searchParams.bottomMargin=dp(6);
+        searchRow=VaultNativeStyle.row(activity);
+        searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(46),1));
+        Button filterShortcut=VaultNativeStyle.button(activity,"☷",false);
+        filterShortcut.setContentDescription("Open filters and sorting");
+        LinearLayout.LayoutParams shortcutParams=new LinearLayout.LayoutParams(dp(48),dp(46));
+        shortcutParams.leftMargin=dp(6);
+        searchRow.addView(filterShortcut,shortcutParams);
+        layout.addView(searchRow,searchParams);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
             public void onTextChanged(CharSequence s,int start,int before,int count) {
@@ -148,6 +171,7 @@ final class NativeCatalogScreen {
             lp.rightMargin=dp(7);filters.addView(button,lp);
             button.setOnClickListener(v -> {
                 source=selection;page=0;
+                inventory.edit().putString(PREF_SOURCE,source).apply();
                 if(!"physical".equals(source))onlyOwnedPhysicalPrintings=false;
                 updateCollectionFilters();schedule();
             });
@@ -169,6 +193,7 @@ final class NativeCatalogScreen {
             lp.rightMargin=dp(7);ownership.addView(button,lp);
             button.setOnClickListener(v -> {
                 owned=selection;page=0;
+                inventory.edit().putString(PREF_OWNED,owned).apply();
                 onlyOwnedPhysicalPrintings=false;
                 updateCollectionFilters();schedule();
             });
@@ -188,24 +213,32 @@ final class NativeCatalogScreen {
             if(onlyOwnedPhysicalPrintings){source="physical";owned="owned";}
             page=0;updateCollectionFilters();schedule();
         });
-        LinearLayout toolRow=VaultNativeStyle.row(activity);
-        viewModeButton=VaultNativeStyle.button(activity,
-            artGrid?"Detailed List":"Card Grid",false);
-        toolRow.addView(viewModeButton,new LinearLayout.LayoutParams(0,dp(42),1));
+        toolRow=VaultNativeStyle.row(activity);
+        Button physicalShortcut=VaultNativeStyle.button(activity,"Physical",source.equals("physical"));
+        Button arenaShortcut=VaultNativeStyle.button(activity,"Arena",source.equals("arena"));
+        Button allShortcut=VaultNativeStyle.button(activity,"All",source.equals("both"));
+        for(Button choice:new Button[]{physicalShortcut,arenaShortcut,allShortcut}){
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(37),1);
+            lp.rightMargin=dp(3);
+            toolRow.addView(choice,lp);
+        }
+        physicalShortcut.setOnClickListener(v->{source="physical";inventory.edit().putString(PREF_SOURCE,source).apply();page=0;updateCollectionFilters();schedule();});
+        arenaShortcut.setOnClickListener(v->{source="arena";onlyOwnedPhysicalPrintings=false;inventory.edit().putString(PREF_SOURCE,source).apply();page=0;updateCollectionFilters();schedule();});
+        allShortcut.setOnClickListener(v->{source="both";onlyOwnedPhysicalPrintings=false;inventory.edit().putString(PREF_SOURCE,source).apply();page=0;updateCollectionFilters();schedule();});
+        sourceShortcuts=new Button[]{physicalShortcut,arenaShortcut,allShortcut};
+        viewModeButton=VaultNativeStyle.button(activity,viewModeLabel(),false);
+        viewModeButton.setContentDescription("Switch catalog view: card art, detailed list, text only");
+        toolRow.addView(viewModeButton,new LinearLayout.LayoutParams(dp(88),dp(37)));
         viewModeButton.setOnClickListener(v->{
-            artGrid=!artGrid;
-            viewModeButton.setText(artGrid?"Detailed List":"Card Grid");
-            inventory.edit().putBoolean(PREF_COMPACT_GRID,artGrid).apply();
+            viewMode=(viewMode+1)%3;
+            artGrid=viewMode==0;
+            viewModeButton.setText(viewModeLabel());
+            inventory.edit().putInt(PREF_VIEW,viewMode).putBoolean(PREF_COMPACT_GRID,artGrid).apply();
             schedule();
         });
+        layout.addView(toolRow,new LinearLayout.LayoutParams(-1,dp(39)));
         advancedButton=VaultNativeStyle.button(activity,"Filters & Sort  ▾",false);
-        LinearLayout.LayoutParams advancedButtonParams=
-            new LinearLayout.LayoutParams(0,dp(42),1);
-        advancedButtonParams.leftMargin=dp(7);
-        toolRow.addView(advancedButton,advancedButtonParams);
-        LinearLayout.LayoutParams toolRowParams=new LinearLayout.LayoutParams(-1,dp(42));
-        toolRowParams.bottomMargin=dp(7);
-        layout.addView(toolRow,toolRowParams);
+        advancedButton.setVisibility(View.GONE);
         advancedFilters=VaultNativeStyle.column(activity);
         advancedFilters.setPadding(dp(10),dp(5),dp(10),dp(7));
         VaultNativeStyle.surface(activity,advancedFilters,false);
@@ -213,17 +246,20 @@ final class NativeCatalogScreen {
         advancedFilters.addView(quickFilters,0);
         buildQuickManaFilters();
         advancedFilters.setVisibility(View.GONE);
-        advancedButton.setOnClickListener(v->{
+        Runnable toggleFilters=()->{
             advancedOpen=!advancedOpen;
             advancedFilters.setVisibility(advancedOpen?View.VISIBLE:View.GONE);
-            advancedButton.setText(advancedOpen?"Filters & Sort  ▴":"Filters & Sort  ▾");
-        });
+            if(advancedOpen)browseScroll.post(()->browseScroll.smoothScrollTo(0,0));
+        };
+        filterShortcut.setOnClickListener(v->toggleFilters.run());
+        advancedButton.setOnClickListener(v->toggleFilters.run());
         updateCollectionFilters();
         browseScroll = VaultNativeStyle.scroll(activity);
         results = new LinearLayout(activity);
         results.setOrientation(LinearLayout.VERTICAL);
         LinearLayout browseContent=VaultNativeStyle.column(activity);
         browseContent.addView(advancedFilters);
+        browseContent.addView(status);
         browseContent.addView(results);
         browseScroll.addView(browseContent);
         layout.addView(browseScroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -335,11 +371,20 @@ final class NativeCatalogScreen {
                             selected.append(value);
                     exactColorIdentity=selected.toString();
                 }
-                updateIdentityButtons();page=0;schedule();
+                updateIdentityButtons();inventory.edit().putString(PREF_COLOR,exactColorIdentity).apply();page=0;schedule();
             });
         }
         quickManaRow.addView(colorRow,new LinearLayout.LayoutParams(0,dp(42),1));
-        layout.addView(quickManaRow,new LinearLayout.LayoutParams(-1,dp(45)));
+        manaRow=quickManaRow;
+        manaRow.setVisibility(View.GONE);
+        colorToggle=VaultNativeStyle.button(activity,"Colors  ▾",false);
+        colorToggle.setOnClickListener(v->{
+            colorsOpen=!colorsOpen;
+            manaRow.setVisibility(colorsOpen?View.VISIBLE:View.GONE);
+            colorToggle.setText(colorsOpen?"Colors  ▴":"Colors  ▾");
+        });
+        layout.addView(colorToggle,new LinearLayout.LayoutParams(-1,dp(34)));
+        layout.addView(manaRow,new LinearLayout.LayoutParams(-1,dp(45)));
         updateIdentityButtons();
     }
 
@@ -368,11 +413,23 @@ final class NativeCatalogScreen {
             advancedFilters.removeAllViews();
             buildAdvancedFilters();
             advancedFilters.addView(quickFilters,0);
-            updateIdentityButtons();page=0;schedule();
+            updateIdentityButtons();inventory.edit().putString(PREF_COLOR,"").apply();page=0;schedule();
         });
     }
 
+    private String viewModeLabel(){return viewMode==0?"Art ▦":viewMode==1?"List ☷":"Text ≡";}
+
     private void updateCollectionFilters() {
+        if(sourceShortcuts!=null){
+            String[] shortcutSources={"physical","arena","both"};
+            for(int i=0;i<sourceShortcuts.length;i++){
+                boolean selected=source.equals(shortcutSources[i]);
+                sourceShortcuts[i].setTextColor(selected?VaultNativeStyle.BACKGROUND:VaultNativeStyle.TEXT);
+                sourceShortcuts[i].setBackground(VaultNativeStyle.rounded(activity,
+                    selected?VaultNativeStyle.PRIMARY:VaultNativeStyle.ELEVATED,
+                    selected?Color.TRANSPARENT:VaultNativeStyle.BORDER,10));
+            }
+        }
         printingFilter.setVisibility("physical".equals(source)?View.VISIBLE:View.GONE);
         printingFilter.setText(onlyOwnedPhysicalPrintings?
             "✓ Owned physical printings (exact editions)" : "Show owned physical printings");
@@ -578,11 +635,11 @@ final class NativeCatalogScreen {
             String oracle=meta==null?"":meta.optString("oracle","");
             String colors=meta==null?"":meta.optJSONArray("colors")==null?"":meta.optJSONArray("colors").toString();
             LinearLayout entry=VaultNativeStyle.row(activity);
-            entry.setPadding(dp(10),dp(10),dp(12),dp(10));
+            entry.setPadding(dp(9),dp(viewMode==2?5:8),dp(9),dp(viewMode==2?5:8));
             VaultNativeStyle.surface(activity,entry,false);
             String imageUrl=meta==null?"":meta.optString("image","");
             String imageBack=meta==null?"":meta.optString("imageBack","");
-            if(hasOfficialArt(imageUrl)){
+            if(viewMode!=2&&hasOfficialArt(imageUrl)){
                 FrameLayout thumb=flippableArt(name,imageUrl,imageBack,dp(66),dp(93));
                 LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(66),dp(93));
                 imageParams.rightMargin=dp(14);entry.addView(thumb,imageParams);
@@ -612,7 +669,7 @@ final class NativeCatalogScreen {
             entry.setOnClickListener(v -> showDetails(name,type,oracle,rarity,imageUrl,imageBack,arenaQty,physicalQty,
                 null,"","",0,meta,null));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
-            lp.bottomMargin=dp(9);
+            lp.bottomMargin=dp(5);
             results.addView(entry,lp);
         }
         LinearLayout pager=new LinearLayout(activity);
@@ -810,6 +867,10 @@ final class NativeCatalogScreen {
         inspectorRequest++;
         inspectorContent.removeAllViews();
         browseScroll.setVisibility(View.GONE);
+        searchRow.setVisibility(View.GONE);
+        toolRow.setVisibility(View.GONE);
+        colorToggle.setVisibility(View.GONE);
+        manaRow.setVisibility(View.GONE);
         inspectorScroll.setVisibility(View.VISIBLE);
         inspectorScroll.scrollTo(0,0);
         Button back=VaultNativeStyle.button(activity,"← Back to catalog",false);
@@ -824,6 +885,10 @@ final class NativeCatalogScreen {
         inspectorBack=null;
         inspectorRequest++;
         inspectorScroll.setVisibility(View.GONE);
+        searchRow.setVisibility(View.VISIBLE);
+        toolRow.setVisibility(View.VISIBLE);
+        colorToggle.setVisibility(View.VISIBLE);
+        manaRow.setVisibility(colorsOpen?View.VISIBLE:View.GONE);
         browseScroll.setVisibility(View.VISIBLE);
     }
 
