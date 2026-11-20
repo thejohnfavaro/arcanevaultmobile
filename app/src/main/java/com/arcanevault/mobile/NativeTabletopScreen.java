@@ -275,10 +275,10 @@ final class NativeTabletopScreen {
         content.addView(note,new LinearLayout.LayoutParams(-1,dp(32)));
         Button decks=button("Associate saved decks");
         content.addView(decks,new LinearLayout.LayoutParams(-1,dp(55)));
-        decks.setOnClickListener(v->showDeckAssignments());
         Button finish=button("End Game · Choose winner");
         content.addView(finish,new LinearLayout.LayoutParams(-1,dp(55)));
-        finish.setOnClickListener(v->showEndGame());
+        Button results=button("Recent completed games");
+        content.addView(results,new LinearLayout.LayoutParams(-1,dp(55)));
 
         android.widget.ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.addView(content);
@@ -297,10 +297,69 @@ final class NativeTabletopScreen {
                     dialog.dismiss();
                     setup();
                 }).show()));
+        decks.setOnClickListener(v->{dialog.dismiss();showDeckAssignments();});
+        finish.setOnClickListener(v->{dialog.dismiss();showEndGame();});
+        results.setOnClickListener(v->{dialog.dismiss();showCompletedGames();});
         dialog.setOnDismissListener(d->{
             if(sessionDirty&&!closed){sessionDirty=false;render();}
         });
         dialog.show();
+    }
+
+    /** Read-only local archive; deliberately not a source of deck win/loss data. */
+    private void showCompletedGames(){
+        try{
+            JSONArray archive=new JSONArray(prefs.getString(COMPLETED,"[]"));
+            if(archive.length()==0){
+                new AlertDialog.Builder(activity).setTitle("Recent completed games")
+                    .setMessage("No completed tabletop games recorded yet.")
+                    .setPositiveButton("OK",null).show();
+                return;
+            }
+            java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+            java.util.ArrayList<JSONObject> records=new java.util.ArrayList<>();
+            for(int i=archive.length()-1;i>=0;i--){
+                JSONObject result=archive.getJSONObject(i);
+                JSONArray seats=result.getJSONArray("people");
+                int winner=result.getInt("winner");
+                if(winner<0||winner>=seats.length())continue;
+                labels.add("Winner: "+seats.getJSONObject(winner).optString("name","Player")+
+                    " · Round "+result.optInt("round",1));
+                records.add(result);
+            }
+            new AlertDialog.Builder(activity).setTitle("Recent completed games")
+                .setItems(labels.toArray(new String[0]),(dialog,index)->{
+                    JSONObject result=records.get(index);
+                    try{
+                        JSONArray seats=result.getJSONArray("people");
+                        StringBuilder text=new StringBuilder();
+                        text.append("Round ").append(result.optInt("round",1)).append("\\n");
+                        for(int i=0;i<seats.length();i++){
+                            JSONObject seat=seats.getJSONObject(i);
+                            text.append("\\n").append(seat.optString("name","Player"))
+                                .append(": ").append(seat.optInt("life",0)).append(" life · ")
+                                .append(seat.optInt("poison",0)).append(" poison");
+                            String deck=seat.optString("deckName","");
+                            if(!deck.isEmpty())text.append("\\nDeck: ").append(deck);
+                            JSONArray damage=seat.optJSONArray("damage");
+                            if(damage!=null)for(int source=0;source<damage.length();source++){
+                                if(source==i||damage.optInt(source,0)<=0)continue;
+                                text.append("\\n  Commander from ")
+                                    .append(seats.optJSONObject(source).optString("name","Player"))
+                                    .append(": ").append(damage.optInt(source));
+                            }
+                            text.append("\\n");
+                        }
+                        new AlertDialog.Builder(activity)
+                            .setTitle(labels.get(index)).setMessage(text.toString())
+                            .setPositiveButton("Done",null).show();
+                    }catch(Exception ignored){ /* Corrupt single archive entry cannot alter live game. */ }
+                }).setNegativeButton("Done",null).show();
+        }catch(Exception error){
+            new AlertDialog.Builder(activity).setTitle("Results unavailable")
+                .setMessage("The saved result archive could not be read. Current game and collection are unchanged.")
+                .setPositiveButton("OK",null).show();
+        }
     }
 
     private String finalSummary(){
