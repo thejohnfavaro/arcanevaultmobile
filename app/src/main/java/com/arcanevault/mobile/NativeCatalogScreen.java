@@ -253,7 +253,7 @@ final class NativeCatalogScreen {
         Runnable toggleFilters=()->{
             advancedOpen=!advancedOpen;
             advancedFilters.setVisibility(advancedOpen?View.VISIBLE:View.GONE);
-            if(advancedOpen)browseScroll.post(()->browseScroll.smoothScrollTo(0,0));
+            if(advancedOpen)scrollFiltersToTop();
         };
         filterShortcut.setOnClickListener(v->toggleFilters.run());
         advancedButton.setOnClickListener(v->toggleFilters.run());
@@ -287,6 +287,9 @@ final class NativeCatalogScreen {
         artworkWorker.shutdownNow();
         pagePrefetchWorker.shutdownNow();
         pageCache.clear();queuedPageArt.clear();
+    }
+    private void scrollFiltersToTop() {
+        browseScroll.post(()->browseScroll.smoothScrollTo(0,0));
     }
     private int dp(float n) { return (int)(activity.getResources().getDisplayMetrics().density*n+.5f); }
     private TextView text(String value,int size,boolean bold) {
