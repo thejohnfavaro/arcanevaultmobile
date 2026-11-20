@@ -18,6 +18,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.security.SecureRandom;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import android.os.Handler;
+import android.os.Looper;
 
 /**
  * Dedicated offline tabletop surface. Uses a separate preference file,
@@ -26,9 +30,12 @@ import java.security.SecureRandom;
 final class NativeTabletopScreen {
     private static final String STORE="arcane_tabletop_companion_v1";
     private static final String SESSION="session_v1";
+    private static final String COMPLETED="completed_games_v1";
     private final Activity activity;
     private final SharedPreferences prefs;
     private final Runnable exit;
+    private final NativeWorkspaceScreen.DeckLoader deckLoader;
+    private final Handler ui=new Handler(Looper.getMainLooper());
     private final LinearLayout root;
     private final SecureRandom tableRandom=new SecureRandom();
     private TabletopSession session;
@@ -36,8 +43,9 @@ final class NativeTabletopScreen {
     private boolean sessionDirty;
     private int currentOrientation=-1;
 
-    NativeTabletopScreen(Activity activity,Runnable exit){
-        this.activity=activity;this.exit=exit;
+    NativeTabletopScreen(Activity activity,Runnable exit,
+            NativeWorkspaceScreen.DeckLoader deckLoader){
+        this.activity=activity;this.exit=exit;this.deckLoader=deckLoader;
         prefs=activity.getSharedPreferences(STORE,Context.MODE_PRIVATE);
         root=VaultNativeStyle.column(activity);
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
@@ -148,6 +156,7 @@ final class NativeTabletopScreen {
     }
     private void render(){
         if(closed)return;
+        if(session!=null&&session.finished()){renderCompleted();return;}
         replaceContent();
         LinearLayout toolbar=VaultNativeStyle.row(activity);
         toolbar.setPadding(dp(8),dp(4),dp(8),dp(4));
@@ -264,6 +273,12 @@ final class NativeTabletopScreen {
         note.setTextColor(VaultNativeStyle.SUBTEXT);
         note.setGravity(Gravity.CENTER);
         content.addView(note,new LinearLayout.LayoutParams(-1,dp(32)));
+        Button decks=button("Associate saved decks");
+        content.addView(decks,new LinearLayout.LayoutParams(-1,dp(55)));
+        decks.setOnClickListener(v->showDeckAssignments());
+        Button finish=button("End Game · Choose winner");
+        content.addView(finish,new LinearLayout.LayoutParams(-1,dp(55)));
+        finish.setOnClickListener(v->showEndGame());
 
         android.widget.ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.addView(content);
@@ -286,6 +301,149 @@ final class NativeTabletopScreen {
             if(sessionDirty&&!closed){sessionDirty=false;render();}
         });
         dialog.show();
+    }
+
+    private String finalSummary(){
+        StringBuilder summary=new StringBuilder();
+        summary.append("Round ").append(session.round).append(" · Commander\\n");
+        for(int i=0;i<session.players;i++){
+            summary.append("\\n").append(session.names[i]).append(": ")
+                .append(session.life[i]).append(" life · ")
+                .append(session.poison[i]).append(" poison");
+            if(!session.deckNames[i].isEmpty())
+                summary.append("\\nDeck: ").append(session.deckNames[i]);
+            for(int source=0;source<session.players;source++){
+                if(source!=i&&session.damage[i][source]>0)
+                    summary.append("\\n  Commander from ")
+                        .append(session.names[source]).append(": ")
+                        .append(session.damage[i][source]);
+            }
+            summary.append("\\n");
+        }
+        return summary.toString();
+    }
+
+    private void showDeckAssignments(){
+        if(closed||session==null||session.finished())return;
+        String[] seats=new String[session.players];
+        for(int i=0;i<seats.length;i++)seats[i]=session.names[i]+
+            (session.deckNames[i].isEmpty()?" · No linked deck":
+                " · "+session.deckNames[i]);
+        new AlertDialog.Builder(activity).setTitle("Associate saved decks")
+            .setMessage("Optional. Links are saved in this tabletop session only and do not update deck statistics.")
+            .setItems(seats,(dialog,seat)->loadDeckChoices(seat))
+            .setNegativeButton("Done",null).show();
+    }
+
+    private void loadDeckChoices(int seat){
+        if(deckLoader==null){new AlertDialog.Builder(activity)
+            .setMessage("Saved deck library unavailable.")
+            .setPositiveButton("OK",null).show();return;}
+        deckLoader.fetch(json->ui.post(()->{
+            if(closed||activity.isFinishing()||session==null||session.finished())return;
+            try{
+                JSONArray library=new JSONArray(json);
+                if(library.length()>5000)throw new IllegalArgumentException("Deck list exceeds safety limit");
+                java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+                java.util.ArrayList<String> ids=new java.util.ArrayList<>();
+                java.util.ArrayList<String> names=new java.util.ArrayList<>();
+                labels.add("None · Unlink saved deck");ids.add("");names.add("");
+                for(int i=0;i<library.length();i++){
+                    JSONObject deck=library.optJSONObject(i);
+                    if(deck==null)continue;
+                    String id=deck.optString("id","").trim();
+                    String name=deck.optString("name","").trim();
+                    if(id.isEmpty()||name.isEmpty()||id.length()>128||name.length()>160)continue;
+                    ids.add(id);names.add(name);
+                    labels.add(name+(deck.optString("commander","").isEmpty()?"":
+                        " · "+deck.optString("commander","")));
+                }
+                new AlertDialog.Builder(activity).setTitle("Deck for "+session.names[seat])
+                    .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                        persist(()->session.associateDeck(seat,ids.get(which),names.get(which)));
+                        if(!closed&&!session.finished())showDeckAssignments();
+                    }).setNegativeButton("Cancel",null).show();
+            }catch(Exception error){
+                new AlertDialog.Builder(activity).setTitle("Deck library unavailable")
+                    .setMessage("No deck was changed. "+error.getMessage())
+                    .setPositiveButton("OK",null).show();
+            }
+        }));
+    }
+
+    private void showEndGame(){
+        if(closed||session==null||session.finished())return;
+        new AlertDialog.Builder(activity).setTitle("End Game · Choose winner")
+            .setMessage("Who won? No deck wins or losses will be recorded.")
+            .setItems(session.names.clone(),(dialog,seat)->confirmEndGame(seat))
+            .setNegativeButton("Cancel",null).show();
+    }
+
+    private void confirmEndGame(int seat){
+        if(closed||session==null||session.finished())return;
+        new AlertDialog.Builder(activity).setTitle("Confirm winner: "+session.names[seat])
+            .setMessage(finalSummary()+"\\nA local match summary will be saved. No deck statistics will change.")
+            .setNegativeButton("Cancel",null)
+            .setNeutralButton("Link decks",(dialog,w)->showDeckAssignments())
+            .setPositiveButton("Finish Game",(dialog,w)->finishGame(seat)).show();
+    }
+
+    private void finishGame(int winner){
+        if(closed||session==null||session.finished())return;
+        String previous=session.encode().toString();
+        try{
+            session.finish(winner,System.currentTimeMillis());
+            JSONArray archive=new JSONArray(prefs.getString(COMPLETED,"[]"));
+            // Keep only recent local result snapshots. Not part of peer sync.
+            if(archive.length()>29){
+                JSONArray retained=new JSONArray();
+                for(int i=Math.max(0,archive.length()-29);i<archive.length();i++)
+                    retained.put(archive.getJSONObject(i));
+                archive=retained;
+            }
+            archive.put(session.snapshot());
+            boolean saved=prefs.edit()
+                .putString(SESSION,session.encode().toString())
+                .putString(COMPLETED,archive.toString()).commit();
+            if(!saved)throw new IllegalStateException("Could not save game result");
+            render();
+        }catch(Exception error){
+            session=TabletopSession.decode(previous);
+            new AlertDialog.Builder(activity).setTitle("Game not finished")
+                .setMessage("Local result was not saved: "+error.getMessage())
+                .setPositiveButton("OK",null).show();
+        }
+    }
+
+    private void renderCompleted(){
+        replaceContent();
+        ScrollView scroll=VaultNativeStyle.scroll(activity);
+        LinearLayout body=VaultNativeStyle.column(activity);
+        body.setPadding(dp(18),dp(20),dp(18),dp(18));
+        TextView title=label("Game Complete",26,true);
+        title.setTextColor(VaultNativeStyle.GOLD);body.addView(title);
+        TextView winner=label("Winner: "+session.names[session.winner],21,true);
+        winner.setPadding(0,dp(12),0,dp(12));body.addView(winner);
+        TextView report=label(finalSummary(),14,false);
+        body.addView(report);
+        TextView note=label("Saved locally only · Deck win/loss statistics unchanged",12,false);
+        note.setTextColor(VaultNativeStyle.SUBTEXT);
+        note.setPadding(0,dp(12),0,dp(12));body.addView(note);
+        Button reopen=button("Reopen game for corrections");
+        body.addView(reopen,new LinearLayout.LayoutParams(-1,dp(54)));
+        reopen.setOnClickListener(v->new AlertDialog.Builder(activity)
+            .setTitle("Reopen completed game?")
+            .setMessage("Counters become editable again. The recorded match summary remains in local history.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Reopen",(dialog,w)->persist(()->session.reopen())).show());
+        Button newGame=button("New tabletop game");
+        body.addView(newGame,new LinearLayout.LayoutParams(-1,dp(54)));
+        newGame.setOnClickListener(v->setup());
+        Button back=button("Return to Arcane Vault");
+        body.addView(back,new LinearLayout.LayoutParams(-1,dp(54)));
+        back.setOnClickListener(v->exit.run());
+        scroll.addView(body);
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
     }
 
     private void chooseCurrentPlayer(){
