@@ -102,7 +102,7 @@ final class NativeTabletopScreen {
         body.addView(sub);
         TextView title=label("Start a game",19,true);
         title.setPadding(0,dp(28),0,dp(10));body.addView(title);
-        for(int n=2;n<=4;n++){
+        for(int n:new int[]{4,3,2}){
             final int players=n;
             Button choice=button(n+" players · Commander · 40 life");
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(62));
