@@ -46,6 +46,7 @@ final class NativeCompanionScreen {
     private NativeCatalogScreen nativeCatalog;
     private NativeCommanderBrowserScreen commanderBrowser;
     private NativeWorkspaceScreen workspace;
+    private NativeTabletopScreen tabletop;
     private final NativeWorkspaceScreen.DeckLoader deckLoader;
     private final NativeWorkspaceScreen.DeckSaver deckSaver;
     private String scope="home", query="";
@@ -143,6 +144,7 @@ final class NativeCompanionScreen {
 
     boolean onBack(){
         if(closed)return false;
+        if(tabletop!=null&&tabletop.onBack())return true;
         if(nativeCatalog!=null&&nativeCatalog.onBack())return true;
         if(commanderBrowser!=null&&commanderBrowser.onBack())return true;
         if(workspace!=null&&workspace.onBack())return true;
@@ -235,12 +237,13 @@ final class NativeCompanionScreen {
             addSecondaryTab("Deck Library","decks");
             addSecondaryTab("Deck Analytics","analytics");
             addSecondaryTab("EDH Lab","edh lab");
+            addSecondaryTab("Tabletop","tabletop");
         } else if(primary.equals("sync")){
             // The old WebView UI is retired. Its hidden storage bridge
             // remains available for existing decks/artwork until migrated.
             addSecondaryTab("Data & Sync","data & sync");
         }
-        secondaryScroll.setVisibility(primary.equals("catalog")?View.GONE:
+        secondaryScroll.setVisibility(scope.equals("tabletop")||primary.equals("catalog")?View.GONE:
             secondaryTabs.getChildCount()==0?View.GONE:View.VISIBLE);
     }
 
@@ -257,6 +260,7 @@ final class NativeCompanionScreen {
         if(nativeCatalog!=null){nativeCatalog.close();nativeCatalog=null;}
         if(commanderBrowser!=null){commanderBrowser.close();commanderBrowser=null;}
         if(workspace!=null){workspace.close();workspace=null;}
+        if(tabletop!=null){tabletop.close();tabletop=null;}
     }
     /** Navigate within the same native workspace; the selected commander is
      * used only as a read-only saved-deck filter, never a deck mutation. */
@@ -319,6 +323,14 @@ final class NativeCompanionScreen {
         });
     }
 
+    private void leaveTabletop(){
+        if(!scope.equals("tabletop"))return;
+        if(!navigationHistory.isEmpty())navigationHistory.removeLast();
+        restoringHistory=true;
+        try{show("home");}
+        finally{restoringHistory=false;}
+    }
+
     private void show(String next){
         if(closed)return;
         if(workspace!=null && workspace.confirmLeave(()->show(next)))return;
@@ -329,6 +341,15 @@ final class NativeCompanionScreen {
         drawTabs();
         drawSecondaryTabs();
         stage.removeAllViews();
+        boolean atTable=scope.equals("tabletop");
+        brand.setVisibility(atTable?View.GONE:View.VISIBLE);
+        tabs.setVisibility(atTable?View.GONE:View.VISIBLE);
+        secondaryScroll.setVisibility(atTable?View.GONE:secondaryScroll.getVisibility());
+        if(atTable){
+            tabletop=new NativeTabletopScreen(activity,()->leaveTabletop());
+            stage.addView(tabletop.view(),new FrameLayout.LayoutParams(-1,-1));
+            return;
+        }
         if(scope.equals("sets")||scope.equals("decks")||scope.equals("shortlist")||scope.equals("data & sync")){
             workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,deckLoader,
                 deckSaver,scope.equals("data & sync")?"data":scope,
@@ -538,6 +559,9 @@ final class NativeCompanionScreen {
         TextView tools=text("QUICK ACTIONS",12,VaultNativeStyle.SUBTEXT,true);
         tools.setPadding(0,dp(14),0,dp(8));
         content.addView(tools);
+        Button tabletopButton=button("Tabletop Companion · Life Tracker",true);
+        VaultNativeStyle.margin(content,tabletopButton,10,activity);
+        tabletopButton.setOnClickListener(v->show("tabletop"));
         Button catalogButton=button("Explore Card Catalog",true);
         VaultNativeStyle.margin(content,catalogButton,10,activity);
         catalogButton.setOnClickListener(v->show("catalog"));
