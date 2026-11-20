@@ -5,6 +5,8 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
+import android.graphics.Typeface;
 import android.graphics.Color;
 import android.view.Gravity;
 import android.view.View;
@@ -29,6 +31,8 @@ final class NativeTabletopScreen {
     private final LinearLayout root;
     private TabletopSession session;
     private boolean closed;
+    private boolean sessionDirty;
+    private int currentOrientation=-1;
 
     NativeTabletopScreen(Activity activity,Runnable exit){
         this.activity=activity;this.exit=exit;
@@ -76,7 +80,8 @@ final class NativeTabletopScreen {
             .setPositiveButton("OK",null).show();
     }
     private void replaceContent(){root.removeAllViews();}
-    private void persist(Runnable operation){
+    private void persist(Runnable operation){persist(operation,true);}
+    private void persist(Runnable operation,boolean redraw){
         if(closed||session==null)return;
         String before=session.encode().toString();
         try{
@@ -85,7 +90,8 @@ final class NativeTabletopScreen {
                 session=TabletopSession.decode(before);
                 throw new IllegalStateException("Device could not save the game");
             }
-            render();
+            if(redraw)render();
+            else sessionDirty=true;
         }catch(Exception error){
             session=TabletopSession.decode(before);
             new AlertDialog.Builder(activity).setTitle("Change not saved")
@@ -128,10 +134,15 @@ final class NativeTabletopScreen {
                 session=fresh;render();
             }).show();
     }
-    private void counterButton(LinearLayout row,String text,Runnable action){
+    private Button counterButton(LinearLayout row,String text,Runnable action){
         Button b=button(text);
-        row.addView(b,new LinearLayout.LayoutParams(0,dp(50),1));
+        b.setTextSize(17);
+        b.setMinHeight(dp(54));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(54),1);
+        lp.setMargins(dp(2),0,dp(2),0);
+        row.addView(b,lp);
         b.setOnClickListener(v->action.run());
+        return b;
     }
     private void render(){
         if(closed)return;
@@ -154,60 +165,74 @@ final class NativeTabletopScreen {
             .setPositiveButton("New Game",(d,w)->setup()).show());
         root.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(50)));
 
-        // A responsive two-column field; Android remeasures on rotations.
-        // Two players occupy two rows; three players use two on top and one
-        // centered below; four players use the expected four quadrants.
+        // Two opposing panels for 2 players; responsive four-player grid.
+        // One device orientation change reflows panels; state is independent.
+        int orientation=activity.getResources().getConfiguration().orientation;
+        boolean landscape=orientation==Configuration.ORIENTATION_LANDSCAPE;
+        currentOrientation=orientation;
+        int columns=session.players==2?(landscape?2:1):
+            landscape?2:2;
+        int rows=(session.players+columns-1)/columns;
         LinearLayout field=VaultNativeStyle.column(activity);
-        field.setPadding(dp(5),dp(3),dp(5),dp(6));
-        int rows=(session.players+1)/2;
+        field.setPadding(dp(4),dp(2),dp(4),dp(4));
         for(int r=0;r<rows;r++){
             LinearLayout row=VaultNativeStyle.row(activity);
-            for(int col=0;col<2;col++){
-                int i=r*2+col;
-                if(i>=session.players){
-                    View filler=new View(activity);
-                    row.addView(filler,new LinearLayout.LayoutParams(0,-1,1));
-                }else{
-                    View panel=playerPanel(i);
-                    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1);
-                    lp.setMargins(dp(2),dp(2),dp(2),dp(2));
-                    row.addView(panel,lp);
-                    // Opposite side of the table should be readable to opponents.
-                    if(r==0&&rows>1)panel.setRotation(180f);
-                }
+            row.setGravity(Gravity.CENTER);
+            int items=Math.min(columns,session.players-r*columns);
+            for(int col=0;col<items;col++){
+                int i=r*columns+col;
+                View panel=playerPanel(i,landscape);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1);
+                lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+                row.addView(panel,lp);
+                // Opponents on the far side read their own counter upright.
+                if((!landscape&&r==0&&rows>1)||(landscape&&col==0&&columns==2))
+                    panel.setRotation(180f);
             }
+            // For a three-player game, the third player gets the entire lower row.
             field.addView(row,new LinearLayout.LayoutParams(-1,0,1));
         }
         root.addView(field,new LinearLayout.LayoutParams(-1,0,1));
     }
-    private View playerPanel(int i){
+    private View playerPanel(int i,boolean landscape){
         int background=TabletopSession.COLORS[session.colors[i]];
         LinearLayout panel=VaultNativeStyle.column(activity);
-        panel.setPadding(dp(7),dp(4),dp(7),dp(4));
+        panel.setPadding(dp(5),dp(4),dp(5),dp(4));
         panel.setBackground(VaultNativeStyle.rounded(activity,background,Color.TRANSPARENT,14));
         panel.setGravity(Gravity.CENTER);
-        TextView name=VaultNativeStyle.label(activity,session.names[i],13,Color.BLACK,true);
+        TextView name=VaultNativeStyle.label(activity,session.names[i],15,Color.BLACK,true);
         name.setGravity(Gravity.CENTER);
-        panel.addView(name,new LinearLayout.LayoutParams(-1,dp(23)));
+        name.setMaxLines(1);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        panel.addView(name,new LinearLayout.LayoutParams(-1,dp(26)));
+        name.setContentDescription(session.names[i]+". Long press to rename");
         name.setOnLongClickListener(v->{rename(i);return true;});
-        TextView total=VaultNativeStyle.label(activity,Integer.toString(session.life[i]),52,Color.BLACK,true);
+        TextView total=VaultNativeStyle.label(activity,Integer.toString(session.life[i]),64,Color.BLACK,true);
         total.setGravity(Gravity.CENTER);
-        total.setAutoSizeTextTypeUniformWithConfiguration(28,66,2,1);
+        total.setAutoSizeTextTypeUniformWithConfiguration(32,86,2,1);
         panel.addView(total,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout life=VaultNativeStyle.row(activity);
-        counterButton(life,"−",()->persist(()->session.changeLife(i,-1)));
-        counterButton(life,"+",()->persist(()->session.changeLife(i,1)));
-        panel.addView(life,new LinearLayout.LayoutParams(-1,dp(50)));
+        Button subtract=counterButton(life,"−",()->persist(()->session.changeLife(i,-1)));
+        Button add=counterButton(life,"+",()->persist(()->session.changeLife(i,1)));
+        subtract.setContentDescription("Subtract one life from "+session.names[i]);
+        add.setContentDescription("Add one life to "+session.names[i]);
+        // Long press provides a deliberate five-life adjustment.
+        subtract.setOnLongClickListener(v->{persist(()->session.changeLife(i,-5));return true;});
+        add.setOnLongClickListener(v->{persist(()->session.changeLife(i,5));return true;});
+        panel.addView(life,new LinearLayout.LayoutParams(-1,dp(56)));
         LinearLayout utilities=VaultNativeStyle.row(activity);
-        counterButton(utilities,"☠ "+session.poison[i],()->poisonDialog(i));
-        counterButton(utilities,"⚔",()->commanderDialog(i));
-        counterButton(utilities,"◉",()->persist(()->session.nextColor(i)));
-        panel.addView(utilities,new LinearLayout.LayoutParams(-1,dp(43)));
+        Button poison=counterButton(utilities,"☠ "+session.poison[i],()->poisonDialog(i));
+        poison.setContentDescription("Poison counters for "+session.names[i]+": "+session.poison[i]);
+        Button commander=counterButton(utilities,"⚔",()->commanderDialog(i));
+        commander.setContentDescription("Commander damage to "+session.names[i]);
+        Button color=counterButton(utilities,"◉",()->persist(()->session.nextColor(i)));
+        color.setContentDescription("Change "+session.names[i]+" panel color");
+        panel.addView(utilities,new LinearLayout.LayoutParams(-1,dp(56)));
         boolean danger=session.poison[i]>=10;
         for(int j=0;j<session.players;j++)
             if(j!=i&&session.damage[i][j]>=21)danger=true;
         if(danger){
-            TextView warning=VaultNativeStyle.label(activity,"☠ LOSS THRESHOLD",11,Color.BLACK,true);
+            TextView warning=VaultNativeStyle.label(activity,"LOSS THRESHOLD",11,Color.BLACK,true);
             warning.setGravity(Gravity.CENTER);
             panel.addView(warning);
         }
@@ -222,34 +247,62 @@ final class NativeTabletopScreen {
             .show();
     }
     private void poisonDialog(int recipient){
-        LinearLayout row=VaultNativeStyle.row(activity);
-        counterButton(row,"−1",()->persist(()->session.changePoison(recipient,-1)));
-        counterButton(row,"+1",()->persist(()->session.changePoison(recipient,1)));
+        LinearLayout body=VaultNativeStyle.column(activity);
+        body.setPadding(dp(16),dp(12),dp(16),dp(8));
+        TextView count=label("",23,true);
+        count.setGravity(Gravity.CENTER);
+        body.addView(count,new LinearLayout.LayoutParams(-1,dp(42)));
+        LinearLayout controls=VaultNativeStyle.row(activity);
+        Button minus=counterButton(controls,"−1",()->{
+            persist(()->session.changePoison(recipient,-1),false);
+            count.setText("Poison: "+session.poison[recipient]+" / 10");
+        });
+        counterButton(controls,"+1",()->{
+            persist(()->session.changePoison(recipient,1),false);
+            count.setText("Poison: "+session.poison[recipient]+" / 10");
+        });
+        body.addView(controls,new LinearLayout.LayoutParams(-1,dp(58)));
+        count.setText("Poison: "+session.poison[recipient]+" / 10");
         AlertDialog dialog=new AlertDialog.Builder(activity)
-            .setTitle(session.names[recipient]+" · Poison: "+session.poison[recipient])
-            .setMessage("10 or more poison counters is a loss condition.")
-            .setView(row).setPositiveButton("Done",null).create();
+            .setTitle(session.names[recipient]+" · Poison counters")
+            .setView(body).setPositiveButton("Done",null).create();
+        dialog.setOnDismissListener(d->{if(sessionDirty&&!closed){sessionDirty=false;render();}});
         dialog.show();
-        // Redraw closes dialog after any committed counter change.
     }
     private void commanderDialog(int recipient){
         LinearLayout list=VaultNativeStyle.column(activity);
-        list.setPadding(dp(12),dp(8),dp(12),dp(8));
+        list.setPadding(dp(12),dp(10),dp(12),dp(8));
         for(int source=0;source<session.players;source++){
             if(source==recipient)continue;
             final int attacker=source;
-            TextView title=label("From "+session.names[source]+": "+session.damage[recipient][source]+" / 21",14,true);
-            title.setTextColor(VaultNativeStyle.TEXT);
-            list.addView(title);
+            TextView heading=label("",16,true);
+            heading.setGravity(Gravity.CENTER);
+            heading.setPadding(0,dp(8),0,dp(4));
+            list.addView(heading);
             LinearLayout controls=VaultNativeStyle.row(activity);
-            counterButton(controls,"−1",()->persist(()->session.changeCommanderDamage(recipient,attacker,-1)));
-            counterButton(controls,"+1",()->persist(()->session.changeCommanderDamage(recipient,attacker,1)));
-            list.addView(controls,new LinearLayout.LayoutParams(-1,dp(50)));
+            Runnable refresh=()->{
+                int amount=session.damage[recipient][attacker];
+                heading.setText(session.names[attacker]+": "+amount+" / 21"+
+                    (amount>=21?" · threshold reached":""));
+            };
+            refresh.run();
+            counterButton(controls,"−1",()->{
+                persist(()->session.changeCommanderDamage(recipient,attacker,-1),false);
+                refresh.run();
+            });
+            counterButton(controls,"+1",()->{
+                persist(()->session.changeCommanderDamage(recipient,attacker,1),false);
+                refresh.run();
+            });
+            list.addView(controls,new LinearLayout.LayoutParams(-1,dp(58)));
         }
         ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.addView(list);
-        new AlertDialog.Builder(activity).setTitle("Commander combat damage to "+session.names[recipient])
-            .setMessage("Damage tracks each commander independently and also changes life.")
-            .setView(scroll).setPositiveButton("Done",null).show();
+        AlertDialog dialog=new AlertDialog.Builder(activity)
+            .setTitle("Commander damage to "+session.names[recipient])
+            .setMessage("Each source is tracked independently. Adjusting combat damage also adjusts life.")
+            .setView(scroll).setPositiveButton("Done",null).create();
+        dialog.setOnDismissListener(d->{if(sessionDirty&&!closed){sessionDirty=false;render();}});
+        dialog.show();
     }
 }
