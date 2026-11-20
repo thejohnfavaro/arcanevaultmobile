@@ -710,6 +710,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             JSONObject row=i<0?null:entries.optJSONObject(i);
             String name=i<0?(commander==null?"":commander.trim()):
                 row==null?"":row.optString("name","").trim();
+            String lookupName=NativeArenaCardName.identity(name);
             int qty=i<0?(name.isEmpty()?0:1):
                 row==null?0:Math.max(0,Math.min(999,row.optInt("qty",0)));
             if(name.isEmpty()||qty==0)continue;
@@ -717,7 +718,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             if(total>10000)throw new IllegalArgumentException("Deck size exceeds analysis limit");
             try(Cursor card=db.rawQuery(
                     "SELECT type,mv FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
-                    new String[]{name})){
+                    new String[]{lookupName})){
                 if(!card.moveToFirst()){
                     unknown+=qty;
                     cards.put(name);
