@@ -126,6 +126,71 @@ public final class TabletopSessionTest {
         assertEquals(1,restored.activePlayer);
     }
 
+    @Test public void winnerAndSavedDeckLinksSurviveSessionRoundTrip(){
+        TabletopSession game=new TabletopSession(4,40);
+        game.associateDeck(0,"deck-a","Borg Queen");
+        game.associateDeck(2,"deck-b","Muldrotha");
+        game.changeLife(1,-14);
+        game.changeCommanderDamage(1,0,6);
+        game.finish(0,1720000000000L);
+        assertTrue(game.finished());
+        assertEquals(0,game.winner);
+        TabletopSession restored=TabletopSession.decode(game.encode().toString());
+        assertTrue(restored.finished());
+        assertEquals(1720000000000L,restored.finishedAt);
+        assertEquals("deck-a",restored.deckIds[0]);
+        assertEquals("Borg Queen",restored.deckNames[0]);
+        assertEquals("Muldrotha",restored.deckNames[2]);
+        assertEquals(20,restored.life[1]);
+        assertEquals(6,restored.damage[1][0]);
+        try{restored.changeLife(1,1);fail("Completed game remained editable");}
+        catch(IllegalStateException expected){}
+        restored.reopen();
+        assertFalse(restored.finished());
+        restored.changeLife(1,1);
+        assertEquals(21,restored.life[1]);
+    }
+
+    @Test public void invalidWinnerCannotCompleteOrChangeGame(){
+        TabletopSession game=new TabletopSession(3,40);
+        try{game.finish(3,1720000000000L);fail("Invalid winner accepted");}
+        catch(IllegalArgumentException expected){}
+        try{game.finish(1,0);fail("Missing timestamp accepted");}
+        catch(IllegalArgumentException expected){}
+        assertFalse(game.finished());
+        assertEquals(-1,game.winner);
+        assertEquals(0,game.recentEvents(10).size());
+    }
+
+    @Test public void deckAssociationChangesCanBeUndoneAndUnlinked(){
+        TabletopSession game=new TabletopSession(2,40);
+        game.associateDeck(0,"stable-id","My Deck");
+        assertEquals("My Deck",game.deckNames[0]);
+        game.associateDeck(0,"","");
+        assertEquals("",game.deckIds[0]);
+        assertTrue(game.undo());
+        assertEquals("stable-id",game.deckIds[0]);
+        assertEquals("My Deck",game.deckNames[0]);
+        assertEquals(40,game.life[0]);
+    }
+
+    @Test public void oldSessionsWithoutCompletionOrDeckDataStillRestore() throws Exception {
+        TabletopSession game=new TabletopSession(2,40);
+        game.changeLife(0,-9);
+        org.json.JSONObject legacy=game.snapshot();
+        legacy.remove("winner");legacy.remove("finishedAt");
+        org.json.JSONArray players=legacy.getJSONArray("people");
+        for(int i=0;i<players.length();i++){
+            players.getJSONObject(i).remove("deckId");
+            players.getJSONObject(i).remove("deckName");
+        }
+        TabletopSession restored=TabletopSession.decode(new org.json.JSONObject()
+            .put("session",legacy).put("undo",new org.json.JSONArray()).toString());
+        assertEquals(31,restored.life[0]);
+        assertFalse(restored.finished());
+        assertEquals("",restored.deckIds[0]);
+    }
+
     @Test public void guardsCounterAndSourceBounds(){
         TabletopSession game=new TabletopSession(2,40);
         try{game.changeCommanderDamage(0,0,1);fail("Self damage accepted");}
