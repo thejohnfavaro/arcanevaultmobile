@@ -39,6 +39,7 @@ final class NativeCompanionScreen {
     private final LinearLayout tabs;
     private final LinearLayout brand;
     private final Button catalogShortlist;
+    private final TextView brandName;
     private final HorizontalScrollView secondaryScroll;
     private final LinearLayout secondaryTabs;
     private final Handler ui=new Handler(Looper.getMainLooper());
@@ -82,10 +83,11 @@ final class NativeCompanionScreen {
         brand.addView(mark);
         LinearLayout titles=VaultNativeStyle.column(activity);
         titles.setPadding(dp(12),0,0,0);
-        titles.addView(VaultNativeStyle.label(activity,"ARCANE VAULT",22,VaultNativeStyle.TEXT,true));
+        brandName=VaultNativeStyle.label(activity,"ARCANE VAULT",22,VaultNativeStyle.TEXT,true);
+        titles.addView(brandName);
         subtitle=VaultNativeStyle.label(activity,"Your collection. Anywhere.",12,VaultNativeStyle.SUBTEXT,false);
         titles.addView(subtitle);
-        brand.addView(titles);
+        brand.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
         brand.addView(catalogShortlist,new LinearLayout.LayoutParams(dp(44),dp(38)));
         catalogShortlist.setVisibility(View.GONE);
         catalogShortlist=VaultNativeStyle.button(activity,"☆",false);
@@ -266,8 +268,13 @@ final class NativeCompanionScreen {
         drawTabs();
         drawSecondaryTabs();
         brand.setPadding(dp(14),dp(1),dp(14),dp(3));
-        brand.setVisibility(primaryScope().equals("catalog")?View.GONE:View.VISIBLE);
-        catalogShortlist.setVisibility(primaryScope().equals("catalog")?View.VISIBLE:View.GONE);
+        brand.setVisibility(View.VISIBLE);
+        boolean catalogPage=primaryScope().equals("catalog");
+        brandName.setText(catalogPage?"Card Catalog":"ARCANE VAULT");
+        brandName.setTextSize(catalogPage?17:22);
+        subtitle.setVisibility(catalogPage?View.GONE:View.VISIBLE);
+        brand.setPadding(dp(14),dp(catalogPage?0:6),dp(14),dp(catalogPage?0:10));
+        catalogShortlist.setVisibility(catalogPage?View.VISIBLE:View.GONE);
         stage.removeAllViews();
         workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,
             deckLoader,deckSaver,"decks",commanderName);
