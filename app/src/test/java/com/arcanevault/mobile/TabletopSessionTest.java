@@ -106,7 +106,7 @@ public final class TabletopSessionTest {
         assertEquals(TabletopSession.MAX_EVENTS,restored.recentEvents(100).size());
     }
 
-    @Test public void olderSavedSessionsWithoutTurnFieldsStillRestore(){
+    @Test public void olderSavedSessionsWithoutTurnFieldsStillRestore() throws Exception {
         TabletopSession game=new TabletopSession(3,40);
         game.changeLife(2,-8);
         org.json.JSONObject legacy=game.snapshot();
