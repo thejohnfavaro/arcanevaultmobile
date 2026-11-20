@@ -18,6 +18,9 @@ final class TabletopSession {
     final int startingLife;
     final String[] names;
     final int[] life, poison, colors;
+    final String[] deckIds, deckNames;
+    int winner=-1;
+    long finishedAt=0;
     // damage[recipient][source], including source index for stable references.
     final int[][] damage;
     private final ArrayDeque<String> history=new ArrayDeque<>();
@@ -29,9 +32,11 @@ final class TabletopSession {
             throw new IllegalArgumentException("Invalid tabletop game setup");
         players=playerCount;startingLife=start;
         names=new String[players];life=new int[players];poison=new int[players];
+        deckIds=new String[players];deckNames=new String[players];
         colors=new int[players];damage=new int[players][players];
         for(int i=0;i<players;i++){
             names[i]="Player "+(i+1);life[i]=start;colors[i]=i;
+            deckIds[i]="";deckNames[i]="";
         }
     }
 
@@ -41,7 +46,12 @@ final class TabletopSession {
     private void player(int index){
         if(index<0||index>=players)throw new IllegalArgumentException("Unknown player");
     }
+    boolean finished(){return winner>=0;}
+    private void ensureActive(){
+        if(finished())throw new IllegalStateException("Game is complete; reopen it to make changes");
+    }
     private void saveUndo(){
+        ensureActive();
         if(history.size()==MAX_HISTORY)history.removeFirst();
         history.addLast(snapshot().toString());
     }
@@ -59,13 +69,14 @@ final class TabletopSession {
         events.addLast("Round "+round+" · "+description);
     }
     void setStartingPlayer(int index){
-        player(index);
+        ensureActive();player(index);
         if(activePlayer==index&&firstPlayer==index&&round==1)return;
         saveUndo();
         firstPlayer=index;activePlayer=index;round=1;
         record(names[index]+" chosen as starting player");
     }
     void nextTurn(){
+        ensureActive();
         if(round>=9999&&activePlayer==(firstPlayer+players-1)%players)
             throw new IllegalArgumentException("Turn limit reached");
         saveUndo();
@@ -74,17 +85,17 @@ final class TabletopSession {
         record(names[activePlayer]+" begins their turn");
     }
     void changeLife(int index,int delta){
-        player(index);if(delta==0)return;
+        ensureActive();player(index);if(delta==0)return;
         range(life[index]+delta,-9999,9999);saveUndo();life[index]+=delta;
         record(names[index]+(delta>0?" +":" ")+delta+" life ("+life[index]+")");
     }
     void changePoison(int index,int delta){
-        player(index);if(delta==0)return;
+        ensureActive();player(index);if(delta==0)return;
         range(poison[index]+delta,0,999);saveUndo();poison[index]+=delta;
         record(names[index]+(delta>0?" +":" ")+delta+" poison ("+poison[index]+")");
     }
     void changeCommanderDamage(int recipient,int source,int delta){
-        player(recipient);player(source);
+        ensureActive();player(recipient);player(source);
         if(source==recipient)throw new IllegalArgumentException("Commander cannot damage itself");
         if(delta==0)return;
         range(damage[recipient][source]+delta,0,999);
@@ -97,21 +108,51 @@ final class TabletopSession {
             names[source]+" ("+damage[recipient][source]+" total)");
     }
     void nextColor(int index){
-        player(index);setColor(index,(colors[index]+1)%COLORS.length);
+        ensureActive();player(index);setColor(index,(colors[index]+1)%COLORS.length);
     }
     void setColor(int index,int color){
-        player(index);range(color,0,COLORS.length-1);
+        ensureActive();player(index);range(color,0,COLORS.length-1);
         if(colors[index]==color)return;
         saveUndo();colors[index]=color;
         record(names[index]+" changed panel color");
     }
     void rename(int index,String value){
-        player(index);String trimmed=value==null?"":value.trim();
+        ensureActive();player(index);String trimmed=value==null?"":value.trim();
         if(trimmed.isEmpty()||trimmed.length()>28)
             throw new IllegalArgumentException("Name must be 1–28 characters");
         if(names[index].equals(trimmed))return;
         saveUndo();String previous=names[index];names[index]=trimmed;
         record(previous+" renamed to "+trimmed);
+    }
+    /**
+     * Store a reference for reporting only. Never updates the linked deck
+     * or any library counters. Empty ID means the seat is unlinked.
+     */
+    void associateDeck(int index,String deckId,String deckName){
+        ensureActive();player(index);
+        String id=deckId==null?"":deckId.trim();
+        String name=deckName==null?"":deckName.trim();
+        if(id.length()>128||name.length()>160||
+            (!id.isEmpty()&&name.isEmpty())||
+            (id.isEmpty()&&!name.isEmpty()))
+            throw new IllegalArgumentException("Invalid saved deck reference");
+        if(deckIds[index].equals(id)&&deckNames[index].equals(name))return;
+        saveUndo();
+        deckIds[index]=id;deckNames[index]=name;
+        record(names[index]+(id.isEmpty()?" unlinked saved deck":" linked deck "+name));
+    }
+    void finish(int winnerIndex,long endedAt){
+        ensureActive();player(winnerIndex);
+        if(endedAt<=0)throw new IllegalArgumentException("Invalid game finish time");
+        // Finishing is deliberately not an undo snapshot. Reopening requires
+        // an explicit confirmation, and retains the original counters.
+        winner=winnerIndex;finishedAt=endedAt;
+        record(names[winnerIndex]+" wins; game completed");
+    }
+    void reopen(){
+        if(!finished())throw new IllegalStateException("Game is not complete");
+        winner=-1;finishedAt=0;
+        record("Completed game reopened for corrections");
     }
     boolean undo(){
         try {
@@ -131,14 +172,16 @@ final class TabletopSession {
             JSONArray dealt=new JSONArray();
             for(int j=0;j<players;j++)dealt.put(damage[i][j]);
             people.put(new JSONObject().put("name",names[i]).put("life",life[i])
-                .put("poison",poison[i]).put("color",colors[i]).put("damage",dealt));
+                .put("poison",poison[i]).put("color",colors[i]).put("damage",dealt)
+                .put("deckId",deckIds[i]).put("deckName",deckNames[i]));
         }
         JSONArray audit=new JSONArray();
         for(String entry:events)audit.put(entry);
         root.put("version",VERSION).put("players",players)
             .put("startingLife",startingLife).put("people",people)
             .put("activePlayer",activePlayer).put("firstPlayer",firstPlayer)
-            .put("round",round).put("events",audit);
+            .put("round",round).put("events",audit)
+            .put("winner",winner).put("finishedAt",finishedAt);
         return root;
     
         } catch(org.json.JSONException error){
@@ -153,6 +196,12 @@ final class TabletopSession {
         int active=state.optInt("activePlayer",0);
         int first=state.optInt("firstPlayer",0);
         int turnRound=state.optInt("round",1);
+        int restoredWinner=state.optInt("winner",-1);
+        long endedAt=state.optLong("finishedAt",0);
+        if(restoredWinner<-1||restoredWinner>=players ||
+            (restoredWinner==-1&&endedAt!=0)||
+            (restoredWinner>=0&&endedAt<=0))
+            throw new IllegalArgumentException("Invalid completion record");
         player(active);player(first);range(turnRound,1,9999);
         JSONArray audit=state.optJSONArray("events");
         if(audit!=null&&audit.length()>MAX_EVENTS)
@@ -180,9 +229,16 @@ final class TabletopSession {
                 if(i==j&&value!=0)throw new IllegalArgumentException("Self damage not allowed");
                 damage[i][j]=value;
             }
+            String deckId=item.optString("deckId","");
+            String deckName=item.optString("deckName","");
+            if(deckId.length()>128||deckName.length()>160||
+                deckId.isEmpty()!=deckName.isEmpty())
+                throw new IllegalArgumentException("Invalid deck association");
             names[i]=name;life[i]=l;poison[i]=p;colors[i]=c;
+            deckIds[i]=deckId;deckNames[i]=deckName;
         }
         activePlayer=active;firstPlayer=first;round=turnRound;
+        winner=restoredWinner;finishedAt=endedAt;
         events.clear();events.addAll(restoredEvents);
     
         } catch(org.json.JSONException error){
