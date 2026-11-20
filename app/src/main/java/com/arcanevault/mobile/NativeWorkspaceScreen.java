@@ -1355,7 +1355,7 @@ final class NativeWorkspaceScreen {
                         throw new IllegalStateException("Inventory safety limit exceeded");
                     for(int i=0;i<cards.length();i++){
                         JSONObject card=cards.optJSONObject(i);if(card==null)continue;
-                        String name=card.optString("name","").toLowerCase(java.util.Locale.ROOT);
+                        String name=NativeArenaCardName.key(card.optString("name",""));
                         owned.put(name,owned.getOrDefault(name,0)+
                             Math.max(0,card.optInt("qty",0)));
                     }
@@ -1368,7 +1368,7 @@ final class NativeWorkspaceScreen {
                     if(entry==null)continue;
                     String name=entry.optString("name","");
                     int qty=Math.max(0,entry.optInt("qty",0));
-                    int have=owned.getOrDefault(name.toLowerCase(java.util.Locale.ROOT),0);
+                    int have=owned.getOrDefault(NativeArenaCardName.key(name),0);
                     int need=Math.max(0,qty-have);
                     missing+=need;total+=qty;
                     cards.add(new String[]{qty+" × "+name,
