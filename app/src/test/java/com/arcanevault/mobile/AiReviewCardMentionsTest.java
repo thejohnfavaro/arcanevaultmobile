@@ -26,4 +26,13 @@ public class AiReviewCardMentionsTest {
             AiReviewCardMentions.longestFirst(java.util.Arrays.asList(
                 "Tithe","Smothering Tithe")).get(0));
     }
+    @Test public void prefersFullFrontFaceOverShortRealCard()throws Exception{
+        String response="Replace **Fell the Profane** with a different removal spell.";
+        List<String> found=AiReviewCardMentions.candidates(response,new JSONArray(),"");
+        assertTrue(found.contains("Fell the Profane"));
+        assertEquals("Fell the Profane",
+            AiReviewCardMentions.longestFirst(java.util.Arrays.asList(
+                "Fell","Fell the Profane")).get(0));
+    }
+
 }
