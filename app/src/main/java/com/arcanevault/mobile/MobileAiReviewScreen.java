@@ -164,7 +164,7 @@ final class MobileAiReviewScreen {
                     return;
                 }
                 response=answer;
-                result.setText(formatReview(answer));
+                result.setText(formatReview(AiReviewCardMentions.EXPLICIT.matcher(answer).replaceAll("$1")));
                 linkVerifiedCards(answer);
                 status.setText("Review complete ("+model+"). No saved deck or collection changes.");
             });
@@ -202,27 +202,29 @@ final class MobileAiReviewScreen {
             java.util.List<String> sorted=AiReviewCardMentions.longestFirst(confirmed.keySet());
             activity.runOnUiThread(()->{
                 if(generation!=reviewGeneration)return;
+                // Work right-to-left so replacing visible markers never shifts
+                // positions of earlier references. Only marked phrases link.
                 SpannableStringBuilder text=new SpannableStringBuilder(formatReview(answer));
-                boolean[] occupied=new boolean[text.length()];
-                for(String name:sorted){
-                    java.util.regex.Matcher m=Pattern.compile(
-                        "(?i)(?<![\\p{L}\\p{N}])"+Pattern.quote(name)+"(?![\\p{L}\\p{N}])")
-                        .matcher(text);
-                    while(m.find()){
-                        boolean clear=true;
-                        for(int k=m.start();k<m.end();k++)
-                            if(occupied[k]){clear=false;break;}
-                        if(!clear)continue;
-                        for(int k=m.start();k<m.end();k++)occupied[k]=true;
-                        final String selected=confirmed.get(name);
-                        text.setSpan(new ClickableSpan(){
-                            @Override public void onClick(View widget){inspectCard.accept(selected);}
-                            @Override public void updateDrawState(TextPaint paint){
-                                paint.setColor(VaultNativeStyle.GOLD);
-                                paint.setUnderlineText(true);
-                            }
-                        },m.start(),m.end(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    }
+                java.util.ArrayList<int[]> positions=new java.util.ArrayList<>();
+                java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+                java.util.regex.Matcher m=AiReviewCardMentions.EXPLICIT.matcher(text);
+                while(m.find()){
+                    positions.add(new int[]{m.start(),m.end()});
+                    labels.add(m.group(1).trim());
+                }
+                for(int i=positions.size()-1;i>=0;i--){
+                    int[] pos=positions.get(i);
+                    String shown=labels.get(i);
+                    String selected=confirmed.get(shown);
+                    text.replace(pos[0],pos[1],shown);
+                    if(selected==null)continue; // Display unverified names, never link.
+                    text.setSpan(new ClickableSpan(){
+                        @Override public void onClick(View widget){inspectCard.accept(selected);}
+                        @Override public void updateDrawState(TextPaint paint){
+                            paint.setColor(VaultNativeStyle.GOLD);
+                            paint.setUnderlineText(true);
+                        }
+                    },pos[0],pos[0]+shown.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
                 result.setText(text);
             });
