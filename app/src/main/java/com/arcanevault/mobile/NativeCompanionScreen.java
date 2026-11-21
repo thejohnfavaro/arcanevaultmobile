@@ -47,6 +47,7 @@ final class NativeCompanionScreen {
     private NativeCommanderBrowserScreen commanderBrowser;
     private NativeWorkspaceScreen workspace;
     private NativeTabletopScreen tabletop;
+    private final MobileChatGptClient aiClient;
     private final NativeWorkspaceScreen.DeckLoader deckLoader;
     private final NativeWorkspaceScreen.DeckSaver deckSaver;
     private String scope="home", query="";
@@ -74,6 +75,7 @@ final class NativeCompanionScreen {
         this.prefs=prefs;this.catalog=catalog;this.artwork=artwork;this.openLegacy=openLegacy;
         this.deckLoader=deckLoader;
         this.deckSaver=deckSaver;
+        this.aiClient=new MobileChatGptClient(activity);
         root=VaultNativeStyle.column(activity);
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
         root.setPadding(0,dp(14),0,0);
@@ -138,6 +140,7 @@ final class NativeCompanionScreen {
         readGeneration++;
         auditGeneration++;
         auditWorker.shutdownNow();
+        aiClient.close();
         closeCatalog();
         navigationHistory.clear();
     }
@@ -182,6 +185,7 @@ final class NativeCompanionScreen {
         if(scope.equals("decks")||scope.equals("edh lab")||scope.equals("analytics"))return "decks";
         if(scope.equals("shortlist"))return "catalog";
         if(scope.equals("data & sync"))return "sync";
+        if(scope.equals("options"))return "home";
         return scope;
     }
 
@@ -282,6 +286,7 @@ final class NativeCompanionScreen {
         stage.removeAllViews();
         workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,
             deckLoader,deckSaver,"decks",commanderName);
+        workspace.setAiClient(aiClient);
         stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
         subtitle.setText("Saved decks for "+commanderName);
     }
@@ -354,6 +359,7 @@ final class NativeCompanionScreen {
             workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,deckLoader,
                 deckSaver,scope.equals("data & sync")?"data":scope,
                 scope.equals("sets")?pendingSetFromWidget:"");
+            workspace.setAiClient(aiClient);
             stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
                 scope.equals("decks")?"Saved deck library":
@@ -388,6 +394,7 @@ final class NativeCompanionScreen {
         scroll.addView(content);
         stage.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
         if(scope.equals("home"))renderHome(content);
+        else if(scope.equals("options"))renderOptions(content);
         else renderInventory(content,scope.equals("physical")?physical:arena);
     }
 
@@ -565,6 +572,9 @@ final class NativeCompanionScreen {
         Button catalogButton=button("Explore Card Catalog",true);
         VaultNativeStyle.margin(content,catalogButton,10,activity);
         catalogButton.setOnClickListener(v->show("catalog"));
+        Button options=button("Options · ChatGPT connection",false);
+        VaultNativeStyle.margin(content,options,10,activity);
+        options.setOnClickListener(v->show("options"));
         Button update=button("Check for app updates",false);
         VaultNativeStyle.margin(content,update,10,activity);
         update.setOnClickListener(v->new NativeAppUpdater(activity).check());
@@ -576,6 +586,46 @@ final class NativeCompanionScreen {
         note.setPadding(0,dp(12),0,0);
         content.addView(note);
     }
+    /** Connection is per Android device; tokens are never synced to Windows. */
+    private void renderOptions(LinearLayout parent){
+        card(parent,"Options","ChatGPT connection",
+            "Use your existing eligible ChatGPT plan. This device keeps its own protected session.",
+            VaultNativeStyle.GOLD);
+        TextView status=text(aiClient.status(),13,VaultNativeStyle.SUBTEXT,false);
+        VaultNativeStyle.margin(parent,status,10,activity);
+        Button connect=button(aiClient.connected()?"ChatGPT connected":"Continue with ChatGPT",true);
+        connect.setEnabled(!aiClient.connected());
+        VaultNativeStyle.margin(parent,connect,9,activity);
+        Button disconnect=button("Disconnect ChatGPT",false);
+        disconnect.setEnabled(aiClient.connected());
+        VaultNativeStyle.margin(parent,disconnect,9,activity);
+        TextView note=text("Your saved deck and collection are never sent by signing in. "+
+            "Only a review prompt you explicitly submit is shared. "+
+            "You may need to reconnect if authorization is revoked or expires.",
+            12,VaultNativeStyle.SUBTEXT,false);
+        VaultNativeStyle.margin(parent,note,10,activity);
+        connect.setOnClickListener(v->{
+            connect.setEnabled(false);
+            status.setText("Authorize with ChatGPT in your browser…");
+            aiClient.connect((message,ok)->{
+                if(closed)return;
+                status.setText(message);
+                connect.setEnabled(!aiClient.connected());
+                connect.setText(aiClient.connected()?"ChatGPT connected":"Continue with ChatGPT");
+                disconnect.setEnabled(aiClient.connected());
+            });
+        });
+        disconnect.setOnClickListener(v->{
+            disconnect.setEnabled(false);
+            aiClient.disconnect((message,ok)->{
+                if(closed)return;
+                status.setText(message);
+                connect.setText("Continue with ChatGPT");
+                disconnect.setEnabled(false);
+            });
+        });
+    }
+
     private void renderInventory(LinearLayout content,List<CardRow> rows){
         boolean paper=scope.equals("physical");
         card(content,paper?"Physical inventory":"Arena inventory",

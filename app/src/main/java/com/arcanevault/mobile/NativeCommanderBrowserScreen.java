@@ -41,7 +41,8 @@ final class NativeCommanderBrowserScreen {
     private final LinearLayout root,list,preview;
     private final ScrollView listScroll,previewScroll;
     private final TextView status;
-    private final boolean wide;
+    private boolean wide;
+    private final LinearLayout workspace;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final ExecutorService data=Executors.newSingleThreadExecutor();
     private final ExecutorService images=Executors.newSingleThreadExecutor();
@@ -59,7 +60,8 @@ final class NativeCommanderBrowserScreen {
         this.activity=activity;this.catalog=catalog;this.artwork=artwork;
         this.openLegacy=openLegacy;
         this.openCommanderDecks=openCommanderDecks;
-        wide=activity.getResources().getConfiguration().screenWidthDp>=700;
+        wide=NativeWindowLayoutPolicy.twoPaneCommander(
+            activity.getResources().getConfiguration().screenWidthDp);
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(14),dp(8),dp(14),dp(12));
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
@@ -162,7 +164,7 @@ final class NativeCommanderBrowserScreen {
             }
             load();
         });
-        LinearLayout workspace=new LinearLayout(activity);
+        workspace=new LinearLayout(activity);
         workspace.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
         root.addView(workspace,new LinearLayout.LayoutParams(-1,0,1));
         listScroll=VaultNativeStyle.scroll(activity);
@@ -182,10 +184,38 @@ final class NativeCommanderBrowserScreen {
             workspace.addView(previewScroll,new LinearLayout.LayoutParams(-1,-1));
             previewScroll.setVisibility(View.GONE);
         }
+        // Reflow on the actual content window changing (fold/unfold, split screen,
+        // landscape), preserving search filters and the currently selected preview.
+        root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,oright,ob)->{
+            int dpWidth=Math.round((r-l)/activity.getResources().getDisplayMetrics().density);
+            if(dpWidth>0)updateLayoutForWindow(dpWidth);
+        });
         preview.addView(VaultNativeStyle.label(activity,
             "Choose a commander to preview its card, Oracle text and ownership.",
             13,VaultNativeStyle.SUBTEXT,false));
         load();
+    }
+
+    private void updateLayoutForWindow(int contentWidthDp){
+        boolean next=NativeWindowLayoutPolicy.twoPaneCommander(contentWidthDp);
+        if(wide==next)return;
+        boolean showingDetail=previewScroll.getVisibility()==View.VISIBLE &&
+            listScroll.getVisibility()!=View.VISIBLE;
+        wide=next;
+        workspace.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
+        if(wide){
+            LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-1,1);
+            left.rightMargin=dp(9);
+            listScroll.setLayoutParams(left);
+            previewScroll.setLayoutParams(new LinearLayout.LayoutParams(0,-1,1));
+            listScroll.setVisibility(View.VISIBLE);
+            previewScroll.setVisibility(View.VISIBLE);
+        }else{
+            listScroll.setLayoutParams(new LinearLayout.LayoutParams(-1,-1));
+            previewScroll.setLayoutParams(new LinearLayout.LayoutParams(-1,-1));
+            listScroll.setVisibility(showingDetail?View.GONE:View.VISIBLE);
+            previewScroll.setVisibility(showingDetail?View.VISIBLE:View.GONE);
+        }
     }
 
     View view(){return root;}

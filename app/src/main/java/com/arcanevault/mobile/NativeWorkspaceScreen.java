@@ -82,6 +82,13 @@ final class NativeWorkspaceScreen {
     private final ArrayDeque<String> syncHistory=new ArrayDeque<>();
     private String screenState="";
     private JSONObject editingDeck;
+    private MobileChatGptClient aiClient;
+    private final ArrayList<View> aiReturnViews=new ArrayList<>();
+    private String aiReturnState="";
+    private String aiReturnStatus="";
+    private int aiReturnScroll=0;
+    void setAiClient(MobileChatGptClient client){this.aiClient=client;}
+
     private EditText editorName,editorMainboard;
     private String editorOriginalName="",editorOriginalMainboard="";
     private String deckCommanderFilter="";
@@ -259,6 +266,9 @@ final class NativeWorkspaceScreen {
     boolean onBack(){
         if(closed)return false;
         switch(screenState){
+            case "ai-review":
+                returnFromAiReview();
+                return true;
             case "deck-edit":
                 requestLeaveEditor(()->showDeck(editingDeck));
                 return true;
@@ -284,7 +294,8 @@ final class NativeWorkspaceScreen {
     }
 
     private boolean editorChanged(){
-        return "deck-edit".equals(screenState) && editorName!=null &&
+        return ("deck-edit".equals(screenState) ||
+            ("ai-review".equals(screenState) && "deck-edit".equals(aiReturnState))) && editorName!=null &&
             editorMainboard!=null &&
             (!editorOriginalName.equals(editorName.getText().toString()) ||
              !editorOriginalMainboard.equals(editorMainboard.getText().toString()));
@@ -999,6 +1010,36 @@ final class NativeWorkspaceScreen {
             }
         }));
     }
+    /** Keep the exact editor widgets alive while reviewing; no saves or mutation. */
+    private void openAiReview(JSONObject deck,String unsavedBoard){
+        if(aiClient==null){info("Open Options to configure ChatGPT first.");return;}
+        if("ai-review".equals(screenState))return;
+        aiReturnViews.clear();
+        for(int i=0;i<content.getChildCount();i++)
+            aiReturnViews.add(content.getChildAt(i));
+        aiReturnState=screenState;
+        aiReturnStatus=status.getText().toString();
+        aiReturnScroll=workspaceScroll.getScrollY();
+        content.removeAllViews();
+        screenState="ai-review";
+        status.setText("AI Review · no automatic deck changes");
+        MobileAiReviewScreen review=new MobileAiReviewScreen(
+            activity,aiClient,prefs,deck,unsavedBoard,this::returnFromAiReview);
+        content.addView(review.view());
+        workspaceScroll.post(()->workspaceScroll.scrollTo(0,0));
+    }
+
+    private void returnFromAiReview(){
+        if(!"ai-review".equals(screenState))return;
+        content.removeAllViews();
+        for(View item:aiReturnViews)content.addView(item);
+        aiReturnViews.clear();
+        screenState=aiReturnState;
+        status.setText(aiReturnStatus);
+        int scroll=aiReturnScroll;
+        workspaceScroll.post(()->workspaceScroll.scrollTo(0,scroll));
+    }
+
     private void editDeck(JSONObject deck){
         screenState="deck-edit";editingDeck=deck;
         final int pageGeneration=++deckPageGeneration;
@@ -1014,6 +1055,10 @@ final class NativeWorkspaceScreen {
             "Commander: "+deck.optString("commander","")+" (unchanged)",13,
             VaultNativeStyle.SUBTEXT,false);
         fields.addView(commander);
+        Button aiReview=VaultNativeStyle.button(activity,"✦ AI Review (current draft)",false);
+        fields.addView(aiReview,new LinearLayout.LayoutParams(-1,dp(47)));
+        aiReview.setOnClickListener(v->openAiReview(deck,
+            editorMainboard==null?null:editorMainboard.getText().toString()));
         TextView nameLabel=VaultNativeStyle.label(activity,
             "DECK NAME",11,VaultNativeStyle.SUBTEXT,true);
         fields.addView(nameLabel);
@@ -1403,6 +1448,7 @@ final class NativeWorkspaceScreen {
                         VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,note,12,activity);
                     button("Edit this deck",()->editDeck(deck));
+                    button("✦ AI Review",()->openAiReview(deck,null));
                     LinearLayout share=VaultNativeStyle.row(activity);
                     Button copyArena=VaultNativeStyle.button(activity,"Copy for Arena",false);
                     Button copyPlain=VaultNativeStyle.button(activity,"Copy plain list",false);
