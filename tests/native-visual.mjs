@@ -30,9 +30,9 @@ console.log('PASS: dark native shell, full-height catalog, real cached thumbnail
 assert.match(catalog,/quickFilters=VaultNativeStyle\.column\(activity\)/);
 assert.match(catalog,/advancedFilters\.addView\(quickFilters,0\)/);
 assert.match(catalog,/catalogTileWidth\(\)/);
-assert.match(catalog,/NativeWindowLayoutPolicy\\.catalogColumns\\(contentDp\\)/);
+assert.match(catalog,/NativeWindowLayoutPolicy\.catalogColumns\(contentDp\)/);
 assert.match(catalog,/lastRenderedPage=response/);
-assert.match(catalog,/results\\.addOnLayoutChangeListener/);
+assert.match(catalog,/results\.addOnLayoutChangeListener/);
 assert.match(catalog,/if\(artGrid\)\{/);
 assert.match(catalog,/renderOwnedPrintingTile\(gallery,row,i\)/);
 assert.match(catalog,/PREF_COMPACT_GRID/);
