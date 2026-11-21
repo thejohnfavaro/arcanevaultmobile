@@ -82,6 +82,13 @@ final class NativeWorkspaceScreen {
     private final ArrayDeque<String> syncHistory=new ArrayDeque<>();
     private String screenState="";
     private JSONObject editingDeck;
+    private MobileChatGptClient aiClient;
+    private final ArrayList<View> aiReturnViews=new ArrayList<>();
+    private String aiReturnState="";
+    private String aiReturnStatus="";
+    private int aiReturnScroll=0;
+    void setAiClient(MobileChatGptClient client){this.aiClient=client;}
+
     private EditText editorName,editorMainboard;
     private String editorOriginalName="",editorOriginalMainboard="";
     private String deckCommanderFilter="";
@@ -259,6 +266,9 @@ final class NativeWorkspaceScreen {
     boolean onBack(){
         if(closed)return false;
         switch(screenState){
+            case "ai-review":
+                returnFromAiReview();
+                return true;
             case "deck-edit":
                 requestLeaveEditor(()->showDeck(editingDeck));
                 return true;
@@ -284,7 +294,8 @@ final class NativeWorkspaceScreen {
     }
 
     private boolean editorChanged(){
-        return "deck-edit".equals(screenState) && editorName!=null &&
+        return ("deck-edit".equals(screenState) ||
+            ("ai-review".equals(screenState) && "deck-edit".equals(aiReturnState))) && editorName!=null &&
             editorMainboard!=null &&
             (!editorOriginalName.equals(editorName.getText().toString()) ||
              !editorOriginalMainboard.equals(editorMainboard.getText().toString()));
