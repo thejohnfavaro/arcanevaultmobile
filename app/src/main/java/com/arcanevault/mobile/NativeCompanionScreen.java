@@ -359,6 +359,7 @@ final class NativeCompanionScreen {
             workspace=NativeWorkspaceScreen.create(activity,prefs,catalog,artwork,openLegacy,deckLoader,
                 deckSaver,scope.equals("data & sync")?"data":scope,
                 scope.equals("sets")?pendingSetFromWidget:"");
+            workspace.setAiClient(aiClient);
             stage.addView(workspace.view(),new FrameLayout.LayoutParams(-1,-1));
             subtitle.setText(scope.equals("sets")?"Set completion by owned edition":
                 scope.equals("decks")?"Saved deck library":
