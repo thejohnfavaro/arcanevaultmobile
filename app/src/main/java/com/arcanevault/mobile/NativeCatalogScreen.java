@@ -998,6 +998,44 @@ final class NativeCatalogScreen {
         });
     }
 
+    /** Full existing Catalog details from AI Review, including artwork,
+     * oracle text, formats and ownership. Return preserves the AI result. */
+    void inspectAiCard(String requestedName,Runnable returnToReview) {
+        String name=NativeArenaCardName.identity(requestedName);
+        openInspector(name);
+        inspectorBack=returnToReview;
+        Button back=(Button)inspectorContent.getChildAt(0);
+        back.setText("← Back to AI Review");
+        inspectorContent.addView(text("Loading local card details…",14,false));
+        final int token=inspectorRequest;
+        worker.execute(()->{
+            try{
+                JSONObject row=catalog.cardDetails(name);
+                ui.post(()->{
+                    if(disposed||activity.isFinishing()||token!=inspectorRequest)return;
+                    JSONObject meta=row.optJSONObject("meta");
+                    if(meta==null)meta=new JSONObject();
+                    showDetails(name,meta.optString("type",""),meta.optString("oracle",""),
+                        meta.optString("rarity",""),meta.optString("image",""),
+                        meta.optString("imageBack",""),row.optInt("arenaQty",0),
+                        row.optInt("physicalQty",0),null,"","",0,meta,returnToReview);
+                    Button top=(Button)inspectorContent.getChildAt(0);
+                    top.setText("← Back to AI Review");
+                });
+            }catch(Exception error){
+                ui.post(()->{
+                    if(disposed||activity.isFinishing()||token!=inspectorRequest)return;
+                    inspectorContent.removeAllViews();
+                    Button backButton=VaultNativeStyle.button(activity,"← Back to AI Review",false);
+                    inspectorContent.addView(backButton);
+                    backButton.setOnClickListener(v->returnToReview.run());
+                    inspectorContent.addView(text("Card details unavailable: "+
+                        error.getMessage(),14,false));
+                });
+            }
+        });
+    }
+
     /** Compact official Scryfall mana glyphs shared by Catalog and Set Progress.
      * Numeric/hybrid tokens remain literal when no approved SVG is available;
      * no approximated or duplicate color symbols are invented. */

@@ -11,6 +11,11 @@ import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.StyleSpan;
+import android.text.style.ClickableSpan;
+import android.text.method.LinkMovementMethod;
+import android.text.TextPaint;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -29,6 +34,10 @@ final class MobileAiReviewScreen {
     private final Activity activity;
     private final MobileChatGptClient client;
     private final SharedPreferences prefs;
+    private final CatalogStore catalog;
+    private final java.util.function.Consumer<String> inspectCard;
+    private final ExecutorService catalogReads=Executors.newSingleThreadExecutor();
+    private int reviewGeneration;
     private final JSONObject deck;
     private final String board;
     private final LinearLayout root;
@@ -45,8 +54,10 @@ final class MobileAiReviewScreen {
     private int dp(float value){return VaultNativeStyle.dp(activity,value);}
 
     MobileAiReviewScreen(Activity activity,MobileChatGptClient client,SharedPreferences prefs,
-            JSONObject deck,String unsavedBoard,Runnable back){
+            JSONObject deck,String unsavedBoard,Runnable back,
+            CatalogStore catalog,java.util.function.Consumer<String> inspectCard){
         this.activity=activity;this.client=client;this.prefs=prefs;this.deck=deck;board=unsavedBoard;
+        this.catalog=catalog;this.inspectCard=inspectCard;
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(14),dp(10),dp(14),dp(24));
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
@@ -101,7 +112,8 @@ final class MobileAiReviewScreen {
         root.addView(copyResult);
         result=VaultNativeStyle.label(activity,"Select Analyze to review your deck.",
             14,VaultNativeStyle.TEXT,false);
-        result.setTextIsSelectable(true);
+        result.setLinksClickable(true);
+        result.setMovementMethod(LinkMovementMethod.getInstance());
         result.setPadding(dp(9),dp(16),dp(9),dp(16));
         result.setBackground(VaultNativeStyle.rounded(activity,
             VaultNativeStyle.SURFACE,VaultNativeStyle.BORDER,10));
@@ -153,11 +165,62 @@ final class MobileAiReviewScreen {
                 }
                 response=answer;
                 result.setText(formatReview(answer));
+                linkVerifiedCards(answer);
                 status.setText("Review complete ("+model+"). No saved deck or collection changes.");
             });
         });
         refresh.run();
     }
+    /** Exact local catalog verification is mandatory; the AI cannot invent a
+     * clickable card by merely formatting arbitrary text as a name. */
+    private void linkVerifiedCards(String answer){
+        int generation=++reviewGeneration;
+        JSONArray entries;
+        try{
+            entries=board==null?deck.optJSONArray("entries"):NativeDeckDraft.parseEntries(board);
+        }catch(Exception ex){entries=deck.optJSONArray("entries");}
+        final JSONArray snapshot=entries;
+        final java.util.List<String> candidates=AiReviewCardMentions.candidates(
+            answer,snapshot,deck.optString("commander",""));
+        catalogReads.execute(()->{
+            java.util.LinkedHashSet<String> confirmed=new java.util.LinkedHashSet<>();
+            for(String candidate:candidates){
+                try{
+                    JSONObject details=catalog.cardDetails(candidate);
+                    String exact=details.optString("name","");
+                    if(!exact.isEmpty())confirmed.add(exact);
+                }catch(Exception ignored){ /* No verified catalog entry, no link. */ }
+            }
+            java.util.List<String> sorted=AiReviewCardMentions.longestFirst(confirmed);
+            activity.runOnUiThread(()->{
+                if(generation!=reviewGeneration)return;
+                SpannableStringBuilder text=new SpannableStringBuilder(formatReview(answer));
+                boolean[] occupied=new boolean[text.length()];
+                for(String name:sorted){
+                    java.util.regex.Matcher m=Pattern.compile(
+                        "(?i)(?<![\\p{L}\\p{N}])"+Pattern.quote(name)+"(?![\\p{L}\\p{N}])")
+                        .matcher(text);
+                    while(m.find()){
+                        boolean clear=true;
+                        for(int k=m.start();k<m.end();k++)
+                            if(occupied[k]){clear=false;break;}
+                        if(!clear)continue;
+                        for(int k=m.start();k<m.end();k++)occupied[k]=true;
+                        final String selected=name;
+                        text.setSpan(new ClickableSpan(){
+                            @Override public void onClick(View widget){inspectCard.accept(selected);}
+                            @Override public void updateDrawState(TextPaint paint){
+                                paint.setColor(VaultNativeStyle.GOLD);
+                                paint.setUnderlineText(true);
+                            }
+                        },m.start(),m.end(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    }
+                }
+                result.setText(text);
+            });
+        });
+    }
+
     View view(){return root;}
     private void label(String text,int size,boolean bold,int color){
         TextView label=VaultNativeStyle.label(activity,text,size,color,bold);
