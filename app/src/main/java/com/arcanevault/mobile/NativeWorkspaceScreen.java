@@ -83,6 +83,9 @@ final class NativeWorkspaceScreen {
     private String screenState="";
     private JSONObject editingDeck;
     private MobileChatGptClient aiClient;
+    private NativeCatalogScreen aiCardInspector;
+    private View aiReviewRetainedView;
+    private int aiReviewRetainedScroll;
     private final ArrayList<View> aiReturnViews=new ArrayList<>();
     private String aiReturnState="";
     private String aiReturnStatus="";
@@ -251,6 +254,7 @@ final class NativeWorkspaceScreen {
     View view(){return root;}
     void close(){
         closed=true;
+        if(aiCardInspector!=null){aiCardInspector.close();aiCardInspector=null;}
         executor.shutdownNow();
         setDetailsWorker.shutdownNow();
         coverWorkers.shutdownNow();
@@ -267,6 +271,7 @@ final class NativeWorkspaceScreen {
         if(closed)return false;
         switch(screenState){
             case "ai-review":
+                if(aiCardInspector!=null){returnFromAiCard();return true;}
                 returnFromAiReview();
                 return true;
             case "deck-edit":
@@ -1024,12 +1029,36 @@ final class NativeWorkspaceScreen {
         screenState="ai-review";
         status.setText("AI Review · no automatic deck changes");
         MobileAiReviewScreen review=new MobileAiReviewScreen(
-            activity,aiClient,prefs,deck,unsavedBoard,this::returnFromAiReview);
+            activity,aiClient,prefs,deck,unsavedBoard,this::returnFromAiReview,
+            catalog,this::openAiCard);
         content.addView(review.view());
         workspaceScroll.post(()->workspaceScroll.scrollTo(0,0));
     }
 
+    private void openAiCard(String name){
+        if(closed||!"ai-review".equals(screenState)||aiCardInspector!=null)return;
+        if(content.getChildCount()==0)return;
+        aiReviewRetainedView=content.getChildAt(0);
+        aiReviewRetainedScroll=workspaceScroll.getScrollY();
+        content.removeAllViews();
+        aiCardInspector=new NativeCatalogScreen(activity,catalog,artwork,prefs);
+        content.addView(aiCardInspector.view(),new LinearLayout.LayoutParams(-1,dp(750)));
+        aiCardInspector.inspectAiCard(name,this::returnFromAiCard);
+        workspaceScroll.post(()->workspaceScroll.scrollTo(0,0));
+    }
+
+    private void returnFromAiCard(){
+        if(aiCardInspector==null)return;
+        aiCardInspector.close();
+        aiCardInspector=null;
+        content.removeAllViews();
+        if(aiReviewRetainedView!=null)content.addView(aiReviewRetainedView);
+        aiReviewRetainedView=null;
+        workspaceScroll.post(()->workspaceScroll.scrollTo(0,aiReviewRetainedScroll));
+    }
+
     private void returnFromAiReview(){
+        if(aiCardInspector!=null){returnFromAiCard();return;}
         if(!"ai-review".equals(screenState))return;
         content.removeAllViews();
         for(View item:aiReturnViews)content.addView(item);
