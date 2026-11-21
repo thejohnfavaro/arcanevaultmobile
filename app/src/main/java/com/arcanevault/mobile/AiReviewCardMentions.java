@@ -32,7 +32,13 @@ final class AiReviewCardMentions {
                 String trimmed=line.trim();
                 if(!trimmed.startsWith("|"))continue;
                 String[] cells=trimmed.replaceAll("^\\||\\|$","").split("\\|");
-                for(int i=0;i<Math.min(2,cells.length);i++)add(names,cells[i]);
+                for(int i=0;i<Math.min(2,cells.length);i++){
+                    String value=cells[i].trim();
+                    if(value.equalsIgnoreCase("cut")||value.equalsIgnoreCase("add")||
+                        value.equalsIgnoreCase("card")||value.equalsIgnoreCase("why")||
+                        value.matches("[:\\- ]+"))continue;
+                    add(names,value);
+                }
             }
         }
         return new ArrayList<>(names);
