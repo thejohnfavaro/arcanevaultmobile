@@ -109,6 +109,13 @@ final class NativeCatalogScreen {
     private Button[] sourceShortcuts;
     private int page = 0;
     private int pageSize=40;
+    // Last page is retained for visual-only reflow: no new catalog query,
+    // filter reset, or collection write on rotate/fold/split screen.
+    private JSONObject lastRenderedPage;
+    private int lastRenderedPageIndex;
+    private String lastRenderedSource;
+    private boolean lastRenderedPrinting;
+    private int lastRenderedColumns = -1;
     private volatile boolean disposed;
     private boolean filtersReady=false;
 
@@ -261,6 +268,23 @@ final class NativeCatalogScreen {
         browseScroll = VaultNativeStyle.scroll(activity);
         results = new LinearLayout(activity);
         results.setOrientation(LinearLayout.VERTICAL);
+        results.addOnLayoutChangeListener((view,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
+            if(disposed || !artGrid || lastRenderedPage==null || results.getWidth()<=0 ||
+                browseScroll.getVisibility()!=View.VISIBLE)return;
+            int columns=catalogColumns();
+            if(columns!=lastRenderedColumns){
+                final JSONObject samePage=lastRenderedPage;
+                final int sameIndex=lastRenderedPageIndex;
+                final String sameSource=lastRenderedSource;
+                final boolean samePrinting=lastRenderedPrinting;
+                lastRenderedColumns=columns;
+                results.post(()->{
+                    if(!disposed && artGrid && samePage==lastRenderedPage &&
+                        browseScroll.getVisibility()==View.VISIBLE)
+                        render(samePage,sameIndex,sameSource,samePrinting);
+                });
+            }
+        });
         LinearLayout browseContent=VaultNativeStyle.column(activity);
         browseContent.addView(advancedFilters);
         browseContent.addView(status);
@@ -611,6 +635,11 @@ final class NativeCatalogScreen {
     }
 
     private void render(JSONObject response,int selectedPage,String src,boolean printingMode) {
+        lastRenderedPage=response;
+        lastRenderedPageIndex=selectedPage;
+        lastRenderedSource=src;
+        lastRenderedPrinting=printingMode;
+        lastRenderedColumns=artGrid?catalogColumns():-1;
         results.removeAllViews();
         int total=response.optInt("total",0);
         JSONArray rows=response.optJSONArray("cards");
@@ -708,11 +737,11 @@ final class NativeCatalogScreen {
             activity.getResources().getDisplayMetrics().widthPixels-dp(36);
     }
 
-    /** Two cards on a phone; three or four when a larger viewport permits it. */
+    /** Window-width based layout, including compact split-screen and tablets. */
     private int catalogColumns() {
-        float usableDp=galleryWidth() /
-            activity.getResources().getDisplayMetrics().density;
-        return usableDp >= 680f ? 4 : usableDp >= 490f ? 3 : 2;
+        int contentDp=Math.round(galleryWidth() /
+            activity.getResources().getDisplayMetrics().density);
+        return NativeWindowLayoutPolicy.catalogColumns(contentDp);
     }
 
     private int catalogTileWidth() {
