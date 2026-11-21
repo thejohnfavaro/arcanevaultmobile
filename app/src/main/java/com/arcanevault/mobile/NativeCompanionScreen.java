@@ -593,7 +593,8 @@ final class NativeCompanionScreen {
             VaultNativeStyle.GOLD);
         TextView status=text(aiClient.status(),13,VaultNativeStyle.SUBTEXT,false);
         VaultNativeStyle.margin(parent,status,10,activity);
-        Button connect=button(aiClient.connected()?"Reauthorize ChatGPT":"Continue with ChatGPT",true);
+        Button connect=button(aiClient.connected()?"ChatGPT connected":"Continue with ChatGPT",true);
+        connect.setEnabled(!aiClient.connected());
         VaultNativeStyle.margin(parent,connect,9,activity);
         Button disconnect=button("Disconnect ChatGPT",false);
         disconnect.setEnabled(aiClient.connected());
@@ -609,8 +610,8 @@ final class NativeCompanionScreen {
             aiClient.connect((message,ok)->{
                 if(closed)return;
                 status.setText(message);
-                connect.setEnabled(true);
-                connect.setText(aiClient.connected()?"Reauthorize ChatGPT":"Continue with ChatGPT");
+                connect.setEnabled(!aiClient.connected());
+                connect.setText(aiClient.connected()?"ChatGPT connected":"Continue with ChatGPT");
                 disconnect.setEnabled(aiClient.connected());
             });
         });
