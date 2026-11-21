@@ -17,7 +17,7 @@ final class AiReviewCardMentions {
     private AiReviewCardMentions(){}
 
     static final Pattern EXPLICIT = Pattern.compile(
-        "\\[\\[card:([^\\]\\r\\n]{2,150})\\]\\]",
+        "\\[\\[card:(.{2,150}?)\\]\\]",
         Pattern.CASE_INSENSITIVE);
 
     /** Never infer links from ordinary prose or pre-populate deck words. */
