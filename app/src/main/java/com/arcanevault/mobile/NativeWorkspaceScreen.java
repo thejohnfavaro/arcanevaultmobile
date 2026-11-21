@@ -1055,6 +1055,10 @@ final class NativeWorkspaceScreen {
             "Commander: "+deck.optString("commander","")+" (unchanged)",13,
             VaultNativeStyle.SUBTEXT,false);
         fields.addView(commander);
+        Button aiReview=VaultNativeStyle.button(activity,"✦ AI Review (current draft)",false);
+        fields.addView(aiReview,new LinearLayout.LayoutParams(-1,dp(47)));
+        aiReview.setOnClickListener(v->openAiReview(deck,
+            editorMainboard==null?null:editorMainboard.getText().toString()));
         TextView nameLabel=VaultNativeStyle.label(activity,
             "DECK NAME",11,VaultNativeStyle.SUBTEXT,true);
         fields.addView(nameLabel);
@@ -1444,6 +1448,7 @@ final class NativeWorkspaceScreen {
                         VaultNativeStyle.SUBTEXT,false);
                     VaultNativeStyle.margin(content,note,12,activity);
                     button("Edit this deck",()->editDeck(deck));
+                    button("✦ AI Review",()->openAiReview(deck,null));
                     LinearLayout share=VaultNativeStyle.row(activity);
                     Button copyArena=VaultNativeStyle.button(activity,"Copy for Arena",false);
                     Button copyPlain=VaultNativeStyle.button(activity,"Copy plain list",false);
