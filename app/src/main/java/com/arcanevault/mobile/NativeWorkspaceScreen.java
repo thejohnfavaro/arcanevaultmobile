@@ -1010,6 +1010,36 @@ final class NativeWorkspaceScreen {
             }
         }));
     }
+    /** Keep the exact editor widgets alive while reviewing; no saves or mutation. */
+    private void openAiReview(JSONObject deck,String unsavedBoard){
+        if(aiClient==null){info("Open Options to configure ChatGPT first.");return;}
+        if("ai-review".equals(screenState))return;
+        aiReturnViews.clear();
+        for(int i=0;i<content.getChildCount();i++)
+            aiReturnViews.add(content.getChildAt(i));
+        aiReturnState=screenState;
+        aiReturnStatus=status.getText().toString();
+        aiReturnScroll=workspaceScroll.getScrollY();
+        content.removeAllViews();
+        screenState="ai-review";
+        status.setText("AI Review · no automatic deck changes");
+        MobileAiReviewScreen review=new MobileAiReviewScreen(
+            activity,aiClient,prefs,deck,unsavedBoard,this::returnFromAiReview);
+        content.addView(review.view());
+        workspaceScroll.post(()->workspaceScroll.scrollTo(0,0));
+    }
+
+    private void returnFromAiReview(){
+        if(!"ai-review".equals(screenState))return;
+        content.removeAllViews();
+        for(View item:aiReturnViews)content.addView(item);
+        aiReturnViews.clear();
+        screenState=aiReturnState;
+        status.setText(aiReturnStatus);
+        int scroll=aiReturnScroll;
+        workspaceScroll.post(()->workspaceScroll.scrollTo(0,scroll));
+    }
+
     private void editDeck(JSONObject deck){
         screenState="deck-edit";editingDeck=deck;
         final int pageGeneration=++deckPageGeneration;
