@@ -183,15 +183,23 @@ final class MobileAiReviewScreen {
         final java.util.List<String> candidates=AiReviewCardMentions.candidates(
             answer,snapshot,deck.optString("commander",""));
         catalogReads.execute(()->{
-            java.util.LinkedHashSet<String> confirmed=new java.util.LinkedHashSet<>();
+            // The visible review phrase may be only the front face of an
+            // MDFC. Keep display text separate from its verified full identity.
+            java.util.LinkedHashMap<String,String> confirmed=new java.util.LinkedHashMap<>();
             for(String candidate:candidates){
                 try{
                     JSONObject details=catalog.cardDetailsForReviewMention(candidate);
                     String exact=details.optString("name","");
-                    if(!exact.isEmpty())confirmed.add(exact);
+                    if(!exact.isEmpty()){
+                        confirmed.put(exact,exact);
+                        if(!candidate.equalsIgnoreCase(exact) &&
+                           exact.regionMatches(true,0,candidate+" // ",0,
+                               (candidate+" // ").length()))
+                            confirmed.put(candidate,exact);
+                    }
                 }catch(Exception ignored){ /* No verified catalog entry, no link. */ }
             }
-            java.util.List<String> sorted=AiReviewCardMentions.longestFirst(confirmed);
+            java.util.List<String> sorted=AiReviewCardMentions.longestFirst(confirmed.keySet());
             activity.runOnUiThread(()->{
                 if(generation!=reviewGeneration)return;
                 SpannableStringBuilder text=new SpannableStringBuilder(formatReview(answer));
@@ -206,7 +214,7 @@ final class MobileAiReviewScreen {
                             if(occupied[k]){clear=false;break;}
                         if(!clear)continue;
                         for(int k=m.start();k<m.end();k++)occupied[k]=true;
-                        final String selected=name;
+                        final String selected=confirmed.get(name);
                         text.setSpan(new ClickableSpan(){
                             @Override public void onClick(View widget){inspectCard.accept(selected);}
                             @Override public void updateDrawState(TextPaint paint){
