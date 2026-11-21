@@ -784,6 +784,30 @@ final class CatalogStore extends SQLiteOpenHelper {
      * A broad LIKE search may return hundreds of cards mentioning a name
      * before the actual exact card is encountered. This query cannot guess
      * a printing and never mutates owned inventory. */
+    /** Resolve a verified review mention to a catalog identity, including
+     * the front face of a double-faced card. Never accept an ambiguous face. */
+    JSONObject cardDetailsForReviewMention(String name)throws Exception {
+        try {
+            return cardDetails(name);
+        } catch (IllegalStateException notExact) {
+            if(name==null || name.isBlank())throw notExact;
+            String prefix=name+" // ";
+            String found=null;
+            try(Cursor rows=getReadableDatabase().rawQuery(
+                "SELECT name FROM cards WHERE substr(name,1,length(?))=? COLLATE NOCASE",
+                new String[]{prefix,prefix})){
+                while(rows.moveToNext()){
+                    String canonical=rows.getString(0);
+                    if(!canonical.regionMatches(true,0,prefix,0,prefix.length()))continue;
+                    if(found!=null && !found.equalsIgnoreCase(canonical))throw notExact;
+                    found=canonical;
+                }
+            }
+            if(found==null)throw notExact;
+            return cardDetails(found);
+        }
+    }
+
     JSONObject cardDetails(String name)throws Exception {
         if(name==null||name.isBlank()||name.length()>300)
             throw new IllegalArgumentException("Invalid card name");
