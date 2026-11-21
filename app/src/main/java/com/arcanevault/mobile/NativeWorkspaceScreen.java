@@ -271,7 +271,10 @@ final class NativeWorkspaceScreen {
         if(closed)return false;
         switch(screenState){
             case "ai-review":
-                if(aiCardInspector!=null){returnFromAiCard();return true;}
+                if(aiCardInspector!=null){
+                    if(!aiCardInspector.onBack())returnFromAiCard();
+                    return true;
+                }
                 returnFromAiReview();
                 return true;
             case "deck-edit":
