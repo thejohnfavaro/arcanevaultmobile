@@ -22,3 +22,5 @@
 - Android debug compilation, existing regression checks and the newly added candidate-name test passed in PR #93.
 - The Android signed release workflow verifies the production APK; full device interaction and callback navigation still require hands-on testing.
 - No automatic deck changes and no extra AI uploads for card previews. Catalog lookup stays local.
+
+Build target: Android application version 2.1.73 (versionCode 129); no user data migration.
