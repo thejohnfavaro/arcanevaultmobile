@@ -186,7 +186,7 @@ final class MobileAiReviewScreen {
             java.util.LinkedHashSet<String> confirmed=new java.util.LinkedHashSet<>();
             for(String candidate:candidates){
                 try{
-                    JSONObject details=catalog.cardDetails(candidate);
+                    JSONObject details=catalog.cardDetailsForReviewMention(candidate);
                     String exact=details.optString("name","");
                     if(!exact.isEmpty())confirmed.add(exact);
                 }catch(Exception ignored){ /* No verified catalog entry, no link. */ }
