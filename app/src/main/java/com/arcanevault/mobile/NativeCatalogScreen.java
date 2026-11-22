@@ -152,6 +152,13 @@ final class NativeCatalogScreen {
         searchParams.topMargin=dp(3);searchParams.bottomMargin=dp(6);
         searchRow=VaultNativeStyle.row(activity);
         searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(46),1));
+        Button clearSearch=VaultNativeStyle.button(activity,"×",false);
+        clearSearch.setContentDescription("Clear card catalog search");
+        clearSearch.setVisibility(View.GONE);
+        LinearLayout.LayoutParams clearParams=new LinearLayout.LayoutParams(dp(40),dp(46));
+        clearParams.leftMargin=dp(4);
+        searchRow.addView(clearSearch,clearParams);
+        clearSearch.setOnClickListener(v->search.setText(""));
         Button filterShortcut=VaultNativeStyle.button(activity,"☷",false);
         filterShortcut.setContentDescription("Open filters and sorting");
         LinearLayout.LayoutParams shortcutParams=new LinearLayout.LayoutParams(dp(48),dp(46));
@@ -161,7 +168,9 @@ final class NativeCatalogScreen {
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
             public void onTextChanged(CharSequence s,int start,int before,int count) {
-                query = s.toString(); page = 0; schedule();
+                query = s.toString(); page = 0;
+                clearSearch.setVisibility(query.isEmpty()?View.GONE:View.VISIBLE);
+                schedule();
             }
             public void afterTextChanged(Editable s) {}
         });
@@ -644,14 +653,15 @@ final class NativeCatalogScreen {
         int total=response.optInt("total",0);
         JSONArray rows=response.optJSONArray("cards");
         int count=rows==null?0:rows.length();
+        int pageCount=Math.max(1,(total+pageSize-1)/pageSize);
         status.setText(total+(printingMode?" confirmed owned printings":" cards found")+
-                " • page "+(selectedPage+1)
+                " • page "+(selectedPage+1)+" of "+pageCount
                 +("physical".equals(src)?" • Physical Collection":"arena".equals(src)?" • Arena Collection":" • Both Collections"));
         if(total==0){
             results.addView(text(printingMode?
                 "No confirmed printings found. Name-only physical cards stay in Physical → Owned, "+
                 "but are not assigned to a set. Sync printing metadata or restore verified IDs in Legacy tools.":
-                "No cards found. If your catalog is empty, sync Scryfall data in Legacy tools.",14,false));
+                "No cards match the current search and filters. Clear the search or adjust Filters & Sort. If your catalog is empty, refresh card data in Data & Sync.",14,false));
             return;
         }
         GridLayout gallery=null;
