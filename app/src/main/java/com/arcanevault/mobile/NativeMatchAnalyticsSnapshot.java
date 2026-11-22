@@ -45,20 +45,67 @@ final class NativeMatchAnalyticsSnapshot {
                 time.length()>48)
                 throw new IllegalArgumentException("Invalid confirmed match entry");
             Instant parsed=OffsetDateTime.parse(time).toInstant();
+            String colors=normalizeOpponentColors(row.optString("opponentColors",""));
             clean.put(new JSONObject().put("playedUtc",parsed.toString())
-                .put("deckName",deck).put("format",format).put("result",result));
+                .put("deckName",deck).put("format",format).put("result",result)
+                .put("opponentColors",colors));
         }
         return new JSONObject().put("schema",1).put("records",clean)
             .put("asOfUtc",source.optString("asOfUtc",""));
     }
 
+    static String normalizeOpponentColors(String raw){
+        if(raw==null)return "";
+        String value=raw.trim().toUpperCase(Locale.ROOT);
+        if(value.equals("C"))return "C";
+        if(value.length()>16)return "";
+        StringBuilder normalized=new StringBuilder();
+        for(char color:"WUBRG".toCharArray())
+            if(value.indexOf(color)>=0)normalized.append(color);
+        for(int i=0;i<value.length();i++)
+            if("WUBRG ,/".indexOf(value.charAt(i))<0)return "";
+        return normalized.toString();
+    }
+    static final class ColorResult {
+        final String identity;
+        int wins,losses;
+        ColorResult(String name){identity=name;}
+        int matches(){return wins+losses;}
+        int percent(){return matches()==0?0:(int)Math.round(100d*wins/matches());}
+    }
+    static ArrayList<ColorResult> byOpponentColors(JSONObject snapshot,
+            String deck,String format,int days,Instant now)throws Exception {
+        JSONArray all=snapshot.getJSONArray("records");
+        Instant cutoff=days>0?now.minusSeconds(days*86400L):Instant.EPOCH;
+        LinkedHashMap<String,ColorResult> grouped=new LinkedHashMap<>();
+        for(int i=0;i<all.length();i++){
+            Row row=new Row(all.getJSONObject(i));
+            if(row.time.isAfter(now)||row.time.isBefore(cutoff))continue;
+            if(deck!=null&&!deck.isEmpty()&&!row.deck.equalsIgnoreCase(deck))continue;
+            String queue=row.format.isEmpty()?"Unknown format":row.format;
+            if(format!=null&&!format.isEmpty()&&!queue.equalsIgnoreCase(format))continue;
+            String key=row.opponentColors.isEmpty()?"Unknown":row.opponentColors;
+            ColorResult result=grouped.get(key);
+            if(result==null){result=new ColorResult(key);grouped.put(key,result);}
+            if(row.result.equals("win"))result.wins++;else result.losses++;
+        }
+        ArrayList<ColorResult> sorted=new ArrayList<>(grouped.values());
+        sorted.sort((a,b)->{
+            if(a.identity.equals("Unknown"))return 1;
+            if(b.identity.equals("Unknown"))return -1;
+            int n=Integer.compare(b.matches(),a.matches());
+            return n!=0?n:a.identity.compareTo(b.identity);
+        });
+        return sorted;
+    }
     static final class Row {
-        final String deck,format,result;
+        final String deck,format,result,opponentColors;
         final Instant time;
         Row(JSONObject o)throws Exception {
             deck=o.getString("deckName");
             format=o.optString("format");
             result=o.getString("result");
+            opponentColors=normalizeOpponentColors(o.optString("opponentColors",""));
             time=Instant.parse(o.getString("playedUtc"));
         }
     }
