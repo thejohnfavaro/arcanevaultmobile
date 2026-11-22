@@ -721,6 +721,109 @@ final class CatalogStore extends SQLiteOpenHelper {
         return result;
     }
 
+    /**
+     * Repair the mana-cost column for cards indexed before schema v4.
+     * Uses a small, rate-limited Scryfall collection lookup for exact known
+     * card names; updates ONLY cards.mana. Never touches printings, inventory
+     * snapshots, saved decks or any ownership table.
+     *
+     * Must run on a background worker, never the UI thread.
+     */
+    int fillMissingDeckManaCosts(String commander,JSONArray entries)throws Exception {
+        if(entries==null||entries.length()>500)
+            throw new IllegalArgumentException("Too many cards to refresh");
+        if(syncing.get())throw new IllegalStateException(
+            "Catalog is synchronizing. Retry once synchronization completes.");
+        SQLiteDatabase db=getReadableDatabase();
+        LinkedHashMap<String,String> missing=new LinkedHashMap<>();
+        for(int i=-1;i<entries.length();i++){
+            JSONObject row=i<0?null:entries.optJSONObject(i);
+            String raw=i<0?commander:row==null?"":row.optString("name","");
+            String name=NativeArenaCardName.identity(raw);
+            if(name==null||name.isBlank()||name.length()>300)continue;
+            String key=name.toLowerCase(Locale.ROOT);
+            if(missing.containsKey(key))continue;
+            try(Cursor c=db.rawQuery(
+                    "SELECT name,type,mana FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
+                    new String[]{name})){
+                if(c.moveToFirst()){
+                    String type=c.getString(1),mana=c.getString(2);
+                    if(type!=null&&!type.toLowerCase(Locale.ROOT).contains("land")&&
+                            (mana==null||mana.isEmpty()))
+                        missing.put(key,c.getString(0));
+                }
+            }
+        }
+        if(missing.isEmpty())return 0;
+        // An individual deck is small; bounded batch requests avoid downloading
+        // the multi-hundred-MB bulk catalog simply to backfill v4 metadata.
+        int updated=0,batches=0;
+        ArrayList<String> all=new ArrayList<>(missing.values());
+        for(int offset=0;offset<all.size();offset+=75){
+            if(syncing.get())throw new IllegalStateException(
+                "Catalog sync started during mana cost refresh");
+            if(batches++>0)Thread.sleep(600);
+            JSONArray identifiers=new JSONArray();
+            HashSet<String> requested=new HashSet<>();
+            for(int j=offset;j<Math.min(offset+75,all.size());j++){
+                String name=all.get(j);
+                requested.add(name.toLowerCase(Locale.ROOT));
+                identifiers.put(new JSONObject().put("name",name));
+            }
+            URL endpoint=new URL("https://api.scryfall.com/cards/collection");
+            HttpURLConnection connection=(HttpURLConnection)endpoint.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(12000);
+            connection.setReadTimeout(20000);
+            connection.setRequestProperty("User-Agent",
+                "ArcaneVaultAndroid/2.1 (local deck mana metadata repair)");
+            connection.setRequestProperty("Accept","application/json");
+            connection.setRequestProperty("Content-Type","application/json");
+            connection.setDoOutput(true);
+            try {
+                byte[] body=new JSONObject().put("identifiers",identifiers)
+                    .toString().getBytes(StandardCharsets.UTF_8);
+                try(OutputStream output=connection.getOutputStream()){
+                    output.write(body);
+                }
+                if(connection.getResponseCode()!=200)
+                    throw new IOException("Scryfall card metadata HTTP "+
+                        connection.getResponseCode());
+                JSONObject response;
+                try(InputStream input=connection.getInputStream()){
+                    response=new JSONObject(readSmall(input,5_000_000));
+                }
+                JSONArray results=response.optJSONArray("data");
+                if(results==null)throw new IOException("Invalid Scryfall card collection response");
+                LinkedHashMap<String,String> resolved=new LinkedHashMap<>();
+                for(int j=0;j<results.length();j++){
+                    JSONObject card=results.optJSONObject(j);
+                    if(card==null)continue;
+                    String canonical=card.optString("name","");
+                    if(!requested.contains(canonical.toLowerCase(Locale.ROOT)))continue;
+                    String cost=manaCost(card);
+                    if(!cost.isEmpty()&&cost.length()<=512)
+                        resolved.put(canonical,cost);
+                }
+                if(!resolved.isEmpty()){
+                    SQLiteDatabase writable=getWritableDatabase();
+                    writable.beginTransaction();
+                    try{
+                        for(Map.Entry<String,String> entry:resolved.entrySet()){
+                            ContentValues values=new ContentValues();
+                            values.put("mana",entry.getValue());
+                            updated+=writable.update("cards",values,
+                                "name=? COLLATE NOCASE AND mana=''",
+                                new String[]{entry.getKey()});
+                        }
+                        writable.setTransactionSuccessful();
+                    }finally{writable.endTransaction();}
+                }
+            }finally{connection.disconnect();}
+        }
+        return updated;
+    }
+
     JSONObject deckInsights(String commander,JSONArray entries)throws Exception {
         if(entries==null || entries.length()>500)
             throw new IllegalArgumentException("Too many deck entries to analyze");
