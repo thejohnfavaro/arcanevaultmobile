@@ -825,13 +825,17 @@ final class NativeWorkspaceScreen {
             coverWorkers.execute(()->{
                 Bitmap decoded=null;
                 try {
-                    String url=catalog.commanderCoverUrl(commander);
+                    // Saved deck entries can include Arena printing annotations
+                    // such as "Esper Sentinel (MH2) 12". Look up the actual
+                    // card identity without modifying the saved entry.
+                    String cardIdentity=NativeArenaCardName.identity(commander);
+                    String url=catalog.commanderCoverUrl(cardIdentity);
                     if(url.isEmpty()){
                         // Draft imports may use a front-face-only name for a
                         // double-faced card, while the local catalog stores
                         // the exact "Front // Back" identity.
                         try{
-                            JSONObject exact=catalog.cardDetailsForReviewMention(commander);
+                            JSONObject exact=catalog.cardDetailsForReviewMention(cardIdentity);
                             JSONObject meta=exact.optJSONObject("meta");
                             if(meta!=null)url=meta.optString("image","");
                         }catch(Exception ignored){
