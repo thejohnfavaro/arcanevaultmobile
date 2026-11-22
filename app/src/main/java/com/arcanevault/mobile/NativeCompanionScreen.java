@@ -134,6 +134,7 @@ final class NativeCompanionScreen {
             deckLoader,deckSaver);
     }
     View view(){return root;}
+    void onAppResumed(){if(!closed)aiClient.onAppResumed();}
     void close(){
         if(closed)return;
         closed=true;
