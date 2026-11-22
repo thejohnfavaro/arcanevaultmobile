@@ -110,7 +110,7 @@ final class MobileChatGptClient {
                 // Java usually reports the failed hostname; never show arbitrary
                 // exception content or authorization URLs with query parameters.
                 java.util.regex.Matcher match=java.util.regex.Pattern.compile(
-                    "(?i)(?:[a-z0-9-]+\\\\.)+[a-z]{2,63}").matcher(host);
+                    "(?i)(?:[a-z0-9-]+\\.)+[a-z]{2,63}").matcher(host);
                 String failedHost=match.find()?match.group():"unknown hostname";
                 return "DNS lookup failed during the OAuth request (host: "+failedHost+
                     "). The earlier HTTPS test succeeded; this could be an intermittent lookup or a different request destination.";
