@@ -98,6 +98,10 @@ final class NativeWorkspaceScreen {
     private JSONArray deckSnapshot=new JSONArray();
     private LinearLayout deckListPanel;
     private String deckSearch="",deckSort="updated",deckFolder="",deckFormat="";
+    private int deckLibraryRestoreScroll=-1;
+    private final Runnable deckSearchPending=()->{
+        if(!closed&&"deck-library".equals(screenState))renderDeckList();
+    };
     private boolean deckFavoritesOnly=false;
     private LinearLayout shortlistPanel;
     private ArrayList<JSONObject> shortlistCards=new ArrayList<>();
@@ -881,6 +885,7 @@ final class NativeWorkspaceScreen {
         editingDeck=null;editorName=null;editorMainboard=null;
         final int pageGeneration=++deckPageGeneration;
         deckCoverTargets.clear();
+        ui.removeCallbacks(deckSearchPending);
         status.setText("Reading saved deck library from the existing app…");
         decks.fetch(json->ui.post(()->{
             if(closed||activity.isFinishing()||pageGeneration!=deckPageGeneration)return;
@@ -899,7 +904,16 @@ final class NativeWorkspaceScreen {
                 search.setSingleLine(true);
                 search.setHint("Search deck, commander, format, or tags");
                 search.setText(deckSearch);
-                VaultNativeStyle.margin(content,search,7,activity);
+                LinearLayout deckSearchRow=VaultNativeStyle.row(activity);
+                deckSearchRow.addView(search,new LinearLayout.LayoutParams(0,dp(48),1));
+                Button clearDeckSearch=VaultNativeStyle.button(activity,"×",false);
+                clearDeckSearch.setContentDescription("Clear deck library search");
+                clearDeckSearch.setVisibility(deckSearch.isEmpty()?View.GONE:View.VISIBLE);
+                LinearLayout.LayoutParams clearDeckParams=new LinearLayout.LayoutParams(dp(42),dp(48));
+                clearDeckParams.leftMargin=dp(5);
+                deckSearchRow.addView(clearDeckSearch,clearDeckParams);
+                clearDeckSearch.setOnClickListener(v->search.setText(""));
+                VaultNativeStyle.margin(content,deckSearchRow,7,activity);
 
                 LinearLayout filters=VaultNativeStyle.row(activity);
                 Spinner sort=new Spinner(activity);
@@ -962,7 +976,10 @@ final class NativeWorkspaceScreen {
                 search.addTextChangedListener(new TextWatcher(){
                     public void beforeTextChanged(CharSequence x,int a,int b,int c){}
                     public void onTextChanged(CharSequence x,int a,int b,int c){
-                        deckSearch=x.toString();renderDeckList();
+                        deckSearch=x.toString();
+                        clearDeckSearch.setVisibility(deckSearch.isEmpty()?View.GONE:View.VISIBLE);
+                        ui.removeCallbacks(deckSearchPending);
+                        ui.postDelayed(deckSearchPending,180);
                     }
                     public void afterTextChanged(Editable x){}
                 });
@@ -988,6 +1005,14 @@ final class NativeWorkspaceScreen {
                     }
                 });
                 renderDeckList();
+                if(deckLibraryRestoreScroll>=0){
+                    final int restored=deckLibraryRestoreScroll;
+                    deckLibraryRestoreScroll=-1;
+                    workspaceScroll.post(()->{
+                        if(!closed&&"deck-library".equals(screenState))
+                            workspaceScroll.scrollTo(0,restored);
+                    });
+                }
                 button("Find decks closest to buildable",()->{
                     final int current=deckPageGeneration;
                     status.setText("Checking saved decks against recorded ownership…");
@@ -1424,6 +1449,9 @@ final class NativeWorkspaceScreen {
     }
 
     private void showDeck(JSONObject deck){
+        if("deck-library".equals(screenState))
+            deckLibraryRestoreScroll=workspaceScroll.getScrollY();
+        ui.removeCallbacks(deckSearchPending);
         screenState="deck-details";
         editingDeck=null;editorName=null;editorMainboard=null;
         final int pageGeneration=++deckPageGeneration;
