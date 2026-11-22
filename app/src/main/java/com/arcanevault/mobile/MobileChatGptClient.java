@@ -185,12 +185,24 @@ final class MobileChatGptClient {
     private static JSONObject request(String url,String encoded)throws Exception{
         return requestOnConnection((HttpURLConnection)new URL(url).openConnection(),url,encoded);
     }
+    /** Android networking stacks may wrap UnknownHostException in IOException.
+     * Recognize only the typed cause, not arbitrary error-message substrings. */
+    static boolean hasDnsFailure(Throwable error){
+        Throwable current=error;
+        for(int depth=0;current!=null&&depth<12;depth++){
+            if(current instanceof UnknownHostException)return true;
+            if(current==current.getCause())break;
+            current=current.getCause();
+        }
+        return false;
+    }
     /** OAuth codes are single-use: retry only a confirmed DNS lookup failure.
      * Produce a distinct status for each fallback outcome without logging tokens. */
     private JSONObject tokenRequest(String url,String encoded)throws Exception{
         try{
             return request(url,encoded);
-        }catch(UnknownHostException first){
+        }catch(IOException first){
+            if(!hasDnsFailure(first))throw first;
             android.net.ConnectivityManager connectivity=
                 (android.net.ConnectivityManager)activity.getSystemService(
                     android.content.Context.CONNECTIVITY_SERVICE);
@@ -207,10 +219,11 @@ final class MobileChatGptClient {
                 HttpURLConnection networkConnection=
                     (HttpURLConnection)active.openConnection(new URL(url));
                 return requestOnConnection(networkConnection,url,encoded);
-            }catch(UnknownHostException second){
+            }catch(IOException second){
+                if(!hasDnsFailure(second))throw second;
                 throw new IOException(activeDnsOk?
-                    "OAuth token DNS: default connection failed; active-network DNS resolved, but active-network HTTPS lookup failed.":
-                    "OAuth token DNS: both default and active-network resolvers failed for auth.openai.com.");
+                    "OAuth token DNS: fallback attempted; active-network DNS succeeded but HTTPS hostname resolution failed.":
+                    "OAuth token DNS: fallback attempted; both default and active-network DNS resolution failed for auth.openai.com.");
             }
         }
     }
