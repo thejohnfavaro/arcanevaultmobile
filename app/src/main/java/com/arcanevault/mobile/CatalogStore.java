@@ -824,6 +824,75 @@ final class CatalogStore extends SQLiteOpenHelper {
         return updated;
     }
 
+    /**
+     * Local, read-only Windows-style deck health overview for unsaved drafts.
+     * Deliberately does NOT claim legal, color-eligible, in-inventory card
+     * recommendations: those require the Windows eligibility snapshot rules.
+     */
+    JSONObject deckHealth(JSONArray entries,int focus)throws Exception{
+        if(entries==null||entries.length()>500)
+            throw new IllegalArgumentException("Too many draft entries");
+        if(focus<0||focus>=NativeDeckHealth.FOCUS.length)
+            throw new IllegalArgumentException("Unknown strategy focus");
+        int[] counts=new int[NativeDeckHealth.KEYS.length];
+        HashSet<String>[] distinct=new HashSet[counts.length];
+        for(int k=0;k<distinct.length;k++)distinct[k]=new HashSet<>();
+        JSONArray unknownNames=new JSONArray();
+        int mainboard=0,unknown=0,missingOracle=0,early=0,nonland=0;
+        SQLiteDatabase db=getReadableDatabase();
+        for(int i=0;i<entries.length();i++){
+            JSONObject row=entries.optJSONObject(i);
+            if(row==null)continue;
+            String name=NativeArenaCardName.identity(row.optString("name",""));
+            int copies=Math.max(0,Math.min(999,row.optInt("qty",0)));
+            if(name.isBlank()||copies==0)continue;
+            mainboard+=copies;
+            if(mainboard>10000)throw new IllegalArgumentException("Deck exceeds analysis limit");
+            try(Cursor c=db.rawQuery(
+                    "SELECT type,oracle,mv FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
+                    new String[]{name})){
+                if(!c.moveToFirst()){
+                    unknown+=copies;
+                    unknownNames.put(name+(copies==1?"":" ×"+copies));
+                    continue;
+                }
+                String type=c.getString(0),oracle=c.getString(1);
+                if(oracle==null||oracle.isBlank())missingOracle+=copies;
+                boolean[] roles=NativeDeckHealth.roles(type,oracle);
+                for(int k=0;k<roles.length;k++)if(roles[k]){
+                    counts[k]+=copies;
+                    distinct[k].add(name.toLowerCase(Locale.ROOT));
+                }
+                if(type!=null&&!type.toLowerCase(Locale.ROOT).contains("land")){
+                    nonland+=copies;
+                    double mv=c.getDouble(2);
+                    if(mv>=0&&mv<=2)early+=copies;
+                }
+            }
+        }
+        JSONArray areas=new JSONArray();
+        for(int k:NativeDeckHealth.priority(focus)){
+            int target=NativeDeckHealth.TARGETS[k];
+            areas.put(new JSONObject().put("role",NativeDeckHealth.KEYS[k])
+                .put("label",NativeDeckHealth.LABELS[k])
+                .put("count",counts[k]).put("target",target)
+                .put("distinct",distinct[k].size())
+                .put("state",NativeDeckHealth.state(counts[k],target,
+                    mainboard,unknown)));
+        }
+        boolean blocked=unknown>0||mainboard>99;
+        String next=blocked?"Resolve unknown cards or reduce mainboard to 99 before recommendations.":
+            mainboard<60?"Partial deck: role targets are construction checkpoints only.":
+            "Review the highest-priority role gaps for your selected strategy. "+
+            "This checklist does not verify owned replacement candidates.";
+        return new JSONObject().put("mainboard",mainboard)
+            .put("unknown",unknown).put("missingOracle",missingOracle)
+            .put("unknownNames",unknownNames).put("areas",areas)
+            .put("early",early).put("nonland",nonland)
+            .put("focus",NativeDeckHealth.FOCUS[focus])
+            .put("safeToSuggest",!blocked).put("reviewNext",next);
+    }
+
     JSONObject deckInsights(String commander,JSONArray entries)throws Exception {
         if(entries==null || entries.length()>500)
             throw new IllegalArgumentException("Too many deck entries to analyze");
