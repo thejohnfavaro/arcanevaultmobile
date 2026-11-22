@@ -373,6 +373,8 @@ public class MainActivity extends Activity {
             callback.accept(false,"Saved deck storage is not ready. No edit applied.");
             return;
         }
+        // A verified AI review changes only one deck's advisory metadata.
+        final boolean reviewOnly=AiReviewMetadata.reviewOnlyChange(expected,revised);
         String id=expected.optString("id","");
         if(id.isEmpty() || !id.equals(revised.optString("id",""))) {
             callback.accept(false,"Saved deck identity changed. No edit applied.");
@@ -422,13 +424,15 @@ public class MainActivity extends Activity {
                 "const index=decks.findIndex(x=>x&&x.id===expected.id);"+
                         "if(index<0||JSON.stringify(stable(decks[index]))!==JSON.stringify(stable(expected)))"+
                             "return JSON.stringify({ok:false,error:'Concurrent edit detected'});"+
+                        (reviewOnly ? "" :
                         "const prior=decks[index];const revisions=Array.isArray(prior.revisions)?prior.revisions.slice():[];"+
                         "revisions.push({name:prior.name,commander:prior.commander,entries:prior.entries,"+
                             "savedAt:new Date().toISOString(),label:'Before Android native edit',"+
                             "coverCard:prior.coverCard||'',folder:prior.folder||'Unfiled',tags:prior.tags||[]});"+
-                        "revised.revisions=revisions.slice(-20);revised.updated=new Date().toISOString();"+
+                        "revised.revisions=revisions.slice(-20);revised.updated=new Date().toISOString();")+
                         "decks[index]=revised;localStorage.setItem(key,JSON.stringify(decks));"+
-                        "if(JSON.parse(localStorage.getItem(key))[index].updated!==revised.updated)"+
+                        "if(JSON.stringify(stable(JSON.parse(localStorage.getItem(key))[index]))!=="+
+                            "JSON.stringify(stable(revised)))"+
                             "throw Error('Readback verification failed');"+
                         "if(typeof deckLibrary!=='undefined')deckLibrary=decks;"+
                         "return JSON.stringify({ok:true});"+
@@ -439,7 +443,8 @@ public class MainActivity extends Activity {
                                 (String)new org.json.JSONTokener(reply).nextValue());
                             callback.accept(applied.optBoolean("ok"),
                                 applied.optBoolean("ok")?
-                                    "Deck saved. Previous library preserved in private recovery.":
+                                    (reviewOnly ? "AI review saved with deck. Private recovery preserved." :
+                                        "Deck saved. Previous library preserved in private recovery.") :
                                     "Save not confirmed: "+applied.optString("error","Unknown error"));
                         }catch(Exception error){
                             callback.accept(false,"Save could not be verified: "+error.getMessage());
