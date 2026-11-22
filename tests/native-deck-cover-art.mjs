@@ -44,6 +44,17 @@ assert.match(workspace,/coverWorkers\.shutdownNow\(\)/,
 assert.match(shell,/NativeWorkspaceScreen\.create\(activity,prefs,catalog,artwork,openLegacy/,
   'Native workspace must receive existing artwork cache rather than duplicating assets');
 
+assert.match(workspace,/clearDeckSearch\.setOnClickListener\(v->search\.setText\(""\)\)/,
+  'Deck search must provide a one-tap clear action');
+assert.match(workspace,/ui\.postDelayed\(deckSearchPending,180\)/,
+  'Deck search should coalesce rapid keystrokes rather than rebuilding every row');
+assert.match(workspace,/deckLibraryRestoreScroll=workspaceScroll\.getScrollY\(\)/,
+  'Opening a deck must retain the scroll position of the library');
+assert.match(workspace,/workspaceScroll\.scrollTo\(0,restored\)/,
+  'Returning to the library must restore its last scroll position');
+assert.match(workspace,/ui\.removeCallbacks\(deckSearchPending\)/,
+  'Pending search redraw must be canceled on navigation or close');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
