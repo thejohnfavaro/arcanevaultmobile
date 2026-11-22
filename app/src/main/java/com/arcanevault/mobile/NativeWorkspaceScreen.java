@@ -84,6 +84,9 @@ final class NativeWorkspaceScreen {
     private JSONObject editingDeck;
     private MobileChatGptClient aiClient;
     private NativeCatalogScreen aiCardInspector;
+    private NativeCatalogScreen deckCardInspector;
+    private final ArrayList<View> deckDetailsRetainedViews=new ArrayList<>();
+    private int deckDetailsRetainedScroll;
     private View aiReviewRetainedView;
     private int aiReviewRetainedScroll;
     private final ArrayList<View> aiReturnViews=new ArrayList<>();
@@ -260,6 +263,8 @@ final class NativeWorkspaceScreen {
         closed=true;
         ui.removeCallbacks(deckSearchPending);
         if(aiCardInspector!=null){aiCardInspector.close();aiCardInspector=null;}
+        if(deckCardInspector!=null){deckCardInspector.close();deckCardInspector=null;}
+        deckDetailsRetainedViews.clear();
         executor.shutdownNow();
         setDetailsWorker.shutdownNow();
         coverWorkers.shutdownNow();
@@ -286,6 +291,10 @@ final class NativeWorkspaceScreen {
                 requestLeaveEditor(()->showDeck(editingDeck));
                 return true;
             case "deck-details":
+                if(deckCardInspector!=null){
+                    if(!deckCardInspector.onBack())returnFromDeckCard();
+                    return true;
+                }
                 deckLibrary();
                 return true;
             case "shortlist-preview":
@@ -1449,6 +1458,40 @@ final class NativeWorkspaceScreen {
         });
     }
 
+    /** Keep the loaded Deck Details views alive while inspecting a card.
+     * Returning restores the exact list and scroll without re-reading inventory,
+     * rebuilding insights, or changing ownership or saved deck contents. */
+    private void openDeckCard(String cardName){
+        String name=cardName==null?"":cardName.trim();
+        if(closed||!"deck-details".equals(screenState)||
+                deckCardInspector!=null||name.isEmpty())return;
+        deckDetailsRetainedScroll=workspaceScroll.getScrollY();
+        deckDetailsRetainedViews.clear();
+        for(int i=0;i<content.getChildCount();i++)
+            deckDetailsRetainedViews.add(content.getChildAt(i));
+        content.removeAllViews();
+        deckCardInspector=new NativeCatalogScreen(activity,catalog,artwork,prefs);
+        deckCardInspector.useEmbeddedInspectorLayout();
+        content.addView(deckCardInspector.view(),new LinearLayout.LayoutParams(
+            -1,LinearLayout.LayoutParams.WRAP_CONTENT));
+        deckCardInspector.inspectDeckCard(name,this::returnFromDeckCard);
+        workspaceScroll.post(()->workspaceScroll.scrollTo(0,0));
+    }
+
+    private void returnFromDeckCard(){
+        if(deckCardInspector==null)return;
+        deckCardInspector.close();
+        deckCardInspector=null;
+        content.removeAllViews();
+        for(View previous:deckDetailsRetainedViews)content.addView(previous);
+        deckDetailsRetainedViews.clear();
+        final int scroll=deckDetailsRetainedScroll;
+        workspaceScroll.post(()->{
+            if(!closed&&"deck-details".equals(screenState))
+                workspaceScroll.scrollTo(0,scroll);
+        });
+    }
+
     private void showDeck(JSONObject deck){
         if("deck-library".equals(screenState))
             deckLibraryRestoreScroll=workspaceScroll.getScrollY();
@@ -1489,7 +1532,7 @@ final class NativeWorkspaceScreen {
                     missing+=need;total+=qty;
                     cards.add(new String[]{qty+" × "+name,
                         need>0?"Missing "+need+" · recorded copies "+have:
-                            "Owned · recorded copies "+have});
+                            "Owned · recorded copies "+have,name});
                 }
                 NativeDeckFit.Result fit=NativeDeckFit.check(deck,
                     new JSONArray(prefs.getString("vault_physicalCollectionV1","[]")),
@@ -1508,7 +1551,9 @@ final class NativeWorkspaceScreen {
                     TextView title=VaultNativeStyle.label(activity,
                         deck.optString("name","Untitled deck"),22,VaultNativeStyle.TEXT,true);
                     VaultNativeStyle.margin(content,title,8,activity);
-                    row("COMMANDER",deck.optString("commander",""),null);
+                    String commanderName=deck.optString("commander","").trim();
+                    row("COMMANDER",commanderName,
+                        commanderName.isEmpty()?null:()->openDeckCard(commanderName));
                     if(AiReviewMetadata.hasReview(deck))
                         row("SAVED AI REVIEW",AiReviewMetadata.label(deck),null);
                     row("BUILDABILITY",fit.summary(),null);
@@ -1540,7 +1585,8 @@ final class NativeWorkspaceScreen {
                         "MAINBOARD  ·  "+cards.size()+" card names",12,
                         VaultNativeStyle.GOLD,true);
                     VaultNativeStyle.margin(content,mainboard,10,activity);
-                    for(String[] card:cards)row(card[0],card[1],null);
+                    for(String[] card:cards)
+                        row(card[0],card[1],()->openDeckCard(card[2]));
                 });
             }catch(Exception e){
                 ui.post(()->{if(!closed&&pageGeneration==deckPageGeneration)info("Deck details unavailable: "+e.getMessage());});
