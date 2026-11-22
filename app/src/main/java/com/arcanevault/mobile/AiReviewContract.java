@@ -68,7 +68,7 @@ final class AiReviewContract {
             "Do not assume that card names, legality, card text, collection ownership or current prices have been independently verified.\n"+
             "If a card is unfamiliar, state uncertainty instead of inventing rules text. Do not propose automatic changes.\n"+
             "Focus: "+focus+"\n"+
-            "Format: use Markdown headings, short paragraphs and a concise table for proposed swaps. No raw HTML.\n"+
+            "Format: use Markdown headings, short paragraphs and a concise Markdown pipe table for proposed swaps. Each swap row MUST contain all four columns: Priority | Cut | Add | Why. Explain WHY the replacement improves this specific deck in 1-2 substantive sentences per swap; never omit the reason. No raw HTML.\n"+
             "CARD REFERENCE CONTRACT: Every intended MTG card mention in your prose or swap table MUST use [[card:Exact Card Name]] (example: [[card:Fell the Profane]]).\n"+
             "Use the complete printed front-face name, not a shortened nickname. Do not wrap normal format terms, mechanics or ordinary words (such as Brawl, draw, exile or ramp) as card references.\n"+
             "Do not mark speculative or uncertain card identities. Keep readable Markdown, not JSON or HTML.\n\n"+
