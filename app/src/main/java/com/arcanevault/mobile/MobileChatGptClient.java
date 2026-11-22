@@ -196,34 +196,52 @@ final class MobileChatGptClient {
         }
         return false;
     }
-    /** OAuth codes are single-use: retry only a confirmed DNS lookup failure.
-     * Produce a distinct status for each fallback outcome without logging tokens. */
+    /** OAuth codes are single-use: retry only confirmed DNS failures, never
+     * HTTP responses or uncertain socket failures. Android may have connected
+     * networks even when getActiveNetwork() returns null. */
     private JSONObject tokenRequest(String url,String encoded)throws Exception{
         try{
             return request(url,encoded);
         }catch(IOException first){
             if(!hasDnsFailure(first))throw first;
-            android.net.ConnectivityManager connectivity=
+            android.net.ConnectivityManager cm=
                 (android.net.ConnectivityManager)activity.getSystemService(
                     android.content.Context.CONNECTIVITY_SERVICE);
-            if(connectivity==null)
-                throw new IOException("OAuth token DNS: default lookup failed; Android network service unavailable.");
-            android.net.Network active=connectivity.getActiveNetwork();
-            if(active==null)
-                throw new IOException("OAuth token DNS: default lookup failed; no active Android network available.");
-            boolean activeDnsOk=false;
+            if(cm==null)
+                throw new IOException("OAuth token DNS: network service unavailable after default DNS failure.");
+            android.net.Network selected=cm.getActiveNetwork();
+            String route="default";
+            if(selected==null){
+                android.net.Network[] networks=cm.getAllNetworks();
+                android.net.Network candidate=null;
+                for(android.net.Network network:networks){
+                    android.net.NetworkCapabilities caps=cm.getNetworkCapabilities(network);
+                    if(caps==null||!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET))
+                        continue;
+                    if(candidate==null)candidate=network;
+                    if(caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)){
+                        candidate=network;
+                        break;
+                    }
+                }
+                selected=candidate;
+                route="enumerated";
+                if(selected==null)
+                    throw new IOException("OAuth token DNS: default lookup failed; no usable Android network found (active=null, enumerated="+networks.length+").");
+            }
+            boolean networkDnsOk=false;
             try{
-                activeDnsOk=active.getAllByName("auth.openai.com").length>0;
+                networkDnsOk=selected.getAllByName("auth.openai.com").length>0;
             }catch(UnknownHostException ignored){}
             try{
                 HttpURLConnection networkConnection=
-                    (HttpURLConnection)active.openConnection(new URL(url));
+                    (HttpURLConnection)selected.openConnection(new URL(url));
                 return requestOnConnection(networkConnection,url,encoded);
             }catch(IOException second){
                 if(!hasDnsFailure(second))throw second;
-                throw new IOException(activeDnsOk?
-                    "OAuth token DNS: fallback attempted; active-network DNS succeeded but HTTPS hostname resolution failed.":
-                    "OAuth token DNS: fallback attempted; both default and active-network DNS resolution failed for auth.openai.com.");
+                throw new IOException(networkDnsOk?
+                    "OAuth token DNS: "+route+"-network fallback attempted; network DNS succeeded but HTTPS lookup failed.":
+                    "OAuth token DNS: "+route+"-network fallback attempted; both system and selected network DNS failed for auth.openai.com.");
             }
         }
     }
