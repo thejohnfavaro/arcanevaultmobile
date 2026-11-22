@@ -129,6 +129,27 @@ assert.match(workspace,/artFrame\.setOnClickListener\(v->openDeckCard\(cardName\
 assert.match(workspace,/new LinearLayout\.LayoutParams\(dp\(70\),dp\(95\)\)/,
   'Art rows should use compact card thumbnail dimensions');
 
+// Art-forward grid uses the same validated draft, group ordering, image cache,
+// exact-card previews and plus/minus listeners as the other two presentations.
+assert.match(workspace,/"Grid",visualGrid\[0\]/,
+  'Visual editor must offer a third Grid mode');
+assert.match(workspace,/native_draft_grid_v1/,
+  'Selected grid presentation must persist independently of deck data');
+assert.match(workspace,/screenDp>=600\?3:2/,
+  'Grid should use two phone columns and three wide-screen columns');
+assert.match(workspace,/cardGrid=new GridLayout\(activity\)/,
+  'Card art must render as a real multi-column grid');
+assert.match(workspace,/badge.setBackgroundColor\(Color.argb/,
+  'Artwork tiles should show a readable copy-count badge');
+assert.match(workspace,/artFrame.setOnClickListener\(v->openDeckCard\(cardName\)\)/,
+  'Grid artwork should preserve full card inspection');
+assert.match(workspace,/quantityRow=visualGrid\[0\]\?/,
+  'Grid quantity controls should remain reachable under the art');
+assert.match(workspace,/lines.setText\(NativeDeckDraft.formatEntries\(updated\)\)/,
+  'Grid plus/minus controls must update the authoritative unsaved text');
+assert.match(workspace,/if\(visualArt\[0\]\|\|visualGrid\[0\]\)/,
+  'Grid thumbnails should use the lazy visible-art loader');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
