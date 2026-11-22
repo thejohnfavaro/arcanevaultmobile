@@ -1355,7 +1355,7 @@ final class NativeWorkspaceScreen {
                 // reveals its cards and scrolls there without changing the draft.
                 final Map<String,Button> groupButtons=new HashMap<>();
                 final Map<String,LinearLayout> groupBodies=new HashMap<>();
-                HorizontalScrollView jumpScroll=new HorizontalScrollView(activity);
+                HorizontalScrollView jumpScroll=VaultNativeStyle.horizontalScroll(activity);
                 jumpScroll.setHorizontalScrollBarEnabled(false);
                 LinearLayout jumpRow=VaultNativeStyle.row(activity);
                 jumpRow.setPadding(0,dp(7),0,dp(4));
