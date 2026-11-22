@@ -414,6 +414,46 @@ public final class NativePeerSyncTest {
         try{NativePeerSync.preview(local,duplicated);fail("should reject duplicate deck IDs");}
         catch(IllegalArgumentException expected){}
     }
+    @Test public void aiReviewMetadataSurvivesReviewedPeerSyncAndConflicts()
+            throws Exception {
+        JSONObject baseline=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject android=peer("00000000-0000-4000-8000-000000000701",4);
+        JSONObject windows=peer("00000000-0000-4000-8000-000000000702",4);
+        JSONObject winDeck=windows.getJSONObject("data")
+            .getJSONArray("deckLibrary").getJSONObject(0);
+        JSONObject meta=new JSONObject()
+            .put("schema",1)
+            .put("markdown","## AI Review\\n[[card:Sol Ring]]")
+            .put("model","gpt-6")
+            .put("mode","health")
+            .put("savedUtc","2026-11-21T18:00:00Z")
+            .put("deckFingerprint","A".repeat(64));
+        winDeck.put("aiReview",meta);
+        JSONObject proposal=NativePeerSync.prepareMerge(android,windows,baseline);
+        JSONObject merged=proposal.getJSONObject("candidate")
+            .getJSONArray("deckLibrary").getJSONObject(0);
+        assertEquals(meta.toString(),merged.getJSONObject("aiReview").toString());
+        assertEquals(0,NativePeerSync.inventoryDelta(android,proposal)
+            .getInt("changedEntries"));
+        // The next sync with the same checkpoint must not replay the review.
+        JSONObject androidApplied=peer("00000000-0000-4000-8000-000000000701",4);
+        androidApplied.put("data",new JSONObject(proposal.getJSONObject("candidate").toString()));
+        assertEquals(0,NativePeerSync.prepareMerge(androidApplied,windows,baseline)
+            .getInt("incomingChanges"));
+        // If both devices edit the same deck, neither review may win silently.
+        android.getJSONObject("data").getJSONArray("deckLibrary")
+            .getJSONObject(0).put("aiReview",new JSONObject(meta.toString())
+                .put("markdown","Android independently updated analysis"));
+        JSONObject conflicts=NativePeerSync.compareWithBaseline(android,windows,baseline);
+        assertEquals(1,conflicts.getInt("conflicts"));
+        try {
+            NativePeerSync.prepareMerge(android,windows,baseline);
+            fail("Conflicting review revisions merged without approval");
+        } catch(IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("deckLibrary"));
+        }
+    }
+
     @Test public void incomingDeckEditPreservesLocalInventoryAndPrinting()throws Exception {
         JSONObject base=peer("00000000-0000-4000-8000-000000000702",4);
         JSONObject android=peer("00000000-0000-4000-8000-000000000701",4);
