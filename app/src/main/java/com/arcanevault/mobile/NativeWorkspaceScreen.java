@@ -744,8 +744,8 @@ final class NativeWorkspaceScreen {
         VaultNativeStyle.surface(activity,entry,false);
         entry.setClickable(true);
         entry.setFocusable(true);
-        entry.setContentDescription(name+", commander "+
-            (commander.isEmpty()?"not specified":commander)+", "+count+
+        entry.setContentDescription(name+", "+
+            (commander.isEmpty()?"format "+format:"commander "+commander)+", "+count+
             " cards. Open saved deck");
 
         // Same deck-box proportions and bottom format ribbon as Windows.
@@ -760,7 +760,7 @@ final class NativeWorkspaceScreen {
         cover.addView(placeholder,new FrameLayout.LayoutParams(-1,-1));
         ImageView art=new ImageView(activity);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        art.setContentDescription("Illustrative commander card artwork for "+
+        art.setContentDescription("Illustrative saved deck card artwork for "+
             (commander.isEmpty()?name:commander)+", not proof of owned printing");
         cover.addView(art,new FrameLayout.LayoutParams(-1,-1));
         TextView ribbon=VaultNativeStyle.label(activity,format,10,Color.WHITE,true);
@@ -781,7 +781,7 @@ final class NativeWorkspaceScreen {
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         details.addView(title);
         TextView leader=VaultNativeStyle.label(activity,
-            commander.isEmpty()?"Commander not specified":commander,12,
+            commander.isEmpty() ? format : commander,12,
             VaultNativeStyle.PRIMARY,false);
         leader.setPadding(0,dp(6),0,dp(5));
         leader.setMaxLines(2);
@@ -802,9 +802,17 @@ final class NativeWorkspaceScreen {
         entry.addView(details,new LinearLayout.LayoutParams(0,-2,1));
         entry.setOnClickListener(v->showDeck(deck));
         VaultNativeStyle.margin(deckListPanel,entry,9,activity);
-        if(!commander.isEmpty())
-            deckCoverTargets.add(new DeckCoverTarget(art,commander,false,
-                deck.optString("commanderDisplayPrintId","")));
+        String coverName=commander;
+        if(coverName.isEmpty()&&"Arena Standard".equalsIgnoreCase(format)){
+            JSONArray entries=deck.optJSONArray("entries");
+            if(entries!=null&&entries.length()>0){
+                JSONObject first=entries.optJSONObject(0);
+                if(first!=null)coverName=first.optString("name","").trim();
+            }
+        }
+        if(!coverName.isEmpty())
+            deckCoverTargets.add(new DeckCoverTarget(art,coverName,false,
+                commander.isEmpty()?"":deck.optString("commanderDisplayPrintId","")));
     }
 
     /** Only request covers whose ImageView is actually inside the scrolling
