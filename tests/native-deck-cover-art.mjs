@@ -158,8 +158,12 @@ assert.match(workspace,/draftArtFailures\.getOrDefault\(target\.commander,0\)>=2
   'Recovery attempts must be bounded to avoid repeated failed downloads');
 assert.match(workspace,/artImage\.addOnAttachStateChangeListener/,
   'Artwork must begin loading when a rebuilt editor thumbnail attaches');
-assert.match(workspace,/catalog\.cardDetailsForReviewMention\(commander\)/,
-  'The art loader should resolve valid front-face-only double-faced names');
+assert.match(workspace,/String cardIdentity=NativeArenaCardName\.identity\(commander\)/,
+  'Annotated draft entries must resolve to their canonical card name for artwork');
+assert.match(workspace,/catalog\.commanderCoverUrl\(cardIdentity\)/,
+  'Card art SQL must use canonical identity rather than Arena printing notes');
+assert.match(workspace,/catalog\.cardDetailsForReviewMention\(cardIdentity\)/,
+  'Double-faced fallback must also use the canonical identity');
 assert.match(workspace,/draftArtFailures\.remove\(commander\)/,
   'Successful art loads should clear the draft failure state');
 
