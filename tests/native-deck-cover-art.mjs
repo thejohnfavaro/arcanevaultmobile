@@ -86,6 +86,27 @@ assert.match(workspace,/lines\.setText\(NativeDeckDraft\.formatEntries\(updated\
   'Quantity controls should edit the same unsaved mainboard text');
 assert.match(workspace,/"Refresh visual mainboard"/,
   'Manual text changes should make the visual list refreshable');
+assert.match(workspace,/catalog\.deckTypeLines\(parsed\)/,
+  'Card types must be retrieved from the local catalog, not inferred from names');
+assert.match(workspace,/for\(String section:NativeDeckTypeGroups\.ORDER\)/,
+  'Visual mainboard must render sections in established Windows order');
+assert.match(workspace,/NativeDeckTypeGroups\.classify\(visualTypeCache\.get\(key\)\)/,
+  'The visible section must come from cached verified card type lines');
+assert.match(workspace,/sectionCopies\+" cards"/,
+  'Section headings must summarize owned-independent draft quantities');
+const groups=read('app/src/main/java/com/arcanevault/mobile/NativeDeckTypeGroups.java');
+for(const type of ['Creatures','Instants','Sorceries','Artifacts','Enchantments',
+  'Planeswalkers','Battles','Other / Unknown','Lands'])
+  assert.ok(groups.includes('"'+type+'"'),'Missing card type section: '+type);
+assert.match(groups,/if\(type\.contains\("land"\)\)return "Lands"/,
+  'Artifact lands and creature lands must be categorized as lands');
+const store=read('app/src/main/java/com/arcanevault/mobile/CatalogStore.java');
+assert.match(store,/Map<String,String> deckTypeLines\(JSONArray entries\)/,
+  'The catalog must offer a bounded local type-line lookup');
+assert.match(store,/SELECT type FROM cards WHERE name=\? COLLATE NOCASE LIMIT 1/,
+  'Visual grouping must use exact case-insensitive local Scryfall card names');
+
+
 assert.match(workspace,/if\(deckCardInspector!=null\)\{/,
   'Editor Back must first dismiss the card inspector, not discard a draft');
 assert.match(workspace,/deckCardReturnState=screenState/,
