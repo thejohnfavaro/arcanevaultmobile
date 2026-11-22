@@ -1053,7 +1053,9 @@ final class NativeWorkspaceScreen {
         aiReviewRetainedScroll=workspaceScroll.getScrollY();
         content.removeAllViews();
         aiCardInspector=new NativeCatalogScreen(activity,catalog,artwork,prefs);
-        content.addView(aiCardInspector.view(),new LinearLayout.LayoutParams(-1,dp(750)));
+        aiCardInspector.useEmbeddedInspectorLayout();
+        content.addView(aiCardInspector.view(),new LinearLayout.LayoutParams(
+            -1,LinearLayout.LayoutParams.WRAP_CONTENT));
         aiCardInspector.inspectAiCard(name,this::returnFromAiCard);
         workspaceScroll.post(()->workspaceScroll.scrollTo(0,0));
     }
