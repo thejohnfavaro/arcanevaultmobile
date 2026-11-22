@@ -1237,6 +1237,90 @@ final class NativeWorkspaceScreen {
         editorOriginalMainboard=lines.getText().toString();
         fields.addView(lines,new LinearLayout.LayoutParams(-1,dp(260)));
 
+        // Optional, read-only insights always analyze the current unsaved
+        // editor text. Never save or mutate inventory to build these charts.
+        Button draftInsightsToggle=VaultNativeStyle.button(activity,
+            "Deck Insights  ▾",false);
+        fields.addView(draftInsightsToggle,new LinearLayout.LayoutParams(-1,dp(46)));
+        LinearLayout draftInsightsPanel=VaultNativeStyle.column(activity);
+        draftInsightsPanel.setVisibility(View.GONE);
+        fields.addView(draftInsightsPanel);
+        final boolean[] draftInsightsOpen={false};
+        final int[] draftInsightRequests={0};
+        final Runnable updateDraftInsights=()->{
+            if(closed||pageGeneration!=deckPageGeneration||
+                    !draftInsightsOpen[0])return;
+            final String snapshot=lines.getText().toString();
+            final String commander=deck.optString("commander","");
+            final int request=++draftInsightRequests[0];
+            draftInsightsPanel.removeAllViews();
+            draftInsightsPanel.addView(VaultNativeStyle.label(activity,
+                "Analyzing unsaved draft using the local card catalog…",12,
+                VaultNativeStyle.SUBTEXT,false));
+            executor.execute(()->{
+                JSONObject result=null;
+                String error=null;
+                try{
+                    result=catalog.deckInsights(commander,
+                        NativeDeckDraft.parseEntries(snapshot));
+                }catch(Exception ex){error=ex.getMessage();}
+                final JSONObject report=result;
+                final String failure=error;
+                ui.post(()->{
+                    if(closed||pageGeneration!=deckPageGeneration||
+                            request!=draftInsightRequests[0]||
+                            !draftInsightsOpen[0])return;
+                    draftInsightsPanel.removeAllViews();
+                    if(!snapshot.equals(lines.getText().toString())){
+                        draftInsightsPanel.addView(VaultNativeStyle.label(activity,
+                            "Draft changed · select Refresh Insights for current counts.",
+                            12,VaultNativeStyle.GOLD,false));
+                        return;
+                    }
+                    if(report==null)
+                        draftInsightsPanel.addView(VaultNativeStyle.label(activity,
+                            "Analysis unavailable: "+failure,12,
+                            VaultNativeStyle.GOLD,false));
+                    else renderDeckInsights(report,draftInsightsPanel);
+                });
+            });
+        };
+        draftInsightsToggle.setOnClickListener(v->{
+            draftInsightsOpen[0]=!draftInsightsOpen[0];
+            draftInsightsToggle.setText(draftInsightsOpen[0]?
+                "Deck Insights  ▴":"Deck Insights  ▾");
+            draftInsightsPanel.setVisibility(draftInsightsOpen[0]?
+                View.VISIBLE:View.GONE);
+            if(draftInsightsOpen[0])updateDraftInsights.run();
+            else ++draftInsightRequests[0];
+        });
+        Button refreshDraftInsights=VaultNativeStyle.button(activity,
+            "Refresh Insights",false);
+        draftInsightsPanel.addView(refreshDraftInsights);
+        // Recreate refresh button after each chart render by placing it
+        // outside the clearable results container.
+        LinearLayout insightsActions=VaultNativeStyle.column(activity);
+        fields.addView(insightsActions);
+        fields.removeView(draftInsightsPanel);
+        insightsActions.addView(draftInsightsPanel);
+        Button insightRefresh=VaultNativeStyle.button(activity,"Refresh Insights",false);
+        insightsActions.addView(insightRefresh,new LinearLayout.LayoutParams(-1,dp(42)));
+        insightRefresh.setVisibility(View.GONE);
+        draftInsightsToggle.setOnClickListener(v->{
+            draftInsightsOpen[0]=!draftInsightsOpen[0];
+            draftInsightsToggle.setText(draftInsightsOpen[0]?
+                "Deck Insights  ▴":"Deck Insights  ▾");
+            insightsActions.setVisibility(draftInsightsOpen[0]?View.VISIBLE:View.GONE);
+            draftInsightsPanel.setVisibility(draftInsightsOpen[0]?
+                View.VISIBLE:View.GONE);
+            insightRefresh.setVisibility(draftInsightsOpen[0]?
+                View.VISIBLE:View.GONE);
+            if(draftInsightsOpen[0])updateDraftInsights.run();
+            else ++draftInsightRequests[0];
+        });
+        insightsActions.setVisibility(View.GONE);
+        insightRefresh.setOnClickListener(v->updateDraftInsights.run());
+
         // Optional visual editing over the SAME draft text and validated parser.
         // No separate card inventory, deck format or unsaved state is created.
         Button visualToggle=VaultNativeStyle.button(activity,
