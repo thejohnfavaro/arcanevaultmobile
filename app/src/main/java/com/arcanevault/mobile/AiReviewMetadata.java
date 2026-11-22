@@ -38,8 +38,11 @@ final class AiReviewMetadata {
         }
         sorted.sort(Comparator.comparing((String[] x)->x[0],String.CASE_INSENSITIVE_ORDER)
             .thenComparingInt(x->Integer.parseInt(x[1])));
+        String fmt=deck.optString("format","").trim();
+        if(fmt.isEmpty())fmt=deck.optString("commander","").trim().isEmpty()?
+            "60-card":"Commander";
         StringBuilder canonical=new StringBuilder()
-            .append(deck.optString("format","").trim().toUpperCase(Locale.ROOT)).append('\n')
+            .append(fmt.toUpperCase(Locale.ROOT)).append('\n')
             .append(canonical(deck.optString("commander","")).toUpperCase(Locale.ROOT))
             .append('\n');
         for(int i=0;i<sorted.size();i++){
