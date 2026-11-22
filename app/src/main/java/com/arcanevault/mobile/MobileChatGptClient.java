@@ -105,7 +105,15 @@ final class MobileChatGptClient {
         Throwable cursor=ex;
         while(cursor!=null){
             if(cursor instanceof UnknownHostException){
-                return "Network DNS could not resolve an OpenAI host. Switch between Wi-Fi and mobile data; if one works, check Private DNS, VPN, router or ad-blocking DNS settings. Your ChatGPT account and saved decks have not been changed.";
+                String host=cursor.getMessage();
+                if(host==null)host="";
+                // Java usually reports the failed hostname; never show arbitrary
+                // exception content or authorization URLs with query parameters.
+                java.util.regex.Matcher match=java.util.regex.Pattern.compile(
+                    "(?i)(?:[a-z0-9-]+\\\\.)+[a-z]{2,63}").matcher(host);
+                String failedHost=match.find()?match.group():"unknown hostname";
+                return "DNS lookup failed during the OAuth request (host: "+failedHost+
+                    "). The earlier HTTPS test succeeded; this could be an intermittent lookup or a different request destination.";
             }
             cursor=cursor.getCause();
         }
@@ -177,6 +185,9 @@ final class MobileChatGptClient {
     private static JSONObject request(String url,String encoded)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
         c.setConnectTimeout(15000);c.setReadTimeout(45000);
+        // Never automatically follow OAuth POST redirects: they can change
+        // origin and obscure the failing host behind an UnknownHostException.
+        c.setInstanceFollowRedirects(false);
         c.setRequestProperty("Accept","application/json");
         if(encoded!=null){
             c.setRequestMethod("POST");c.setDoOutput(true);
@@ -185,6 +196,15 @@ final class MobileChatGptClient {
         }
         try{
             int code=c.getResponseCode();
+            if(code>=300&&code<400){
+                String location=c.getHeaderField("Location");
+                String nextHost="not supplied";
+                try{
+                    if(location!=null)nextHost=new URL(new URL(url),location).getHost();
+                }catch(Exception ignored){}
+                throw new IOException("ChatGPT token request redirected (HTTP "+code+
+                    ") to host "+nextHost+"; redirect not followed");
+            }
             if(code<200||code>=300){
                 // Never surface raw OAuth responses: they can contain account
                 // information or authorization material. Preserve only safe,
