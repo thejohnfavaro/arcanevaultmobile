@@ -183,7 +183,30 @@ final class MobileChatGptClient {
         return out;
     }
     private static JSONObject request(String url,String encoded)throws Exception{
-        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
+        return requestOnConnection((HttpURLConnection)new URL(url).openConnection(),url,encoded);
+    }
+    /** Retry DNS-only failures through Android's active network resolver.
+     * Do not retry HTTP errors or ambiguous transport failures: OAuth codes are
+     * single use, and a request may already have reached the token server. */
+    private JSONObject tokenRequest(String url,String encoded)throws Exception{
+        try{
+            return request(url,encoded);
+        }catch(UnknownHostException first){
+            android.net.ConnectivityManager connectivity=
+                (android.net.ConnectivityManager)activity.getSystemService(
+                    android.content.Context.CONNECTIVITY_SERVICE);
+            android.net.Network active=connectivity==null?null:connectivity.getActiveNetwork();
+            if(active==null)throw first;
+            try{
+                HttpURLConnection networkConnection=
+                    (HttpURLConnection)active.openConnection(new URL(url));
+                return requestOnConnection(networkConnection,url,encoded);
+            }catch(UnknownHostException second){
+                throw new UnknownHostException("auth.openai.com (default and active-network DNS both failed)");
+            }
+        }
+    }
+    private static JSONObject requestOnConnection(HttpURLConnection c,String url,String encoded)throws Exception{
         c.setConnectTimeout(15000);c.setReadTimeout(45000);
         // Never automatically follow OAuth POST redirects: they can change
         // origin and obscure the failing host behind an UnknownHostException.
@@ -389,7 +412,7 @@ final class MobileChatGptClient {
                 request.put("code",code);request.put("code_verifier",verifier);
                 request.put("redirect_uri",redirect);request.put("resource",RESOURCE);
                 stage="exchanging authorization code";
-                JSONObject tokens=request(AUTH+"/api/accounts/oauth/token",form(request));
+                JSONObject tokens=tokenRequest(AUTH+"/api/accounts/oauth/token",form(request));
                 stage="verifying signed identity";
                 String user=verify(tokens.getString("id_token"),issued,nonce);
                 if(subject!=null&&!subject.equals(user))throw new SecurityException("Account mismatch");
@@ -426,7 +449,7 @@ final class MobileChatGptClient {
         values.put("grant_type","refresh_token");values.put("client_id",clientId);
         values.put("refresh_token",refresh);values.put("resource",RESOURCE);
         JSONObject p;
-        try{p=request(AUTH+"/api/accounts/oauth/token",form(values));}
+        try{p=tokenRequest(AUTH+"/api/accounts/oauth/token",form(values));}
         catch(IOException ex){throw new IOException("ChatGPT renewal failed: "+ex.getMessage(),ex);}
         if(p.has("scope")&&!Arrays.asList(p.optString("scope","").split(" ")).contains(SCOPE)){
             clear();throw new SecurityException("Plan use permission was withdrawn");
