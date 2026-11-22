@@ -120,8 +120,8 @@ assert.match(workspace,/"Art \+ Details"/,
   'The visual mainboard must offer an illustrated layout');
 assert.match(workspace,/"List",!visualArt\[0\]/,
   'The compact list must remain directly selectable');
-assert.match(workspace,/deckCoverTargets\.add\(new DeckCoverTarget\(artImage,cardName\)\)/,
-  'Artwork rows should reuse lazy card art loading rather than new bulk requests');
+assert.match(workspace,/deckCoverTargets\.add\(new DeckCoverTarget\(artImage,cardName,true\)\)/,
+  'Artwork rows should reuse lazy card art loading with recoverable draft requests');
 assert.match(workspace,/workspaceScroll\.post\(this::loadVisibleDeckCovers\)/,
   'Visible art should render as the workspace scrolls');
 assert.match(workspace,/artFrame\.setOnClickListener\(v->openDeckCard\(cardName\)\)/,
