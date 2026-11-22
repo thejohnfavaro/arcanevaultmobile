@@ -15,5 +15,5 @@
 - No collection, saved deck, sync or account data removed.
 
 ## Verification
-- Signed workflow must pass regression checks, Android unit tests, build and APK signature verification.
+- Signed workflow must pass regression checks, Android unit tests (including updated DNS hostname expectations), build and APK signature verification.
 - On-device: Home → Options → Continue with ChatGPT; if authorization fails at code exchange, capture the sanitized hostname or redirect report. No authorization codes or tokens are shown.
