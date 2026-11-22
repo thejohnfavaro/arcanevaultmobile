@@ -67,6 +67,7 @@ final class NativeWorkspaceScreen {
     // Draft artwork may become available after catalog indexing or an
     // intermittent image fetch; do not permanently blacklist that card.
     private final Map<String,Integer> draftArtFailures=new HashMap<>();
+    private final Map<String,Long> draftArtRetryAfter=new HashMap<>();
     private final Set<String> setArtInFlight=new HashSet<>();
     private final LinkedHashMap<String,Bitmap> coverBitmaps=new LinkedHashMap<String,Bitmap>(40,0.75f,true){
         @Override protected boolean removeEldestEntry(Map.Entry<String,Bitmap> eldest){
@@ -816,10 +817,14 @@ final class NativeWorkspaceScreen {
                 continue;
             }
             if((target.draft?
-                    draftArtFailures.getOrDefault(target.commander,0)>=2:
+                    android.os.SystemClock.uptimeMillis()<
+                        draftArtRetryAfter.getOrDefault(target.commander,0L):
                     coverUnavailable.contains(target.commander)) ||
                     coverInFlight.contains(target.commander))continue;
-            if(coverInFlight.size()>=8)break;
+            // Keep in-flight work equal to the two actual cover workers.
+            // Otherwise an earlier visible group can monopolize a long queue
+            // while later card-type sections are being scrolled into view.
+            if(coverInFlight.size()>=2)break;
             String commander=target.commander;
             coverInFlight.add(commander);
             coverWorkers.execute(()->{
@@ -856,6 +861,7 @@ final class NativeWorkspaceScreen {
                         coverBitmaps.put(commander,result);
                         coverUnavailable.remove(commander);
                         draftArtFailures.remove(commander);
+                        draftArtRetryAfter.remove(commander);
                         // Apply the completed image immediately to live targets.
                         // A nested editor can be rebuilt without a scroll event,
                         // so don't depend on another visibility scan to repaint.
@@ -872,9 +878,16 @@ final class NativeWorkspaceScreen {
                             if(candidate.draft&&commander.equals(candidate.commander)){
                                 draftTarget=true;break;
                             }
-                        if(draftTarget)draftArtFailures.put(commander,
-                            draftArtFailures.getOrDefault(commander,0)+1);
-                        else coverUnavailable.add(commander);
+                        if(draftTarget){
+                            int failures=draftArtFailures.getOrDefault(commander,0)+1;
+                            draftArtFailures.put(commander,failures);
+                            // Back off transient offline, CDN rate limiting or
+                            // indexing failures; never permanently blacklist a
+                            // draft card while the editor remains open.
+                            long delayMs=Math.min(60000L,6000L*failures);
+                            draftArtRetryAfter.put(commander,
+                                android.os.SystemClock.uptimeMillis()+delayMs);
+                        }else coverUnavailable.add(commander);
                     }
                     if(!closed&&pageGeneration==deckPageGeneration)
                         loadVisibleDeckCovers();
@@ -1234,6 +1247,7 @@ final class NativeWorkspaceScreen {
         fields.addView(visualCards);
         final boolean[] visualOpen={false};
         draftArtFailures.clear();
+        draftArtRetryAfter.clear();
         // Presentation preference only. Never changes deck contents or draft text.
         final boolean[] visualArt={prefs.getBoolean("native_draft_art_rows_v1",false)};
         final boolean[] visualGrid={prefs.getBoolean("native_draft_grid_v1",false)};
@@ -1271,6 +1285,20 @@ final class NativeWorkspaceScreen {
                 gridModeParams.leftMargin=dp(5);
                 viewModes.addView(gridMode,gridModeParams);
                 visualCards.addView(viewModes);
+                if(visualGrid[0]||visualArt[0]){
+                    Button retryImages=VaultNativeStyle.button(activity,
+                        "Retry missing artwork",false);
+                    retryImages.setAllCaps(false);
+                    retryImages.setContentDescription(
+                        "Retry card images that have not loaded in this deck");
+                    visualCards.addView(retryImages,new LinearLayout.LayoutParams(-1,dp(42)));
+                    retryImages.setOnClickListener(v->{
+                        draftArtFailures.clear();
+                        draftArtRetryAfter.clear();
+                        coverUnavailable.clear();
+                        workspaceScroll.post(this::loadVisibleDeckCovers);
+                    });
+                }
                 listMode.setOnClickListener(v->{
                     if(!visualArt[0]&&!visualGrid[0])return;
                     visualArt[0]=false;visualGrid[0]=false;
