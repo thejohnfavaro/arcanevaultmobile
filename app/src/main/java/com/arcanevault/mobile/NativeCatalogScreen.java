@@ -1126,6 +1126,9 @@ final class NativeCatalogScreen {
         if(identity!=null){
             LinearLayout identityLine=VaultNativeStyle.row(activity);
             TextView identityLabel=text("IDENTITY",11,true);
+            // Keep the full concept available to screen readers even though
+            // the small-screen visual label is abbreviated.
+            identityLabel.setContentDescription("COLOR IDENTITY");
             identityLabel.setTextColor(VaultNativeStyle.SUBTEXT);
             identityLabel.setGravity(Gravity.CENTER_VERTICAL);
             identityLine.addView(identityLabel,new LinearLayout.LayoutParams(dp(77),dp(34)));
