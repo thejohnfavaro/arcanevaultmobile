@@ -696,6 +696,31 @@ final class CatalogStore extends SQLiteOpenHelper {
     /** Small, read-only Windows-style overview from the same local catalog.
      * Unresolved card names remain UNKNOWN (not zero-cost spells), and the
      * mana curve excludes lands. Quantities, not names, are counted. */
+    /** Read-only type-line lookup for the visual deck draft. Never guesses from
+     * card names, writes catalog records, or changes any ownership pool. */
+    Map<String,String> deckTypeLines(JSONArray entries)throws Exception {
+        if(entries==null||entries.length()>500)
+            throw new IllegalArgumentException("Too many draft cards to categorize");
+        Map<String,String> result=new HashMap<>();
+        SQLiteDatabase db=getReadableDatabase();
+        for(int i=0;i<entries.length();i++){
+            JSONObject entry=entries.optJSONObject(i);
+            if(entry==null)continue;
+            String name=NativeArenaCardName.identity(entry.optString("name",""));
+            if(name.isEmpty()||name.length()>300)continue;
+            String key=name.toLowerCase(java.util.Locale.ROOT);
+            if(result.containsKey(key))continue;
+            String type="";
+            try(Cursor card=db.rawQuery(
+                    "SELECT type FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
+                    new String[]{name})){
+                if(card.moveToFirst())type=card.getString(0);
+            }
+            result.put(key,type==null?"":type);
+        }
+        return result;
+    }
+
     JSONObject deckInsights(String commander,JSONArray entries)throws Exception {
         if(entries==null || entries.length()>500)
             throw new IllegalArgumentException("Too many deck entries to analyze");
