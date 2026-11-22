@@ -75,6 +75,22 @@ assert.match(inspector,/void inspectDeckCard\(String requestedName,Runnable retu
 assert.match(inspector,/inspectLinkedCard\(requestedName,returnToDeck,"deck"\)/,
   'Deck cards should use the same full inspector as AI Review');
 
+// Visual editing must remain an opt-in view of the existing draft text.
+assert.match(workspace,/"Visual mainboard  ▾"/,
+  'Editor should expose an optional visual mainboard');
+assert.match(workspace,/NativeDeckDraft\.parseEntries\(lines\.getText\(\)\.toString\(\)\)/,
+  'Visual mainboard should use the validated draft parser');
+assert.match(workspace,/preview\.setOnClickListener\(v->openDeckCard\(cardName\)\)/,
+  'Visual draft entries should link to full card previews');
+assert.match(workspace,/lines\.setText\(NativeDeckDraft\.formatEntries\(updated\)\)/,
+  'Quantity controls should edit the same unsaved mainboard text');
+assert.match(workspace,/"Refresh visual mainboard"/,
+  'Manual text changes should make the visual list refreshable');
+assert.match(workspace,/if\(deckCardInspector!=null\)\{/,
+  'Editor Back must first dismiss the card inspector, not discard a draft');
+assert.match(workspace,/deckCardReturnState=screenState/,
+  'Shared deck inspector should remember whether the origin was editing or details');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
