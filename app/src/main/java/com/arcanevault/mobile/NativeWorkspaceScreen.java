@@ -1187,6 +1187,7 @@ final class NativeWorkspaceScreen {
         fields.addView(visualCards);
         final boolean[] visualOpen={false};
         final String[] visualSnapshot={""};
+        final Map<String,String> visualTypeCache=new HashMap<>();
         final Runnable redrawVisual=()->{
             if(closed||!visualOpen[0]||
                     pageGeneration!=deckPageGeneration)return;
@@ -1204,9 +1205,70 @@ final class NativeWorkspaceScreen {
                 if(parsed.length()==0)
                     visualCards.addView(VaultNativeStyle.label(activity,
                         "Add a card to see it here.",13,VaultNativeStyle.SUBTEXT,false));
+                boolean missingTypes=false;
                 for(int i=0;i<parsed.length();i++){
                     JSONObject item=parsed.optJSONObject(i);
                     if(item==null)continue;
+                    String key=NativeArenaCardName.identity(
+                        item.optString("name","")).toLowerCase(java.util.Locale.ROOT);
+                    if(!visualTypeCache.containsKey(key)){missingTypes=true;break;}
+                }
+                if(missingTypes){
+                    visualCards.addView(VaultNativeStyle.label(activity,
+                        "Grouping cards using the local Scryfall catalog…",12,
+                        VaultNativeStyle.SUBTEXT,false));
+                    final String requestedDraft=visualSnapshot[0];
+                    executor.execute(()->{
+                        Map<String,String> types;
+                        try{types=catalog.deckTypeLines(parsed);}
+                        catch(Exception ignored){
+                            // Missing or syncing metadata must not block draft editing.
+                            types=new HashMap<>();
+                            for(int n=0;n<parsed.length();n++){
+                                JSONObject card=parsed.optJSONObject(n);
+                                if(card==null)continue;
+                                String key=NativeArenaCardName.identity(
+                                    card.optString("name","")).toLowerCase(java.util.Locale.ROOT);
+                                types.put(key,"");
+                            }
+                        }
+                        final Map<String,String> resolvedTypes=types;
+                        ui.post(()->{
+                            if(closed||pageGeneration!=deckPageGeneration||
+                                    !visualOpen[0])return;
+                            visualTypeCache.putAll(resolvedTypes);
+                            if(!requestedDraft.equals(lines.getText().toString())){
+                                // Text changed during lookup. Keep the newer draft.
+                                visualSnapshot[0]="";
+                            }
+                            visualToggle.performClick();
+                            visualToggle.performClick();
+                        });
+                    });
+                    return;
+                }
+                Map<String,java.util.ArrayList<JSONObject>> grouped=new java.util.LinkedHashMap<>();
+                for(String section:NativeDeckTypeGroups.ORDER)
+                    grouped.put(section,new java.util.ArrayList<>());
+                for(int i=0;i<parsed.length();i++){
+                    JSONObject item=parsed.optJSONObject(i);
+                    if(item==null)continue;
+                    String key=NativeArenaCardName.identity(
+                        item.optString("name","")).toLowerCase(java.util.Locale.ROOT);
+                    String section=NativeDeckTypeGroups.classify(visualTypeCache.get(key));
+                    grouped.get(section).add(item);
+                }
+                for(String section:NativeDeckTypeGroups.ORDER){
+                    java.util.ArrayList<JSONObject> sectionCards=grouped.get(section);
+                    if(sectionCards==null||sectionCards.isEmpty())continue;
+                    int sectionCopies=0;
+                    for(JSONObject item:sectionCards)sectionCopies+=item.optInt("qty",0);
+                    TextView groupHeading=VaultNativeStyle.label(activity,
+                        section.toUpperCase(java.util.Locale.ROOT)+" · "+
+                        sectionCopies+" cards",12,VaultNativeStyle.GOLD,true);
+                    groupHeading.setPadding(dp(2),dp(12),dp(2),dp(5));
+                    visualCards.addView(groupHeading);
+                    for(JSONObject item:sectionCards){
                     String cardName=item.optString("name","");
                     int quantity=item.optInt("qty",0);
                     LinearLayout cardRow=VaultNativeStyle.row(activity);
@@ -1258,6 +1320,7 @@ final class NativeWorkspaceScreen {
                         }catch(Exception error){info("Draft not changed: "+error.getMessage());}
                     });
                     VaultNativeStyle.margin(visualCards,cardRow,3,activity);
+                    }
                 }
             }catch(Exception error){
                 visualCards.addView(VaultNativeStyle.label(activity,
