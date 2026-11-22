@@ -22,7 +22,9 @@ assert.match(workspace,/workspaceScroll\.post\(this::loadVisibleDeckCovers\)/);
 assert.match(catalog,/JSONObject deckInsights\(String commander,JSONArray entries\)/);
 assert.match(catalog,/SELECT type,mv,colors,mana FROM cards WHERE name=\? COLLATE NOCASE LIMIT 1/);
 assert.match(catalog,/unknown\+=qty/,'Unresolved metadata must remain unknown');
-assert.match(catalog,/if\(normalized\.contains\("land"\)\)lands\+=qty/);
+assert.match(catalog,/if\(normalized\.contains\("land"\)\)\{/);
+assert.match(catalog,/lands\+=qty/);
+assert.match(catalog,/if\(i>=0\)mainboardLands\+=qty/);
 assert.match(workspace,/new android\.widget\.ProgressBar/);
 assert.match(workspace,/if\(report!=null\)renderDeckInsights\(report\)/);
 
