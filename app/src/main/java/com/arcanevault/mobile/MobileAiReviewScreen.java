@@ -139,8 +139,13 @@ final class MobileAiReviewScreen {
             result.setText(formatReview(AiReviewCardMentions.EXPLICIT.matcher(response)
                 .replaceAll("$1")));
             linkVerifiedCards(response);
-            status.setText(AiReviewMetadata.label(deck)+(AiReviewMetadata.stale(deck)?
-                " · Reanalyze the current deck for updated advice.":" · Available offline."));
+            boolean draftChanged=false;
+            try{draftChanged=!draftFingerprint().equalsIgnoreCase(reviewedFingerprint);}
+            catch(Exception ex){draftChanged=true;}
+            status.setText(AiReviewMetadata.label(deck)+
+                (AiReviewMetadata.stale(deck)||draftChanged?
+                    " · Outdated for the current deck/draft. Reanalyze before saving.":
+                    " · Available offline."));
         }
         saveReview.setOnClickListener(v->saveCompletedReview());
         Runnable refresh=()->{
@@ -180,7 +185,13 @@ final class MobileAiReviewScreen {
         run.setOnClickListener(v->{
             refresh.run();
             if(request.isEmpty()||running||!client.connected())return;
-            String exactPrompt=request;running=true;run.setEnabled(false);
+            String exactPrompt=request;
+            final String analyzedMode=KEYS[Math.max(0,
+                Math.min(mode.getSelectedItemPosition(),KEYS.length-1))];
+            final String analyzedFingerprint;
+            try{analyzedFingerprint=draftFingerprint();}
+            catch(Exception ex){status.setText("Invalid deck: "+ex.getMessage());return;}
+            running=true;run.setEnabled(false);
             status.setText("Analyzing the previewed deck…");
             client.review(exactPrompt,(answer,model,error)->{
                 running=false;refresh.run();
@@ -190,9 +201,8 @@ final class MobileAiReviewScreen {
                 }
                 response=answer;
                 lastModel=model;
-                lastMode=KEYS[Math.max(0,Math.min(mode.getSelectedItemPosition(),KEYS.length-1))];
-                try{reviewedFingerprint=draftFingerprint();}
-                catch(Exception ex){reviewedFingerprint="";}
+                lastMode=analyzedMode;
+                reviewedFingerprint=analyzedFingerprint;
                 updateSaveAvailability();
                 result.setText(formatReview(AiReviewCardMentions.EXPLICIT.matcher(answer).replaceAll("$1")));
                 linkVerifiedCards(answer);
