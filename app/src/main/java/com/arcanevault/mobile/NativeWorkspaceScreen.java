@@ -1188,6 +1188,7 @@ final class NativeWorkspaceScreen {
         final boolean[] visualOpen={false};
         // Presentation preference only. Never changes deck contents or draft text.
         final boolean[] visualArt={prefs.getBoolean("native_draft_art_rows_v1",false)};
+        final boolean[] visualGrid={prefs.getBoolean("native_draft_grid_v1",false)};
         final String[] visualSnapshot={""};
         final Map<String,String> visualTypeCache=new HashMap<>();
         final Runnable redrawVisual=()->{
@@ -1206,24 +1207,41 @@ final class NativeWorkspaceScreen {
                     " names · unsaved draft",12,VaultNativeStyle.SUBTEXT,false);
                 visualCards.addView(summary);
                 LinearLayout viewModes=VaultNativeStyle.row(activity);
-                Button listMode=VaultNativeStyle.button(activity,"List",!visualArt[0]);
-                Button artMode=VaultNativeStyle.button(activity,"Art + Details",visualArt[0]);
+                Button listMode=VaultNativeStyle.button(activity,"List",!visualArt[0]&&!visualGrid[0]);
+                Button artMode=VaultNativeStyle.button(activity,"Art + Details",visualArt[0]&&!visualGrid[0]);
+                Button gridMode=VaultNativeStyle.button(activity,"Grid",visualGrid[0]);
+                listMode.setAllCaps(false);
+                artMode.setAllCaps(false);
+                gridMode.setAllCaps(false);
                 viewModes.addView(listMode,new LinearLayout.LayoutParams(0,dp(44),1));
                 LinearLayout.LayoutParams artModeParams=new LinearLayout.LayoutParams(0,dp(44),1);
-                artModeParams.leftMargin=dp(7);
+                artModeParams.leftMargin=dp(5);
                 viewModes.addView(artMode,artModeParams);
+                LinearLayout.LayoutParams gridModeParams=new LinearLayout.LayoutParams(0,dp(44),1);
+                gridModeParams.leftMargin=dp(5);
+                viewModes.addView(gridMode,gridModeParams);
                 visualCards.addView(viewModes);
                 listMode.setOnClickListener(v->{
-                    if(!visualArt[0])return;
-                    visualArt[0]=false;
-                    prefs.edit().putBoolean("native_draft_art_rows_v1",false).apply();
+                    if(!visualArt[0]&&!visualGrid[0])return;
+                    visualArt[0]=false;visualGrid[0]=false;
+                    prefs.edit().putBoolean("native_draft_art_rows_v1",false)
+                        .putBoolean("native_draft_grid_v1",false).apply();
                     visualToggle.performClick();
                     visualToggle.performClick();
                 });
                 artMode.setOnClickListener(v->{
-                    if(visualArt[0])return;
-                    visualArt[0]=true;
-                    prefs.edit().putBoolean("native_draft_art_rows_v1",true).apply();
+                    if(visualArt[0]&&!visualGrid[0])return;
+                    visualArt[0]=true;visualGrid[0]=false;
+                    prefs.edit().putBoolean("native_draft_art_rows_v1",true)
+                        .putBoolean("native_draft_grid_v1",false).apply();
+                    visualToggle.performClick();
+                    visualToggle.performClick();
+                });
+                gridMode.setOnClickListener(v->{
+                    if(visualGrid[0])return;
+                    visualGrid[0]=true;visualArt[0]=false;
+                    prefs.edit().putBoolean("native_draft_grid_v1",true)
+                        .putBoolean("native_draft_art_rows_v1",false).apply();
                     visualToggle.performClick();
                     visualToggle.performClick();
                 });
@@ -1293,11 +1311,30 @@ final class NativeWorkspaceScreen {
                         sectionCopies+" cards",12,VaultNativeStyle.GOLD,true);
                     groupHeading.setPadding(dp(2),dp(12),dp(2),dp(5));
                     visualCards.addView(groupHeading);
+                    // Two art-forward columns on phones, three on wider screens.
+                    int screenDp=Math.round(activity.getResources().getDisplayMetrics()
+                        .widthPixels/activity.getResources().getDisplayMetrics().density);
+                    int columns=screenDp>=600?3:2;
+                    int tileWidth=Math.max(dp(112),
+                        (activity.getResources().getDisplayMetrics().widthPixels-
+                            dp(104)-dp(10)*(columns-1))/columns);
+                    GridLayout cardGrid=null;
+                    if(visualGrid[0]){
+                        cardGrid=new GridLayout(activity);
+                        cardGrid.setColumnCount(columns);
+                        visualCards.addView(cardGrid);
+                    }
+                    int gridIndex=0;
                     for(JSONObject item:sectionCards){
                     String cardName=item.optString("name","");
                     int quantity=item.optInt("qty",0);
-                    LinearLayout cardRow=VaultNativeStyle.row(activity);
-                    if(visualArt[0]){
+                    LinearLayout cardRow=visualGrid[0]?
+                        VaultNativeStyle.column(activity):VaultNativeStyle.row(activity);
+                    if(visualGrid[0]){
+                        cardRow.setPadding(dp(5),dp(5),dp(5),dp(7));
+                        VaultNativeStyle.surface(activity,cardRow,false);
+                    }
+                    if(visualGrid[0]||visualArt[0]){
                         // Load only visible card art via the existing bounded,
                         // cache-backed deck cover worker. No full deck prefetch.
                         FrameLayout artFrame=new FrameLayout(activity);
@@ -1311,9 +1348,20 @@ final class NativeWorkspaceScreen {
                         artImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
                         artImage.setContentDescription("Card artwork for "+cardName);
                         artFrame.addView(artImage,new FrameLayout.LayoutParams(-1,-1));
-                        LinearLayout.LayoutParams artSize=new LinearLayout.LayoutParams(dp(70),dp(95));
-                        artSize.rightMargin=dp(8);
+                        LinearLayout.LayoutParams artSize=visualGrid[0]?
+                            new LinearLayout.LayoutParams(-1,Math.round((tileWidth-dp(10))*1.36f)):
+                            new LinearLayout.LayoutParams(dp(70),dp(95));
+                        if(!visualGrid[0])artSize.rightMargin=dp(8);
                         cardRow.addView(artFrame,artSize);
+                        if(visualGrid[0]){
+                            TextView badge=VaultNativeStyle.label(activity,
+                                "×"+quantity,12,Color.WHITE,true);
+                            badge.setPadding(dp(6),dp(3),dp(6),dp(3));
+                            badge.setBackgroundColor(Color.argb(220,16,19,28));
+                            FrameLayout.LayoutParams badgeParams=new FrameLayout.LayoutParams(
+                                -2,-2,Gravity.TOP|Gravity.RIGHT);
+                            artFrame.addView(badge,badgeParams);
+                        }
                         artFrame.setOnClickListener(v->openDeckCard(cardName));
                         deckCoverTargets.add(new DeckCoverTarget(artImage,cardName));
                     }
@@ -1322,15 +1370,30 @@ final class NativeWorkspaceScreen {
                     preview.setAllCaps(false);
                     preview.setContentDescription("Inspect "+cardName+
                         ", "+quantity+" copies in unsaved draft");
-                    cardRow.addView(preview,new LinearLayout.LayoutParams(
+                    if(visualGrid[0]){
+                        preview.setMaxLines(2);
+                        preview.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                        cardRow.addView(preview,new LinearLayout.LayoutParams(-1,dp(57)));
+                    }else cardRow.addView(preview,new LinearLayout.LayoutParams(
                         0,visualArt[0]?dp(95):dp(46),1));
                     preview.setOnClickListener(v->openDeckCard(cardName));
                     Button minus=VaultNativeStyle.button(activity,"−",false);
                     minus.setContentDescription("Remove one "+cardName+" from draft");
-                    cardRow.addView(minus,new LinearLayout.LayoutParams(dp(43),dp(46)));
+                    LinearLayout quantityRow=visualGrid[0]?
+                        VaultNativeStyle.row(activity):cardRow;
+                    quantityRow.addView(minus,new LinearLayout.LayoutParams(
+                        visualGrid[0]?0:dp(43),dp(46),visualGrid[0]?1:0));
                     Button plus=VaultNativeStyle.button(activity,"+",false);
                     plus.setContentDescription("Add one "+cardName+" to draft");
-                    cardRow.addView(plus,new LinearLayout.LayoutParams(dp(43),dp(46)));
+                    if(visualGrid[0]){
+                        TextView count=VaultNativeStyle.label(activity,
+                            "×"+quantity,12,VaultNativeStyle.TEXT,true);
+                        count.setGravity(Gravity.CENTER);
+                        quantityRow.addView(count,new LinearLayout.LayoutParams(0,dp(46),1));
+                    }
+                    quantityRow.addView(plus,new LinearLayout.LayoutParams(
+                        visualGrid[0]?0:dp(43),dp(46),visualGrid[0]?1:0));
+                    if(visualGrid[0])cardRow.addView(quantityRow);
                     minus.setOnClickListener(v->{
                         try{
                             JSONArray updated=NativeDeckDraft.parseEntries(lines.getText().toString());
@@ -1365,10 +1428,20 @@ final class NativeWorkspaceScreen {
                             visualToggle.performClick();
                         }catch(Exception error){info("Draft not changed: "+error.getMessage());}
                     });
-                    VaultNativeStyle.margin(visualCards,cardRow,3,activity);
+                    if(visualGrid[0]){
+                        GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
+                        cell.width=tileWidth;
+                        cell.height=-2;
+                        cell.rowSpec=GridLayout.spec(gridIndex/columns);
+                        cell.columnSpec=GridLayout.spec(gridIndex%columns);
+                        cell.setMargins(dp(2),dp(3),dp(2),dp(4));
+                        cardGrid.addView(cardRow,cell);
+                        gridIndex++;
+                    }else VaultNativeStyle.margin(visualCards,cardRow,3,activity);
                     }
                 }
-                if(visualArt[0])workspaceScroll.post(this::loadVisibleDeckCovers);
+                if(visualArt[0]||visualGrid[0])
+                    workspaceScroll.post(this::loadVisibleDeckCovers);
             }catch(Exception error){
                 visualCards.addView(VaultNativeStyle.label(activity,
                     "Fix draft text before viewing cards: "+error.getMessage(),
