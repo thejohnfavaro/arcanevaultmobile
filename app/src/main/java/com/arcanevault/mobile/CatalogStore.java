@@ -730,6 +730,9 @@ final class CatalogStore extends SQLiteOpenHelper {
             planeswalkers=0,other=0,nonland=0;
         double costSum=0;
         int[] curve=new int[8];
+        // Nonland spell color identities. A multicolor spell contributes to
+        // each of its colors; this is NOT land mana production or mana pips.
+        int[] identityCounts=new int[6];
         JSONArray cards=new JSONArray();
         for(int i=-1;i<entries.length();i++){
             JSONObject row=i<0?null:entries.optJSONObject(i);
@@ -742,7 +745,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             total+=qty;
             if(total>10000)throw new IllegalArgumentException("Deck size exceeds analysis limit");
             try(Cursor card=db.rawQuery(
-                    "SELECT type,mv FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
+                    "SELECT type,mv,colors FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
                     new String[]{lookupName})){
                 if(!card.moveToFirst()){
                     unknown+=qty;
@@ -757,6 +760,11 @@ final class CatalogStore extends SQLiteOpenHelper {
                 if(normalized.contains("land"))lands+=qty;
                 else{
                     nonland+=qty;
+                    String colors=card.getString(2);
+                    if(colors==null||colors.isEmpty())identityCounts[5]+=qty;
+                    else for(int ci=0;ci<5;ci++)
+                        if(colors.indexOf("WUBRG".charAt(ci))>=0)
+                            identityCounts[ci]+=qty;
                     if(Double.isFinite(mv)&&mv>=0){
                         curve[Math.min(7,(int)Math.floor(mv))]+=qty;
                         costSum+=mv*qty;
@@ -773,12 +781,17 @@ final class CatalogStore extends SQLiteOpenHelper {
         }
         JSONArray bars=new JSONArray();
         for(int number:curve)bars.put(number);
+        JSONObject colorIdentity=new JSONObject();
+        for(int ci=0;ci<6;ci++)
+            colorIdentity.put(ci==5?"C":String.valueOf("WUBRG".charAt(ci)),
+                identityCounts[ci]);
         return new JSONObject().put("total",total).put("known",known)
             .put("unknown",unknown).put("lands",lands)
             .put("creatures",creatures).put("instants",instants)
             .put("sorceries",sorceries).put("artifacts",artifacts)
             .put("enchantments",enchantments).put("planeswalkers",planeswalkers)
             .put("other",other).put("curve",bars).put("unknownNames",cards)
+            .put("colorIdentity",colorIdentity).put("nonland",nonland)
             .put("avgMv",nonland>0?costSum/nonland:JSONObject.NULL);
     }
 
