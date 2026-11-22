@@ -20,10 +20,11 @@ final class AiReviewTableFormatter {
     }
     static String label(String heading,int column){
         String key=heading==null?"":heading.replaceAll("[*_]","").trim().toLowerCase(Locale.ROOT);
-        if(key.matches(".*(cut|remove|outgoing|replace|out).*"))return "CUT";
-        if(key.matches(".*(add|incoming|replacement|replace with|in).*"))return "ADD";
         if(key.matches(".*(reason|why|rationale|benefit|explanation).*"))return "WHY";
-        if(key.matches(".*(role|purpose|impact|priority|notes?).*"))return key.toUpperCase(Locale.ROOT);
+        if(key.matches(".*(replacement|replace with|add|incoming).*"))return "ADD";
+        if(key.matches(".*(cut|remove|outgoing|take out).*"))return "CUT";
+        if(key.matches(".*(role|purpose|impact|priority|rank|notes?).*"))
+            return key.toUpperCase(Locale.ROOT);
         return key.isEmpty()?"COLUMN "+(column+1):heading.trim().toUpperCase(Locale.ROOT);
     }
     static String row(String[] headers,String[] values,int index){
