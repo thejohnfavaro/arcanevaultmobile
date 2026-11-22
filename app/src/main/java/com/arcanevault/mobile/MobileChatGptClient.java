@@ -72,8 +72,9 @@ final class MobileChatGptClient {
                 if(usable==0)throw new IOException("No eligible ChatGPT models were returned for this connection");
                 connectionVerified=true;
                 lastConnectionIssue="";
-                ui.post(()->callback.done("ChatGPT connection verified. "+usable+
-                    " eligible model"+(usable==1?"":"s")+" available for deck reviews.",true));
+                final int availableModels=usable;
+                ui.post(()->callback.done("ChatGPT connection verified. "+availableModels+
+                    " eligible model"+(availableModels==1?"":"s")+" available for deck reviews.",true));
             }catch(Exception ex){
                 connectionVerified=false;
                 String message=ex.getMessage()==null?"Unknown connection error":ex.getMessage();
