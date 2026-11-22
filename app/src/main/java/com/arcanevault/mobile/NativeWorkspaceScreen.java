@@ -826,6 +826,18 @@ final class NativeWorkspaceScreen {
                 Bitmap decoded=null;
                 try {
                     String url=catalog.commanderCoverUrl(commander);
+                    if(url.isEmpty()){
+                        // Draft imports may use a front-face-only name for a
+                        // double-faced card, while the local catalog stores
+                        // the exact "Front // Back" identity.
+                        try{
+                            JSONObject exact=catalog.cardDetailsForReviewMention(commander);
+                            JSONObject meta=exact.optJSONObject("meta");
+                            if(meta!=null)url=meta.optString("image","");
+                        }catch(Exception ignored){
+                            // Keep the readable placeholder if metadata is absent.
+                        }
+                    }
                     if(!url.isEmpty()){
                         decoded=NativeArtworkQuality.load(artwork,url,
                             dp(98),dp(132),false);
