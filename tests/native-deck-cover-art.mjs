@@ -13,7 +13,7 @@ for(const part of [
   'cover.setClipToOutline(true)',
   'art.setScaleType(ImageView.ScaleType.CENTER_CROP)',
   'entry.setOnClickListener(v->showDeck(deck))',
-  'commander.isEmpty()?"Commander not specified"',
+  'commander.isEmpty() ? format : commander',
   'count+" cards · "+folder',
   'ribbon',
 ])assert.ok(workspace.includes(part),'Missing deck cover presentation: '+part);
@@ -327,9 +327,16 @@ console.log('PASS: Android Deck Library displays lazy, safe commander artwork de
 
 // Saved deck cosmetics are keyed by commander + exact printing ID, so multiple
 // decks using the same commander can display different official artwork.
-assert.match(workspace,/new DeckCoverTarget\(art,commander,false,/,
-  'Saved deck cover must carry its exact commander printing preference');
+assert.match(workspace,/new DeckCoverTarget\(art,coverName,false,/,
+  'Saved deck cover must support a commander or a Standard mainboard card');
 assert.match(workspace,/catalog\.commanderPrintingArtwork\(cardIdentity,printingId\)/,
   'Selected artwork must match the exact printing ID');
 assert.match(workspace,/coverBitmaps\.get\(target\.coverKey\)/,
   'Different commander printings must not share one decoded image cache key');
+
+assert.match(workspace,/"Arena Standard"\.equalsIgnoreCase\(format\)/,
+  'Arena Standard deck art must use a representative mainboard card, not a fabricated commander');
+assert.match(workspace,/revised\.put\("format",selectedFormat\)/,
+  'Deck editing must preserve the selected format through saved native JSON');
+assert.match(workspace,/Arena Standard requires at least 60 mainboard cards/,
+  'Arena Standard needs at least a 60-card mainboard before saving');
