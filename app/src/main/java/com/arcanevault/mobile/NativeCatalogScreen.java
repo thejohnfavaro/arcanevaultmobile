@@ -1062,7 +1062,7 @@ final class NativeCatalogScreen {
         openInspector(name);
         inspectorBack=onReturn;
         Button back=(Button)inspectorContent.getChildAt(0);
-        back.setText("← Back to "+origin");
+        back.setText("← Back to "+origin);
         inspectorContent.addView(text("Loading local card details…",14,false));
         final int token=inspectorRequest;
         worker.execute(()->{
@@ -1077,13 +1077,13 @@ final class NativeCatalogScreen {
                         meta.optString("imageBack",""),row.optInt("arenaQty",0),
                         row.optInt("physicalQty",0),null,"","",0,meta,onReturn);
                     Button top=(Button)inspectorContent.getChildAt(0);
-                    top.setText("← Back to "+origin");
+                    top.setText("← Back to "+origin);
                 });
             }catch(Exception error){
                 ui.post(()->{
                     if(disposed||activity.isFinishing()||token!=inspectorRequest)return;
                     inspectorContent.removeAllViews();
-                    Button backButton=VaultNativeStyle.button(activity,"← Back to "+origin",false);
+                    Button backButton=VaultNativeStyle.button(activity,"← Back to "+origin,false);
                     inspectorContent.addView(backButton);
                     backButton.setOnClickListener(v->onReturn.run());
                     inspectorContent.addView(text("Card details unavailable: "+
