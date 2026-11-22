@@ -87,6 +87,7 @@ final class NativeWorkspaceScreen {
     private NativeCatalogScreen deckCardInspector;
     private final ArrayList<View> deckDetailsRetainedViews=new ArrayList<>();
     private int deckDetailsRetainedScroll;
+    private String deckCardReturnState="deck-details";
     private View aiReviewRetainedView;
     private int aiReviewRetainedScroll;
     private final ArrayList<View> aiReturnViews=new ArrayList<>();
@@ -288,6 +289,10 @@ final class NativeWorkspaceScreen {
                 returnFromAiReview();
                 return true;
             case "deck-edit":
+                if(deckCardInspector!=null){
+                    if(!deckCardInspector.onBack())returnFromDeckCard();
+                    return true;
+                }
                 requestLeaveEditor(()->showDeck(editingDeck));
                 return true;
             case "deck-details":
@@ -1171,6 +1176,114 @@ final class NativeWorkspaceScreen {
         editorOriginalName=name.getText().toString();
         editorOriginalMainboard=lines.getText().toString();
         fields.addView(lines,new LinearLayout.LayoutParams(-1,dp(260)));
+
+        // Optional visual editing over the SAME draft text and validated parser.
+        // No separate card inventory, deck format or unsaved state is created.
+        Button visualToggle=VaultNativeStyle.button(activity,
+            "Visual mainboard  ▾",false);
+        fields.addView(visualToggle,new LinearLayout.LayoutParams(-1,dp(46)));
+        LinearLayout visualCards=VaultNativeStyle.column(activity);
+        visualCards.setVisibility(View.GONE);
+        fields.addView(visualCards);
+        final boolean[] visualOpen={false};
+        final String[] visualSnapshot={""};
+        final Runnable redrawVisual=()->{
+            if(closed||!visualOpen[0]||
+                    pageGeneration!=deckPageGeneration)return;
+            visualCards.removeAllViews();
+            try{
+                JSONArray parsed=NativeDeckDraft.parseEntries(lines.getText().toString());
+                visualSnapshot[0]=lines.getText().toString();
+                int copies=0;
+                for(int i=0;i<parsed.length();i++)
+                    copies+=parsed.optJSONObject(i).optInt("qty",0);
+                TextView summary=VaultNativeStyle.label(activity,
+                    copies+" mainboard cards · "+parsed.length()+
+                    " names · unsaved draft",12,VaultNativeStyle.SUBTEXT,false);
+                visualCards.addView(summary);
+                if(parsed.length()==0)
+                    visualCards.addView(VaultNativeStyle.label(activity,
+                        "Add a card to see it here.",13,VaultNativeStyle.SUBTEXT,false));
+                for(int i=0;i<parsed.length();i++){
+                    JSONObject item=parsed.optJSONObject(i);
+                    if(item==null)continue;
+                    String cardName=item.optString("name","");
+                    int quantity=item.optInt("qty",0);
+                    LinearLayout cardRow=VaultNativeStyle.row(activity);
+                    Button preview=VaultNativeStyle.button(activity,
+                        quantity+" × "+cardName,false);
+                    preview.setAllCaps(false);
+                    preview.setContentDescription("Inspect "+cardName+
+                        ", "+quantity+" copies in unsaved draft");
+                    cardRow.addView(preview,new LinearLayout.LayoutParams(0,dp(46),1));
+                    preview.setOnClickListener(v->openDeckCard(cardName));
+                    Button minus=VaultNativeStyle.button(activity,"−",false);
+                    minus.setContentDescription("Remove one "+cardName+" from draft");
+                    cardRow.addView(minus,new LinearLayout.LayoutParams(dp(43),dp(46)));
+                    Button plus=VaultNativeStyle.button(activity,"+",false);
+                    plus.setContentDescription("Add one "+cardName+" to draft");
+                    cardRow.addView(plus,new LinearLayout.LayoutParams(dp(43),dp(46)));
+                    minus.setOnClickListener(v->{
+                        try{
+                            JSONArray updated=NativeDeckDraft.parseEntries(lines.getText().toString());
+                            for(int n=0;n<updated.length();n++){
+                                JSONObject entry=updated.optJSONObject(n);
+                                if(entry==null||!cardName.equalsIgnoreCase(entry.optString("name","")))continue;
+                                int remaining=entry.optInt("qty",0)-1;
+                                if(remaining>0)entry.put("qty",remaining);
+                                else updated.remove(n);
+                                break;
+                            }
+                            lines.setText(NativeDeckDraft.formatEntries(updated));
+                            visualSnapshot[0]="";
+                            visualToggle.performClick();
+                            visualToggle.performClick();
+                        }catch(Exception error){info("Draft not changed: "+error.getMessage());}
+                    });
+                    plus.setOnClickListener(v->{
+                        try{
+                            JSONArray updated=NativeDeckDraft.parseEntries(lines.getText().toString());
+                            for(int n=0;n<updated.length();n++){
+                                JSONObject entry=updated.optJSONObject(n);
+                                if(entry==null||!cardName.equalsIgnoreCase(entry.optString("name","")))continue;
+                                int qty=entry.optInt("qty",0);
+                                if(qty>=999){info("Maximum 999 copies per entry.");return;}
+                                entry.put("qty",qty+1);
+                                break;
+                            }
+                            lines.setText(NativeDeckDraft.formatEntries(updated));
+                            visualSnapshot[0]="";
+                            visualToggle.performClick();
+                            visualToggle.performClick();
+                        }catch(Exception error){info("Draft not changed: "+error.getMessage());}
+                    });
+                    VaultNativeStyle.margin(visualCards,cardRow,3,activity);
+                }
+            }catch(Exception error){
+                visualCards.addView(VaultNativeStyle.label(activity,
+                    "Fix draft text before viewing cards: "+error.getMessage(),
+                    12,VaultNativeStyle.GOLD,false));
+            }
+        };
+        visualToggle.setOnClickListener(v->{
+            visualOpen[0]=!visualOpen[0];
+            visualToggle.setText(visualOpen[0]?"Visual mainboard  ▴":"Visual mainboard  ▾");
+            visualCards.setVisibility(visualOpen[0]?View.VISIBLE:View.GONE);
+            if(visualOpen[0])redrawVisual.run();
+        });
+        lines.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence text,int start,int count,int after){}
+            public void onTextChanged(CharSequence text,int start,int before,int count){
+                if(visualOpen[0]&&!text.toString().equals(visualSnapshot[0])){
+                    visualCards.removeAllViews();
+                    Button refresh=VaultNativeStyle.button(activity,
+                        "Refresh visual mainboard",false);
+                    visualCards.addView(refresh);
+                    refresh.setOnClickListener(v->redrawVisual.run());
+                }
+            }
+            public void afterTextChanged(Editable text){}
+        });
         // Add cards without typing exact names or leaving the native workspace.
         // Only query the existing local Scryfall catalog; the selection modifies
         // this unsaved draft, never physical or Arena ownership.
@@ -1463,8 +1576,9 @@ final class NativeWorkspaceScreen {
      * rebuilding insights, or changing ownership or saved deck contents. */
     private void openDeckCard(String cardName){
         String name=cardName==null?"":cardName.trim();
-        if(closed||!"deck-details".equals(screenState)||
+        if(closed||(!"deck-details".equals(screenState)&&!"deck-edit".equals(screenState))||
                 deckCardInspector!=null||name.isEmpty())return;
+        deckCardReturnState=screenState;
         deckDetailsRetainedScroll=workspaceScroll.getScrollY();
         deckDetailsRetainedViews.clear();
         for(int i=0;i<content.getChildCount();i++)
@@ -1487,7 +1601,7 @@ final class NativeWorkspaceScreen {
         deckDetailsRetainedViews.clear();
         final int scroll=deckDetailsRetainedScroll;
         workspaceScroll.post(()->{
-            if(!closed&&"deck-details".equals(screenState))
+            if(!closed&&deckCardReturnState.equals(screenState))
                 workspaceScroll.scrollTo(0,scroll);
         });
     }
