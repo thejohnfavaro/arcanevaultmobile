@@ -1090,7 +1090,11 @@ final class NativeCatalogScreen {
         if(metadata==null)return;
         String mana=metadata.optString("manaCost","");
         if(!mana.isEmpty()){
-            inspectorContent.addView(text("MANA COST (EXACT)",11,true));
+            LinearLayout manaLine=VaultNativeStyle.row(activity);
+            TextView manaLabel=text("MANA",11,true);
+            manaLabel.setTextColor(VaultNativeStyle.SUBTEXT);
+            manaLabel.setGravity(Gravity.CENTER_VERTICAL);
+            manaLine.addView(manaLabel,new LinearLayout.LayoutParams(dp(77),dp(34)));
             LinearLayout glyphs=VaultNativeStyle.row(activity);
             java.util.regex.Matcher tokens=java.util.regex.Pattern
                 .compile("\\{([^{}]{1,16})\\}").matcher(mana);
@@ -1112,11 +1116,16 @@ final class NativeCatalogScreen {
             HorizontalScrollView scroll=VaultNativeStyle.horizontalScroll(activity);
             scroll.setHorizontalScrollBarEnabled(false);
             scroll.addView(glyphs);
-            inspectorContent.addView(scroll);
+            manaLine.addView(scroll,new LinearLayout.LayoutParams(0,dp(40),1));
+            inspectorContent.addView(manaLine);
         }
         JSONArray identity=metadata.optJSONArray("colors");
         if(identity!=null){
-            inspectorContent.addView(text("COLOR IDENTITY",11,true));
+            LinearLayout identityLine=VaultNativeStyle.row(activity);
+            TextView identityLabel=text("IDENTITY",11,true);
+            identityLabel.setTextColor(VaultNativeStyle.SUBTEXT);
+            identityLabel.setGravity(Gravity.CENTER_VERTICAL);
+            identityLine.addView(identityLabel,new LinearLayout.LayoutParams(dp(77),dp(34)));
             LinearLayout glyphs=VaultNativeStyle.row(activity);
             boolean any=false;
             for(int i=0;i<identity.length()&&i<5;i++){
@@ -1128,7 +1137,8 @@ final class NativeCatalogScreen {
                 any=true;
             }
             if(!any)glyphs.addView(text("Colorless",14,false));
-            inspectorContent.addView(glyphs);
+            identityLine.addView(glyphs,new LinearLayout.LayoutParams(0,-2,1));
+            inspectorContent.addView(identityLine);
         }
     }
 
