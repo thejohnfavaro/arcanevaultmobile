@@ -64,6 +64,9 @@ final class NativeWorkspaceScreen {
     private final ArrayList<DeckCoverTarget> deckCoverTargets=new ArrayList<>();
     private final Set<String> coverInFlight=new HashSet<>();
     private final Set<String> coverUnavailable=new HashSet<>();
+    // Draft artwork may become available after catalog indexing or an
+    // intermittent image fetch; do not permanently blacklist that card.
+    private final Map<String,Integer> draftArtFailures=new HashMap<>();
     private final Set<String> setArtInFlight=new HashSet<>();
     private final LinkedHashMap<String,Bitmap> coverBitmaps=new LinkedHashMap<String,Bitmap>(40,0.75f,true){
         @Override protected boolean removeEldestEntry(Map.Entry<String,Bitmap> eldest){
@@ -712,9 +715,13 @@ final class NativeWorkspaceScreen {
     private static final class DeckCoverTarget {
         final ImageView image;
         final String commander;
+        final boolean draft;
         boolean loaded;
         DeckCoverTarget(ImageView image,String commander){
-            this.image=image;this.commander=commander;
+            this(image,commander,false);
+        }
+        DeckCoverTarget(ImageView image,String commander,boolean draft){
+            this.image=image;this.commander=commander;this.draft=draft;
         }
     }
 
@@ -808,7 +815,9 @@ final class NativeWorkspaceScreen {
                 target.loaded=true;
                 continue;
             }
-            if(coverUnavailable.contains(target.commander) ||
+            if((target.draft?
+                    draftArtFailures.getOrDefault(target.commander,0)>=2:
+                    coverUnavailable.contains(target.commander)) ||
                     coverInFlight.contains(target.commander))continue;
             if(coverInFlight.size()>=8)break;
             String commander=target.commander;
@@ -827,8 +836,20 @@ final class NativeWorkspaceScreen {
                 final Bitmap result=decoded;
                 ui.post(()->{
                     coverInFlight.remove(commander);
-                    if(result!=null)coverBitmaps.put(commander,result);
-                    else coverUnavailable.add(commander);
+                    if(result!=null){
+                        coverBitmaps.put(commander,result);
+                        coverUnavailable.remove(commander);
+                        draftArtFailures.remove(commander);
+                    }else{
+                        boolean draftTarget=false;
+                        for(DeckCoverTarget target:deckCoverTargets)
+                            if(target.draft&&commander.equals(target.commander)){
+                                draftTarget=true;break;
+                            }
+                        if(draftTarget)draftArtFailures.put(commander,
+                            draftArtFailures.getOrDefault(commander,0)+1);
+                        else coverUnavailable.add(commander);
+                    }
                     if(!closed&&pageGeneration==deckPageGeneration)
                         loadVisibleDeckCovers();
                 });
@@ -1186,6 +1207,7 @@ final class NativeWorkspaceScreen {
         visualCards.setVisibility(View.GONE);
         fields.addView(visualCards);
         final boolean[] visualOpen={false};
+        draftArtFailures.clear();
         // Presentation preference only. Never changes deck contents or draft text.
         final boolean[] visualArt={prefs.getBoolean("native_draft_art_rows_v1",false)};
         final boolean[] visualGrid={prefs.getBoolean("native_draft_grid_v1",false)};
@@ -1363,7 +1385,19 @@ final class NativeWorkspaceScreen {
                             artFrame.addView(badge,badgeParams);
                         }
                         artFrame.setOnClickListener(v->openDeckCard(cardName));
-                        deckCoverTargets.add(new DeckCoverTarget(artImage,cardName));
+                        deckCoverTargets.add(new DeckCoverTarget(artImage,cardName,true));
+                        // The editor can be rebuilt without a scroll event. An
+                        // attachment/layout callback starts the visible request.
+                        artImage.addOnAttachStateChangeListener(
+                            new View.OnAttachStateChangeListener(){
+                                public void onViewAttachedToWindow(View view){
+                                    view.post(()->{
+                                        if(!closed&&pageGeneration==deckPageGeneration)
+                                            loadVisibleDeckCovers();
+                                    });
+                                }
+                                public void onViewDetachedFromWindow(View view){}
+                            });
                     }
                     Button preview=VaultNativeStyle.button(activity,
                         quantity+" × "+cardName,false);
