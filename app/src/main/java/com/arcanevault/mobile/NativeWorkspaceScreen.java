@@ -2374,6 +2374,29 @@ final class NativeWorkspaceScreen {
                 "Not a mana-source or mana-symbol estimate.",11,
                 VaultNativeStyle.SUBTEXT,false));
         }
+        JSONObject pips=report.optJSONObject("coloredPipDemand");
+        if(pips!=null){
+            TextView pipHeading=VaultNativeStyle.label(activity,
+                "COLORED CASTING-COST DEMAND",12,VaultNativeStyle.GOLD,true);
+            pipHeading.setPadding(0,dp(10),0,dp(3));
+            insights.addView(pipHeading);
+            StringBuilder demand=new StringBuilder();
+            String[] names={"White","Blue","Black","Red","Green"};
+            String symbols="WUBRG";
+            for(int ci=0;ci<5;ci++){
+                if(demand.length()>0)demand.append("  ·  ");
+                demand.append(names[ci]).append(" ");
+                demand.append(String.format(java.util.Locale.US,"%.1f",
+                    pips.optDouble(String.valueOf(symbols.charAt(ci)),0)));
+            }
+            insights.addView(VaultNativeStyle.label(activity,demand.toString(),
+                12,VaultNativeStyle.TEXT,false));
+            insights.addView(VaultNativeStyle.label(activity,
+                report.optInt("manaCostCopies",0)+" nonland copies with costs · "+
+                report.optInt("missingCostCopies",0)+" without cost metadata. "+
+                "Approximate: hybrid/Phyrexian symbols discounted; not cast odds.",
+                11,VaultNativeStyle.SUBTEXT,false));
+        }
         VaultNativeStyle.margin(target,insights,10,activity);
     }
 
