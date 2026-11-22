@@ -1048,11 +1048,21 @@ final class NativeCatalogScreen {
     /** Full existing Catalog details from AI Review, including artwork,
      * oracle text, formats and ownership. Return preserves the AI result. */
     void inspectAiCard(String requestedName,Runnable returnToReview) {
+        inspectLinkedCard(requestedName,returnToReview,"AI Review");
+    }
+
+    /** Same read-only, full-card inspector as AI Review for saved Deck Details.
+     * Ownership and saved deck entries are never modified by inspection. */
+    void inspectDeckCard(String requestedName,Runnable returnToDeck){
+        inspectLinkedCard(requestedName,returnToDeck,"deck");
+    }
+
+    private void inspectLinkedCard(String requestedName,Runnable onReturn,String origin) {
         String name=NativeArenaCardName.identity(requestedName);
         openInspector(name);
-        inspectorBack=returnToReview;
+        inspectorBack=onReturn;
         Button back=(Button)inspectorContent.getChildAt(0);
-        back.setText("← Back to AI Review");
+        back.setText("← Back to "+origin");
         inspectorContent.addView(text("Loading local card details…",14,false));
         final int token=inspectorRequest;
         worker.execute(()->{
@@ -1065,17 +1075,17 @@ final class NativeCatalogScreen {
                     showDetails(name,meta.optString("type",""),meta.optString("oracle",""),
                         meta.optString("rarity",""),meta.optString("image",""),
                         meta.optString("imageBack",""),row.optInt("arenaQty",0),
-                        row.optInt("physicalQty",0),null,"","",0,meta,returnToReview);
+                        row.optInt("physicalQty",0),null,"","",0,meta,onReturn);
                     Button top=(Button)inspectorContent.getChildAt(0);
-                    top.setText("← Back to AI Review");
+                    top.setText("← Back to "+origin");
                 });
             }catch(Exception error){
                 ui.post(()->{
                     if(disposed||activity.isFinishing()||token!=inspectorRequest)return;
                     inspectorContent.removeAllViews();
-                    Button backButton=VaultNativeStyle.button(activity,"← Back to AI Review",false);
+                    Button backButton=VaultNativeStyle.button(activity,"← Back to "+origin",false);
                     inspectorContent.addView(backButton);
-                    backButton.setOnClickListener(v->returnToReview.run());
+                    backButton.setOnClickListener(v->onReturn.run());
                     inspectorContent.addView(text("Card details unavailable: "+
                         error.getMessage(),14,false));
                 });
