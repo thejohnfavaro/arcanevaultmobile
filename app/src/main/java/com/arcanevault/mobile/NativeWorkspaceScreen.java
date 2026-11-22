@@ -1247,6 +1247,10 @@ final class NativeWorkspaceScreen {
         fields.addView(draftInsightsPanel);
         final boolean[] draftInsightsOpen={false};
         final int[] draftInsightRequests={0};
+        // One automatic attempt per editor; Refresh Insights can retry after
+        // connectivity returns. Only the local catalog's missing mana strings
+        // are updated, never draft text or ownership.
+        final boolean[] attemptedManaRepair={false};
         final Runnable updateDraftInsights=()->{
             if(closed||pageGeneration!=deckPageGeneration||
                     !draftInsightsOpen[0])return;
@@ -1260,12 +1264,35 @@ final class NativeWorkspaceScreen {
             executor.execute(()->{
                 JSONObject result=null;
                 String error=null;
+                String repairNotice="";
                 try{
-                    result=catalog.deckInsights(draftCommander,
-                        NativeDeckDraft.parseEntries(snapshot));
+                    JSONArray parsed=NativeDeckDraft.parseEntries(snapshot);
+                    result=catalog.deckInsights(draftCommander,parsed);
+                    // Cards indexed before the catalog's mana column was added
+                    // have perfectly valid type/MV data, but blank mana strings.
+                    // Recover only exact-name cards in this draft, in one small
+                    // Scryfall batch, rather than redownloading the entire catalog.
+                    if(result.optInt("manaCostCopies",0)==0 &&
+                            result.optInt("missingCostCopies",0)>0 &&
+                            !attemptedManaRepair[0]){
+                        attemptedManaRepair[0]=true;
+                        try{
+                            int filled=catalog.fillMissingDeckManaCosts(
+                                draftCommander,parsed);
+                            result=catalog.deckInsights(draftCommander,parsed);
+                            if(filled==0)repairNotice=
+                                "Mana metadata still unavailable; use Refresh Insights "+
+                                "after checking connectivity or catalog sync.";
+                        }catch(Exception recovery){
+                            repairNotice="Mana-cost recovery unavailable: "+
+                                recovery.getMessage()+
+                                ". Refresh Insights to retry.";
+                        }
+                    }
                 }catch(Exception ex){error=ex.getMessage();}
                 final JSONObject report=result;
                 final String failure=error;
+                final String notice=repairNotice;
                 ui.post(()->{
                     if(closed||pageGeneration!=deckPageGeneration||
                             request!=draftInsightRequests[0]||
@@ -1281,7 +1308,12 @@ final class NativeWorkspaceScreen {
                         draftInsightsPanel.addView(VaultNativeStyle.label(activity,
                             "Analysis unavailable: "+failure,12,
                             VaultNativeStyle.GOLD,false));
-                    else renderDeckInsights(report,draftInsightsPanel);
+                    else{
+                        renderDeckInsights(report,draftInsightsPanel);
+                        if(!notice.isEmpty())
+                            draftInsightsPanel.addView(VaultNativeStyle.label(activity,
+                                notice,12,VaultNativeStyle.GOLD,false));
+                    }
                 });
             });
         };
@@ -1302,7 +1334,10 @@ final class NativeWorkspaceScreen {
             if(draftInsightsOpen[0])updateDraftInsights.run();
             else ++draftInsightRequests[0];
         });
-        insightRefresh.setOnClickListener(v->updateDraftInsights.run());
+        insightRefresh.setOnClickListener(v->{
+            attemptedManaRepair[0]=false;
+            updateDraftInsights.run();
+        });
 
         // Optional visual editing over the SAME draft text and validated parser.
         // No separate card inventory, deck format or unsaved state is created.
