@@ -735,6 +735,7 @@ final class CatalogStore extends SQLiteOpenHelper {
         int[] identityCounts=new int[6];
         double[] coloredPips=new double[5];
         int manaCostCopies=0,missingCostCopies=0;
+        int mainboardCopies=0,mainboardLands=0,mainboardUnknown=0;
         JSONArray cards=new JSONArray();
         for(int i=-1;i<entries.length();i++){
             JSONObject row=i<0?null:entries.optJSONObject(i);
@@ -745,12 +746,14 @@ final class CatalogStore extends SQLiteOpenHelper {
                 row==null?0:Math.max(0,Math.min(999,row.optInt("qty",0)));
             if(name.isEmpty()||qty==0)continue;
             total+=qty;
+            if(i>=0)mainboardCopies+=qty;
             if(total>10000)throw new IllegalArgumentException("Deck size exceeds analysis limit");
             try(Cursor card=db.rawQuery(
                     "SELECT type,mv,colors,mana FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
                     new String[]{lookupName})){
                 if(!card.moveToFirst()){
                     unknown+=qty;
+                    if(i>=0)mainboardUnknown+=qty;
                     cards.put(name);
                     continue;
                 }
@@ -759,8 +762,10 @@ final class CatalogStore extends SQLiteOpenHelper {
                 if(type==null)type="";
                 String normalized=type.toLowerCase(java.util.Locale.ROOT);
                 double mv=card.getDouble(1);
-                if(normalized.contains("land"))lands+=qty;
-                else{
+                if(normalized.contains("land")){
+                    lands+=qty;
+                    if(i>=0)mainboardLands+=qty;
+                }else{
                     nonland+=qty;
                     String colors=card.getString(2);
                     if(colors==null||colors.isEmpty())identityCounts[5]+=qty;
@@ -798,6 +803,13 @@ final class CatalogStore extends SQLiteOpenHelper {
             if(ci<5)coloredPipDemand.put(symbol,
                 Math.round(coloredPips[ci]*10.0)/10.0);
         }
+        JSONObject landOdds=new JSONObject();
+        // Report odds only for a complete, known 99-card Commander mainboard.
+        // Unknown cards cannot safely be assumed to be nonlands.
+        if(mainboardCopies==99&&mainboardUnknown==0)
+            for(int turn=2;turn<=4;turn++)
+                landOdds.put("T"+turn,
+                    NativeDeckLandOdds.probability(mainboardLands,turn));
         return new JSONObject().put("total",total).put("known",known)
             .put("unknown",unknown).put("lands",lands)
             .put("creatures",creatures).put("instants",instants)
@@ -806,6 +818,8 @@ final class CatalogStore extends SQLiteOpenHelper {
             .put("other",other).put("curve",bars).put("unknownNames",cards)
             .put("colorIdentity",colorIdentity).put("nonland",nonland)
             .put("coloredPipDemand",coloredPipDemand)
+            .put("landOdds",landOdds).put("mainboardCopies",mainboardCopies)
+            .put("mainboardLands",mainboardLands)
             .put("manaCostCopies",manaCostCopies)
             .put("missingCostCopies",missingCostCopies)
             .put("avgMv",nonland>0?costSum/nonland:JSONObject.NULL);
