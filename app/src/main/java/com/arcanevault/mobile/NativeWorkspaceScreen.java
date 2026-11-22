@@ -1324,8 +1324,125 @@ final class NativeWorkspaceScreen {
                 }
             });
         });
+        // Deck cover is a purely cosmetic property of a saved deck, not a
+        // card added to the list nor an alteration of owned printings.
+        final String[] customCoverMode={
+            "Custom".equalsIgnoreCase(deck.optString("deckCoverMode",""))?"Custom":"Auto"};
+        final String[] customCoverCard={deck.optString("deckCoverCardName","").trim()};
+        final String[] customCoverPrinting={deck.optString("deckCoverPrintingId","").trim()};
+        TextView coverHeading=VaultNativeStyle.label(activity,
+            "DECK COVER ART",11,VaultNativeStyle.SUBTEXT,true);
+        fields.addView(coverHeading);
+        Spinner coverModePicker=new Spinner(activity);
+        ArrayAdapter<String> coverModeAdapter=new ArrayAdapter<>(activity,
+            android.R.layout.simple_spinner_item,
+            new String[]{"Auto","Custom"});
+        coverModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        coverModePicker.setAdapter(coverModeAdapter);
+        coverModePicker.setSelection("Custom".equals(customCoverMode[0])?1:0);
+        fields.addView(coverModePicker,new LinearLayout.LayoutParams(-1,dp(47)));
+        Button coverCardButton=VaultNativeStyle.button(activity,"Choose deck cover card",false);
+        fields.addView(coverCardButton,new LinearLayout.LayoutParams(-1,dp(47)));
+        Button coverPrintingButton=VaultNativeStyle.button(activity,"Choose cover printing",false);
+        fields.addView(coverPrintingButton,new LinearLayout.LayoutParams(-1,dp(47)));
+        TextView coverDescription=VaultNativeStyle.label(activity,
+            "Auto uses commander artwork, or the first mainboard card.",12,
+            VaultNativeStyle.SUBTEXT,false);
+        fields.addView(coverDescription);
+        Runnable updateCoverControls=()->{
+            boolean custom="Custom".equals(customCoverMode[0]);
+            coverCardButton.setVisibility(custom?View.VISIBLE:View.GONE);
+            coverPrintingButton.setVisibility(custom?View.VISIBLE:View.GONE);
+            coverCardButton.setText(customCoverCard[0].isEmpty()?
+                "Choose deck cover card": "Cover card: "+customCoverCard[0]);
+            coverPrintingButton.setText(customCoverPrinting[0].isEmpty()?
+                "Default card printing":"Selected cover printing");
+            coverDescription.setText(custom?
+                "Custom artwork is display-only and does not change your owned cards.":
+                "Auto uses commander art or a representative mainboard card.");
+        };
+        coverModePicker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                customCoverMode[0]=position==1?"Custom":"Auto";
+                updateCoverControls.run();
+            }
+            public void onNothingSelected(AdapterView<?> parent){}
+        });
+        coverCardButton.setOnClickListener(v->{
+            java.util.LinkedHashSet<String> names=new java.util.LinkedHashSet<>();
+            String leader=commander.getText().toString().trim();
+            if(!leader.isEmpty()&&("Commander".equals(formatPicker.getSelectedItem())||
+                "Arena Brawl".equals(formatPicker.getSelectedItem())))names.add(leader);
+            try{
+                JSONArray all=NativeDeckDraft.revised(deck,
+                    deck.optString("name","Deck"),editorMainboard==null?
+                        deck.optString("mainboard",""):editorMainboard.getText().toString())
+                    .optJSONArray("entries");
+                if(all!=null)for(int i=0;i<all.length();i++){
+                    JSONObject entry=all.optJSONObject(i);
+                    if(entry!=null && entry.optInt("qty",0)>0){
+                        String title=entry.optString("name","").trim();
+                        if(!title.isEmpty())names.add(title);
+                    }
+                }
+            }catch(Exception ignored){
+                // Invalid draft lines cannot make an unverified card eligible.
+            }
+            if(names.isEmpty()){
+                info("Add a card to the mainboard before selecting custom deck art.");
+                return;
+            }
+            String[] options=names.toArray(new String[0]);
+            new AlertDialog.Builder(activity).setTitle("Choose artwork from this deck")
+                .setItems(options,(dialog,position)->{
+                    customCoverCard[0]=options[position];
+                    customCoverPrinting[0]="";
+                    updateCoverControls.run();
+                }).setNegativeButton("Cancel",null).show();
+        });
+        coverPrintingButton.setOnClickListener(v->{
+            String card=customCoverCard[0];
+            if(card.isEmpty()){info("Choose a cover card first.");return;}
+            coverPrintingButton.setEnabled(false);
+            executor.execute(()->{
+                try{
+                    JSONArray gallery=catalog.commanderPrintings(card);
+                    ui.post(()->{
+                        if(closed||pageGeneration!=deckPageGeneration)return;
+                        coverPrintingButton.setEnabled(true);
+                        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+                        java.util.ArrayList<String> ids=new java.util.ArrayList<>();
+                        labels.add("Default artwork for "+card);ids.add("");
+                        for(int i=0;i<gallery.length();i++){
+                            JSONObject item=gallery.optJSONObject(i);
+                            if(item==null)continue;
+                            String id=item.optString("id","");
+                            if(!id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+                                continue;
+                            labels.add(item.optString("set","").toUpperCase(java.util.Locale.ROOT)+
+                                " #"+item.optString("collectorNumber","")+" · "+
+                                item.optString("setName",""));
+                            ids.add(id);
+                        }
+                        new AlertDialog.Builder(activity).setTitle("Cover printing")
+                            .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                                customCoverPrinting[0]=ids.get(which);
+                                updateCoverControls.run();
+                            }).setNegativeButton("Cancel",null).show();
+                    });
+                }catch(Exception ex){
+                    ui.post(()->{
+                        if(closed||pageGeneration!=deckPageGeneration)return;
+                        coverPrintingButton.setEnabled(true);
+                        info("Could not load cover printings: "+ex.getMessage());
+                    });
+                }
+            });
+        });
+        updateCoverControls.run();
         Runnable updateCommanderVisibility=()->{
-            boolean standard="Arena Standard".equals(formatPicker.getSelectedItem());
+            boolean standard=!("Commander".equals(formatPicker.getSelectedItem()) ||
+                "Arena Brawl".equals(formatPicker.getSelectedItem()));
             commanderLabel.setVisibility(standard?View.GONE:View.VISIBLE);
             commander.setVisibility(standard?View.GONE:View.VISIBLE);
             printingButton.setVisibility(standard?View.GONE:View.VISIBLE);
@@ -2237,13 +2354,35 @@ final class NativeWorkspaceScreen {
                 JSONObject revised=NativeDeckDraft.revised(deck,
                     name.getText().toString(),lines.getText().toString());
                 String selectedFormat=(String)formatPicker.getSelectedItem();
+                boolean commanderFormat="Commander".equals(selectedFormat)||
+                    "Arena Brawl".equals(selectedFormat);
                 boolean standard="Arena Standard".equals(selectedFormat);
-                String selectedCommander=standard?"":commander.getText().toString().trim();
+                String selectedCommander=commanderFormat?commander.getText().toString().trim():"";
                 if(selectedCommander.length()>180)
                     throw new IllegalArgumentException("Commander name is too long.");
                 revised.put("format",selectedFormat);
                 revised.put("commander",selectedCommander);
-                revised.put("commanderDisplayPrintId",standard?"":chosenCommanderPrinting[0]);
+                revised.put("commanderDisplayPrintId",
+                    commanderFormat?chosenCommanderPrinting[0]:"");
+                String coverMode=customCoverMode[0];
+                String coverCard=customCoverCard[0];
+                String coverPrinting=customCoverPrinting[0];
+                JSONArray coverEntries=revised.optJSONArray("entries");
+                boolean stillPresent=!selectedCommander.isEmpty() &&
+                    selectedCommander.equalsIgnoreCase(coverCard);
+                if(coverEntries!=null)for(int i=0;i<coverEntries.length();i++){
+                    JSONObject entry=coverEntries.optJSONObject(i);
+                    if(entry!=null&&entry.optInt("qty",0)>0&&
+                        coverCard.equalsIgnoreCase(entry.optString("name","")))
+                        stillPresent=true;
+                }
+                if("Custom".equals(coverMode)&&!stillPresent){
+                    coverMode="Auto";
+                    coverCard="";coverPrinting="";
+                }
+                revised.put("deckCoverMode",coverMode);
+                revised.put("deckCoverCardName","Custom".equals(coverMode)?coverCard:"");
+                revised.put("deckCoverPrintingId","Custom".equals(coverMode)?coverPrinting:"");
                 JSONArray entries=revised.getJSONArray("entries");
                 int count=selectedCommander.isEmpty()?0:1;
                 for(int i=0;i<entries.length();i++)
