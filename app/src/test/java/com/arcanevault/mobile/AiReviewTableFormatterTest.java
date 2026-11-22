@@ -10,8 +10,8 @@ public final class AiReviewTableFormatterTest {
             "| 1 | [[card:Deserted Temple]] | [[card:Godless Shrine]] | Stabilizes early mana and reduces color screw. |");
         String output=AiReviewTableFormatter.row(headers,values,1);
         assertTrue(output.contains("PRIORITY: 1"));
-        assertTrue(output.contains("CUT: [[card:Deserted Temple]]"));
-        assertTrue(output.contains("ADD: [[card:Godless Shrine]]"));
+        assertTrue(output.contains("⊖ [[card:Deserted Temple]]"));
+        assertTrue(output.contains("⊕ [[card:Godless Shrine]]"));
         assertTrue(output.contains("WHY: Stabilizes early mana and reduces color screw."));
     }
 
@@ -20,8 +20,8 @@ public final class AiReviewTableFormatterTest {
         String[] values=AiReviewTableFormatter.cells(
             "| [[card:Fear of Immobility]] | [[card:Get Lost]] | Removal | More flexible answer | Unknown |");
         String output=AiReviewTableFormatter.row(headers,values,2);
-        assertTrue(output.contains("CUT: [[card:Fear of Immobility]]"));
-        assertTrue(output.contains("ADD: [[card:Get Lost]]"));
+        assertTrue(output.contains("⊖ [[card:Fear of Immobility]]"));
+        assertTrue(output.contains("⊕ [[card:Get Lost]]"));
         assertTrue(output.contains("ROLE: Removal"));
         assertTrue(output.contains("WHY: More flexible answer"));
         assertTrue(output.contains("OWNERSHIP: Unknown"));
