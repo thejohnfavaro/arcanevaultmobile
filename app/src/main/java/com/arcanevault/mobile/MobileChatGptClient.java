@@ -52,6 +52,45 @@ final class MobileChatGptClient {
     /** A saved token is not proof the linked account can perform AI requests.
      * Check the same model-list endpoint used by the review workflow. Never
      * transmit a deck, collection or personal information for diagnostics. */
+    /** Checks only DNS; this never reads tokens or transmits user data. */
+    void checkNetwork(Result callback){
+        worker.execute(()->{
+            StringBuilder report=new StringBuilder();
+            boolean healthy=true;
+            for(String host:new String[]{"auth.openai.com","api.openai.com"}){
+                try{
+                    java.net.InetAddress[] records=java.net.InetAddress.getAllByName(host);
+                    if(records.length==0)throw new UnknownHostException(host);
+                    report.append(host).append(": DNS resolved").append("\\n");
+                }catch(UnknownHostException ex){
+                    healthy=false;
+                    report.append(host).append(": cannot resolve hostname").append("\\n");
+                }catch(Exception ex){
+                    healthy=false;
+                    report.append(host).append(": DNS check unavailable").append("\\n");
+                }
+            }
+            if(!healthy)report.append(
+                "Try mobile data instead of Wi-Fi, or temporarily disable Private DNS, VPN, or DNS filtering. Then repeat this check. No sign-in credentials were changed.");
+            else report.append(
+                "DNS works for both OpenAI hosts. If authorization still fails, check browser redirects and the connection permissions.");
+            final boolean resolved=healthy;
+            final String message=report.toString();
+            ui.post(()->callback.done(message,resolved));
+        });
+    }
+
+    static String connectionError(Throwable ex){
+        Throwable cursor=ex;
+        while(cursor!=null){
+            if(cursor instanceof UnknownHostException){
+                return "Network DNS could not resolve an OpenAI host. Switch between Wi-Fi and mobile data; if one works, check Private DNS, VPN, router or ad-blocking DNS settings. Your ChatGPT account and saved decks have not been changed.";
+            }
+            cursor=cursor.getCause();
+        }
+        return ex.getMessage()==null?"Unknown connection error":ex.getMessage();
+    }
+
     void verifyConnection(Result callback){
         if(!connected()){
             ui.post(()->callback.done("Arcane Vault is not authorized. Use Continue with ChatGPT in Options, even if the ChatGPT app is signed in.",false));
@@ -77,7 +116,7 @@ final class MobileChatGptClient {
                     " eligible model"+(availableModels==1?"":"s")+" available for deck reviews.",true));
             }catch(Exception ex){
                 connectionVerified=false;
-                String message=ex.getMessage()==null?"Unknown connection error":ex.getMessage();
+                String message=connectionError(ex);
                 lastConnectionIssue="ChatGPT connection not verified: "+message;
                 ui.post(()->callback.done(lastConnectionIssue+
                     ". If authorization is no longer valid, disconnect and authorize Arcane Vault again.",false));
@@ -299,7 +338,7 @@ final class MobileChatGptClient {
                 lastConnectionIssue="";
                 ui.post(()->callback.done("ChatGPT authorization saved. Use Check connection to confirm plan access on this device.",true));
             }catch(Exception ex){
-                ui.post(()->callback.done("ChatGPT connection unavailable: "+ex.getMessage(),false));
+                ui.post(()->callback.done("ChatGPT connection unavailable: "+connectionError(ex),false));
             }
         });
     }
