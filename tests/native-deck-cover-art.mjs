@@ -55,6 +55,26 @@ assert.match(workspace,/workspaceScroll\.scrollTo\(0,restored\)/,
 assert.match(workspace,/ui\.removeCallbacks\(deckSearchPending\)/,
   'Pending search redraw must be canceled on navigation or close');
 
+// Reuse the full, locally verified inspector for saved deck cards, without
+// discarding the deck-detail views, ownership analysis or original scroll.
+const inspector=read('app/src/main/java/com/arcanevault/mobile/NativeCatalogScreen.java');
+assert.match(workspace,/row\("COMMANDER",commanderName,/,
+  'Commander row should support direct card preview');
+assert.match(workspace,/row\(card\[0\],card\[1\],\(\)->openDeckCard\(card\[2\]\)\)/,
+  'Mainboard rows should open their exact card identities');
+assert.match(workspace,/deckCardInspector\.inspectDeckCard\(name,this::returnFromDeckCard\)/,
+  'Deck Details must open the shared complete card inspector');
+assert.match(workspace,/deckDetailsRetainedViews\.add\(content\.getChildAt\(i\)\)/,
+  'The live deck-detail view should survive nested inspection');
+assert.match(workspace,/workspaceScroll\.scrollTo\(0,scroll\)/,
+  'Return from a card should preserve Deck Details scroll');
+assert.match(workspace,/if\(deckCardInspector!=null\)\{/,
+  'System Back should close nested card before leaving the deck');
+assert.match(inspector,/void inspectDeckCard\(String requestedName,Runnable returnToDeck\)/,
+  'Inspector needs an explicit deck return path');
+assert.match(inspector,/inspectLinkedCard\(requestedName,returnToDeck,"deck"\)/,
+  'Deck cards should use the same full inspector as AI Review');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
