@@ -1379,10 +1379,60 @@ final class NativeWorkspaceScreen {
                     String section=NativeDeckTypeGroups.classify(visualTypeCache.get(key));
                     grouped.get(section).add(item);
                 }
+                // Compact composition uses only the current unsaved draft.
+                // Never count ownership or rewrite card entries to summarize.
+                StringBuilder composition=new StringBuilder();
+                int populatedGroups=0;
+                for(String type:NativeDeckTypeGroups.ORDER){
+                    java.util.ArrayList<JSONObject> members=grouped.get(type);
+                    if(members==null||members.isEmpty())continue;
+                    int sectionTotal=0;
+                    for(JSONObject member:members)sectionTotal+=member.optInt("qty",0);
+                    if(composition.length()>0)composition.append("   ·   ");
+                    composition.append(type).append(" ").append(sectionTotal);
+                    populatedGroups++;
+                }
+                TextView compositionHeader=VaultNativeStyle.label(activity,
+                    "DECK COMPOSITION · "+populatedGroups+" card types",
+                    11,VaultNativeStyle.SUBTEXT,true);
+                compositionHeader.setPadding(0,dp(9),0,dp(3));
+                visualCards.addView(compositionHeader);
+                TextView compositionDetail=VaultNativeStyle.label(activity,
+                    composition.length()==0?"No mainboard cards":composition.toString(),
+                    12,VaultNativeStyle.TEXT,false);
+                visualCards.addView(compositionDetail);
+
                 // Navigation is only a presentation aid: tapping a type
                 // reveals its cards and scrolls there without changing the draft.
                 final Map<String,Button> groupButtons=new HashMap<>();
                 final Map<String,LinearLayout> groupBodies=new HashMap<>();
+                LinearLayout bulkSectionActions=VaultNativeStyle.row(activity);
+                Button collapseAll=VaultNativeStyle.button(activity,"Collapse All",false);
+                Button expandAll=VaultNativeStyle.button(activity,"Expand All",false);
+                collapseAll.setAllCaps(false);
+                expandAll.setAllCaps(false);
+                bulkSectionActions.addView(collapseAll,
+                    new LinearLayout.LayoutParams(0,dp(42),1));
+                LinearLayout.LayoutParams expandParams=
+                    new LinearLayout.LayoutParams(0,dp(42),1);
+                expandParams.leftMargin=dp(7);
+                bulkSectionActions.addView(expandAll,expandParams);
+                visualCards.addView(bulkSectionActions);
+                collapseAll.setOnClickListener(v->{
+                    for(String type:groupButtons.keySet()){
+                        Button heading=groupButtons.get(type);
+                        if(heading!=null&&!collapsedDraftGroups.contains(type))
+                            heading.performClick();
+                    }
+                });
+                expandAll.setOnClickListener(v->{
+                    for(String type:groupButtons.keySet()){
+                        Button heading=groupButtons.get(type);
+                        if(heading!=null&&collapsedDraftGroups.contains(type))
+                            heading.performClick();
+                    }
+                    workspaceScroll.post(this::loadVisibleDeckCovers);
+                });
                 HorizontalScrollView jumpScroll=VaultNativeStyle.horizontalScroll(activity);
                 jumpScroll.setHorizontalScrollBarEnabled(false);
                 LinearLayout jumpRow=VaultNativeStyle.row(activity);
