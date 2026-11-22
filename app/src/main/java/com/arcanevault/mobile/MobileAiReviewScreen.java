@@ -39,6 +39,10 @@ final class MobileAiReviewScreen {
     private final ExecutorService catalogReads=Executors.newSingleThreadExecutor();
     private int reviewGeneration;
     private final JSONObject deck;
+    private final NativeWorkspaceScreen.DeckSaver deckSaver;
+    private final Button saveReview;
+    private boolean saving;
+    private String lastModel="",lastMode="",reviewedFingerprint="";
     private final String board;
     private final LinearLayout root;
     private final Spinner mode;
@@ -55,9 +59,10 @@ final class MobileAiReviewScreen {
 
     MobileAiReviewScreen(Activity activity,MobileChatGptClient client,SharedPreferences prefs,
             JSONObject deck,String unsavedBoard,Runnable back,
-            CatalogStore catalog,java.util.function.Consumer<String> inspectCard){
+            CatalogStore catalog,java.util.function.Consumer<String> inspectCard,
+            NativeWorkspaceScreen.DeckSaver deckSaver){
         this.activity=activity;this.client=client;this.prefs=prefs;this.deck=deck;board=unsavedBoard;
-        this.catalog=catalog;this.inspectCard=inspectCard;
+        this.catalog=catalog;this.inspectCard=inspectCard;this.deckSaver=deckSaver;
         root=VaultNativeStyle.column(activity);
         root.setPadding(dp(14),dp(10),dp(14),dp(24));
         root.setBackgroundColor(VaultNativeStyle.BACKGROUND);
@@ -110,6 +115,9 @@ final class MobileAiReviewScreen {
         root.addView(status);
         Button copyResult=VaultNativeStyle.button(activity,"Copy review",false);
         root.addView(copyResult);
+        saveReview=VaultNativeStyle.button(activity,"Save review with deck",false);
+        saveReview.setEnabled(false);
+        root.addView(saveReview,new LinearLayout.LayoutParams(-1,dp(46)));
         result=VaultNativeStyle.label(activity,"Select Analyze to review your deck.",
             14,VaultNativeStyle.TEXT,false);
         result.setLinksClickable(true);
@@ -118,6 +126,23 @@ final class MobileAiReviewScreen {
         result.setBackground(VaultNativeStyle.rounded(activity,
             VaultNativeStyle.SURFACE,VaultNativeStyle.BORDER,10));
         root.addView(result);
+        // Android reads Windows' exact aiReview object from the saved deck.
+        // Old analyses remain visible (and flagged) after card edits.
+        if(AiReviewMetadata.hasReview(deck)){
+            JSONObject saved=deck.optJSONObject("aiReview");
+            response=saved.optString("markdown","");
+            lastModel=saved.optString("model","");
+            lastMode=saved.optString("mode","");
+            reviewedFingerprint=saved.optString("deckFingerprint","");
+            int selection=java.util.Arrays.asList(KEYS).indexOf(lastMode);
+            if(selection>=0)mode.setSelection(selection);
+            result.setText(formatReview(AiReviewCardMentions.EXPLICIT.matcher(response)
+                .replaceAll("$1")));
+            linkVerifiedCards(response);
+            status.setText(AiReviewMetadata.label(deck)+(AiReviewMetadata.stale(deck)?
+                " · Reanalyze the current deck for updated advice.":" · Available offline."));
+        }
+        saveReview.setOnClickListener(v->saveCompletedReview());
         Runnable refresh=()->{
             try{
                 String text=AiReviewContract.deckText(deck,board);
@@ -164,13 +189,65 @@ final class MobileAiReviewScreen {
                     return;
                 }
                 response=answer;
+                lastModel=model;
+                lastMode=KEYS[Math.max(0,Math.min(mode.getSelectedItemPosition(),KEYS.length-1))];
+                try{reviewedFingerprint=draftFingerprint();}
+                catch(Exception ex){reviewedFingerprint="";}
+                updateSaveAvailability();
                 result.setText(formatReview(AiReviewCardMentions.EXPLICIT.matcher(answer).replaceAll("$1")));
                 linkVerifiedCards(answer);
-                status.setText("Review complete ("+model+"). No saved deck or collection changes.");
+                status.setText("Review complete ("+model+"). Save explicitly to retain it with this deck.");
             });
         });
         refresh.run();
     }
+    private String draftFingerprint()throws Exception {
+        if(board==null)return AiReviewMetadata.fingerprint(deck);
+        JSONObject current=new JSONObject(deck.toString());
+        current.put("entries",NativeDeckDraft.parseEntries(board));
+        return AiReviewMetadata.fingerprint(current);
+    }
+
+    private void updateSaveAvailability(){
+        boolean valid=false;
+        try{
+            valid=!running&&!saving&&!lastModel.isEmpty()&&!response.isEmpty()&&
+                !reviewedFingerprint.isEmpty()&&
+                AiReviewMetadata.fingerprint(deck).equals(reviewedFingerprint)&&
+                draftFingerprint().equals(reviewedFingerprint)&&
+                (!AiReviewMetadata.hasReview(deck)||
+                    !response.equals(deck.getJSONObject("aiReview").optString("markdown","")));
+        }catch(Exception ignored){valid=false;}
+        saveReview.setEnabled(valid);
+    }
+
+    private void saveCompletedReview(){
+        updateSaveAvailability();
+        if(!saveReview.isEnabled()||saving)return;
+        try{
+            final JSONObject before=new JSONObject(deck.toString());
+            final JSONObject changed=AiReviewMetadata.attach(before,response,lastModel,lastMode);
+            if(!draftFingerprint().equals(reviewedFingerprint))
+                throw new IllegalArgumentException("The unsaved draft changed. Save it and review again.");
+            saving=true;
+            saveReview.setEnabled(false);
+            status.setText("Saving AI review with the existing deck and a recovery copy…");
+            deckSaver.save(before,changed,(ok,message)->activity.runOnUiThread(()->{
+                saving=false;
+                if(ok){
+                    try{deck.put("aiReview",new JSONObject(changed.getJSONObject("aiReview").toString()));}
+                    catch(Exception ignored){}
+                    status.setText("AI review saved with deck · available offline and in verified peer snapshots.");
+                }else status.setText("Review could not be saved: "+message);
+                updateSaveAvailability();
+            }));
+        }catch(Exception error){
+            saving=false;
+            status.setText("Review not saved: "+error.getMessage());
+            updateSaveAvailability();
+        }
+    }
+
     /** Exact local catalog verification is mandatory; the AI cannot invent a
      * clickable card by merely formatting arbitrary text as a name. */
     private void linkVerifiedCards(String answer){
