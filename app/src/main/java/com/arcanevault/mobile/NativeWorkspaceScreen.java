@@ -757,6 +757,14 @@ final class NativeWorkspaceScreen {
             11,VaultNativeStyle.SUBTEXT,false);
         summary.setMaxLines(2);
         details.addView(summary);
+        if(AiReviewMetadata.hasReview(deck)){
+            boolean outdated=AiReviewMetadata.stale(deck);
+            TextView reviewStatus=VaultNativeStyle.label(activity,
+                outdated?"AI review · Outdated":"AI review · Saved",
+                11,outdated?VaultNativeStyle.GOLD:VaultNativeStyle.SUBTEXT,false);
+            reviewStatus.setPadding(0,dp(5),0,0);
+            details.addView(reviewStatus);
+        }
         entry.addView(details,new LinearLayout.LayoutParams(0,-2,1));
         entry.setOnClickListener(v->showDeck(deck));
         VaultNativeStyle.margin(deckListPanel,entry,9,activity);
