@@ -185,9 +185,8 @@ final class MobileChatGptClient {
     private static JSONObject request(String url,String encoded)throws Exception{
         return requestOnConnection((HttpURLConnection)new URL(url).openConnection(),url,encoded);
     }
-    /** Retry DNS-only failures through Android's active network resolver.
-     * Do not retry HTTP errors or ambiguous transport failures: OAuth codes are
-     * single use, and a request may already have reached the token server. */
+    /** OAuth codes are single-use: retry only a confirmed DNS lookup failure.
+     * Produce a distinct status for each fallback outcome without logging tokens. */
     private JSONObject tokenRequest(String url,String encoded)throws Exception{
         try{
             return request(url,encoded);
@@ -195,14 +194,23 @@ final class MobileChatGptClient {
             android.net.ConnectivityManager connectivity=
                 (android.net.ConnectivityManager)activity.getSystemService(
                     android.content.Context.CONNECTIVITY_SERVICE);
-            android.net.Network active=connectivity==null?null:connectivity.getActiveNetwork();
-            if(active==null)throw first;
+            if(connectivity==null)
+                throw new IOException("OAuth token DNS: default lookup failed; Android network service unavailable.");
+            android.net.Network active=connectivity.getActiveNetwork();
+            if(active==null)
+                throw new IOException("OAuth token DNS: default lookup failed; no active Android network available.");
+            boolean activeDnsOk=false;
+            try{
+                activeDnsOk=active.getAllByName("auth.openai.com").length>0;
+            }catch(UnknownHostException ignored){}
             try{
                 HttpURLConnection networkConnection=
                     (HttpURLConnection)active.openConnection(new URL(url));
                 return requestOnConnection(networkConnection,url,encoded);
             }catch(UnknownHostException second){
-                throw new UnknownHostException("auth.openai.com (default and active-network DNS both failed)");
+                throw new IOException(activeDnsOk?
+                    "OAuth token DNS: default connection failed; active-network DNS resolved, but active-network HTTPS lookup failed.":
+                    "OAuth token DNS: both default and active-network resolvers failed for auth.openai.com.");
             }
         }
     }
