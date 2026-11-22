@@ -174,8 +174,8 @@ assert.match(workspace,/candidate\.image\.isAttachedToWindow\(\)/,
 // Type navigation is UI-only; all three visual modes share the same state.
 assert.match(workspace,/final Set<String> collapsedDraftGroups=new HashSet<>\(\)/,
   'Section collapsed state must survive in-editor redraws');
-assert.match(workspace,/HorizontalScrollView jumpScroll=new HorizontalScrollView\(activity\)/,
-  'A horizontally scrolling quick-jump strip should fit mobile screens');
+assert.match(workspace,/HorizontalScrollView jumpScroll=VaultNativeStyle\.horizontalScroll\(activity\)/,
+  'A themed, horizontally scrolling quick-jump strip should fit mobile screens');
 assert.match(workspace,/groupHeading\.setOnClickListener\(v->\{/,
   'Every occupied type section must offer a collapse toggle');
 assert.match(workspace,/sectionBody\.setVisibility\(collapse\?View\.GONE:View\.VISIBLE\)/,
