@@ -18,6 +18,6 @@
 - No ChatGPT tokens, saved AI reviews, collections, proxies, decks, sync history or tabletop data intentionally removed. Credentials remain encrypted in Android Keystore-backed local storage and are not copied across devices.
 
 ## Verification
-- Android regression suite, Java unit tests, debug APK, release signature verification, and signed publication required.
+- Android regression suite, Java unit tests, debug APK, release signature verification, and signed publication required. The connection test never assumes that a saved token guarantees delegated plan access.
 - On-device test: Home → Options → **Check ChatGPT connection**. If no saved authorization, use **Continue with ChatGPT** in this app; approve identity and ChatGPT plan use, return and run the check again.
 - Successful connection verification confirms access on Android only; it does not imply access to ChatGPT chat history or Windows' saved credentials.
