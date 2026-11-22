@@ -1285,32 +1285,16 @@ final class NativeWorkspaceScreen {
                 });
             });
         };
-        draftInsightsToggle.setOnClickListener(v->{
-            draftInsightsOpen[0]=!draftInsightsOpen[0];
-            draftInsightsToggle.setText(draftInsightsOpen[0]?
-                "Deck Insights  ▴":"Deck Insights  ▾");
-            draftInsightsPanel.setVisibility(draftInsightsOpen[0]?
-                View.VISIBLE:View.GONE);
-            if(draftInsightsOpen[0])updateDraftInsights.run();
-            else ++draftInsightRequests[0];
-        });
-        Button refreshDraftInsights=VaultNativeStyle.button(activity,
+        // Refresh stays outside the results container so clearing/repainting
+        // charts never removes the action.
+        Button insightRefresh=VaultNativeStyle.button(activity,
             "Refresh Insights",false);
-        draftInsightsPanel.addView(refreshDraftInsights);
-        // Recreate refresh button after each chart render by placing it
-        // outside the clearable results container.
-        LinearLayout insightsActions=VaultNativeStyle.column(activity);
-        fields.addView(insightsActions);
-        fields.removeView(draftInsightsPanel);
-        insightsActions.addView(draftInsightsPanel);
-        Button insightRefresh=VaultNativeStyle.button(activity,"Refresh Insights",false);
-        insightsActions.addView(insightRefresh,new LinearLayout.LayoutParams(-1,dp(42)));
+        fields.addView(insightRefresh,new LinearLayout.LayoutParams(-1,dp(42)));
         insightRefresh.setVisibility(View.GONE);
         draftInsightsToggle.setOnClickListener(v->{
             draftInsightsOpen[0]=!draftInsightsOpen[0];
             draftInsightsToggle.setText(draftInsightsOpen[0]?
                 "Deck Insights  ▴":"Deck Insights  ▾");
-            insightsActions.setVisibility(draftInsightsOpen[0]?View.VISIBLE:View.GONE);
             draftInsightsPanel.setVisibility(draftInsightsOpen[0]?
                 View.VISIBLE:View.GONE);
             insightRefresh.setVisibility(draftInsightsOpen[0]?
@@ -1318,7 +1302,6 @@ final class NativeWorkspaceScreen {
             if(draftInsightsOpen[0])updateDraftInsights.run();
             else ++draftInsightRequests[0];
         });
-        insightsActions.setVisibility(View.GONE);
         insightRefresh.setOnClickListener(v->updateDraftInsights.run());
 
         // Optional visual editing over the SAME draft text and validated parser.
