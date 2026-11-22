@@ -1251,7 +1251,7 @@ final class NativeWorkspaceScreen {
             if(closed||pageGeneration!=deckPageGeneration||
                     !draftInsightsOpen[0])return;
             final String snapshot=lines.getText().toString();
-            final String commander=deck.optString("commander","");
+            final String draftCommander=deck.optString("commander","");
             final int request=++draftInsightRequests[0];
             draftInsightsPanel.removeAllViews();
             draftInsightsPanel.addView(VaultNativeStyle.label(activity,
@@ -1261,7 +1261,7 @@ final class NativeWorkspaceScreen {
                 JSONObject result=null;
                 String error=null;
                 try{
-                    result=catalog.deckInsights(commander,
+                    result=catalog.deckInsights(draftCommander,
                         NativeDeckDraft.parseEntries(snapshot));
                 }catch(Exception ex){error=ex.getMessage();}
                 final JSONObject report=result;
