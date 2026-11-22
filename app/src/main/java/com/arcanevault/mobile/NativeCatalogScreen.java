@@ -313,6 +313,18 @@ final class NativeCatalogScreen {
     }
 
     View view() { return layout; }
+    /** AI Review presents the inspector inside its own scrolling workspace.
+     * Let that outer scroll own vertical scrolling and size the entire card,
+     * rather than clipping it inside a second, fixed-height scroll viewport. */
+    void useEmbeddedInspectorLayout(){
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.WRAP_CONTENT);
+        inspectorScroll.setLayoutParams(params);
+        inspectorScroll.setNestedScrollingEnabled(false);
+        inspectorScroll.setVerticalScrollBarEnabled(false);
+        browseScroll.setLayoutParams(new LinearLayout.LayoutParams(-1,0));
+        layout.setMinimumHeight(0);
+    }
     void close() {
         disposed = true;
         ui.removeCallbacks(pendingSearch);
