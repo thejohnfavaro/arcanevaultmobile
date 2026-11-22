@@ -19,6 +19,23 @@ public final class TabletopSessionTest {
         assertEquals(40,game.life[2]);
     }
 
+    @Test public void directPoisonCounterEditsRecoverAndUndoInOrder(){
+        TabletopSession game=new TabletopSession(4,40);
+        game.changePoison(2,1);
+        game.changePoison(2,1);
+        game.changePoison(2,-1);
+        assertEquals(1,game.poison[2]);
+        assertEquals(0,game.poison[0]);
+        assertEquals(0,game.poison[1]);
+        TabletopSession saved=TabletopSession.decode(game.encode().toString());
+        assertEquals(1,saved.poison[2]);
+        assertTrue(saved.undo());
+        assertEquals(2,saved.poison[2]);
+        assertTrue(saved.undo());
+        assertEquals(1,saved.poison[2]);
+        assertEquals(40,saved.life[2]);
+    }
+
     @Test public void undoRestoresExactPreviousState(){
         TabletopSession game=new TabletopSession(4,40);
         game.changeCommanderDamage(0,1,21);
