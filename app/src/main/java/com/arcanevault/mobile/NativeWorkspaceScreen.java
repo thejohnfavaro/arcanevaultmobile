@@ -1339,6 +1339,82 @@ final class NativeWorkspaceScreen {
             updateDraftInsights.run();
         });
 
+        // Windows EDH Lab health starting targets and strategy emphasis.
+        // Separate, read-only panel: no speculative owned-card replacements.
+        Button healthToggle=VaultNativeStyle.button(activity,"Deck Health  ▾",false);
+        fields.addView(healthToggle,new LinearLayout.LayoutParams(-1,dp(46)));
+        LinearLayout healthPanel=VaultNativeStyle.column(activity);
+        healthPanel.setVisibility(View.GONE);
+        fields.addView(healthPanel);
+        final boolean[] healthOpen={false};
+        final int[] healthRequests={0};
+        final int[] healthFocus={0};
+        Spinner healthStrategy=new Spinner(activity);
+        ArrayAdapter<String> strategyAdapter=new ArrayAdapter<>(activity,
+            android.R.layout.simple_spinner_item,NativeDeckHealth.FOCUS);
+        strategyAdapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item);
+        healthStrategy.setAdapter(strategyAdapter);
+        healthPanel.addView(VaultNativeStyle.label(activity,
+            "STRATEGY FOCUS",11,VaultNativeStyle.GOLD,true));
+        healthPanel.addView(healthStrategy,new LinearLayout.LayoutParams(-1,dp(48)));
+        LinearLayout healthReport=VaultNativeStyle.column(activity);
+        healthPanel.addView(healthReport);
+        Button refreshHealth=VaultNativeStyle.button(activity,"Refresh Deck Health",false);
+        healthPanel.addView(refreshHealth,new LinearLayout.LayoutParams(-1,dp(42)));
+        final Runnable updateHealth=()->{
+            if(closed||pageGeneration!=deckPageGeneration||!healthOpen[0])return;
+            final String snapshot=lines.getText().toString();
+            final int focus=healthFocus[0];
+            final int request=++healthRequests[0];
+            healthReport.removeAllViews();
+            healthReport.addView(VaultNativeStyle.label(activity,
+                "Checking unsaved deck roles against local Oracle text…",12,
+                VaultNativeStyle.SUBTEXT,false));
+            executor.execute(()->{
+                JSONObject result=null;
+                String problem=null;
+                try{result=catalog.deckHealth(
+                    NativeDeckDraft.parseEntries(snapshot),focus);}
+                catch(Exception ex){problem=ex.getMessage();}
+                final JSONObject report=result;
+                final String error=problem;
+                ui.post(()->{
+                    if(closed||pageGeneration!=deckPageGeneration||!healthOpen[0]||
+                            request!=healthRequests[0])return;
+                    healthReport.removeAllViews();
+                    if(!snapshot.equals(lines.getText().toString())){
+                        healthReport.addView(VaultNativeStyle.label(activity,
+                            "Draft changed · Refresh Deck Health for current counts.",
+                            12,VaultNativeStyle.GOLD,false));
+                        return;
+                    }
+                    if(report==null)
+                        healthReport.addView(VaultNativeStyle.label(activity,
+                            "Deck Health unavailable: "+error,12,
+                            VaultNativeStyle.GOLD,false));
+                    else renderNativeDeckHealth(report,healthReport);
+                });
+            });
+        };
+        healthStrategy.setOnItemSelectedListener(
+            new AdapterView.OnItemSelectedListener(){
+                public void onNothingSelected(AdapterView<?> parent){}
+                public void onItemSelected(AdapterView<?> parent,View v,int position,long id){
+                    if(healthFocus[0]==position)return;
+                    healthFocus[0]=position;
+                    if(healthOpen[0])updateHealth.run();
+                }
+            });
+        healthToggle.setOnClickListener(v->{
+            healthOpen[0]=!healthOpen[0];
+            healthToggle.setText(healthOpen[0]?"Deck Health  ▴":"Deck Health  ▾");
+            healthPanel.setVisibility(healthOpen[0]?View.VISIBLE:View.GONE);
+            if(healthOpen[0])updateHealth.run();
+            else ++healthRequests[0];
+        });
+        refreshHealth.setOnClickListener(v->updateHealth.run());
+
         // Optional visual editing over the SAME draft text and validated parser.
         // No separate card inventory, deck format or unsaved state is created.
         Button visualToggle=VaultNativeStyle.button(activity,
@@ -2313,6 +2389,57 @@ final class NativeWorkspaceScreen {
 
     /** Native Shortlist reads/writes the existing vault_favorites array in
      * the authoritative WebView. No second bookmark store is introduced. */
+    /** Read-only heuristic health overview. Never edits a saved deck. */
+    private void renderNativeDeckHealth(JSONObject report,LinearLayout target){
+        LinearLayout panel=VaultNativeStyle.column(activity);
+        panel.setPadding(dp(13),dp(12),dp(13),dp(12));
+        VaultNativeStyle.surface(activity,panel,false);
+        panel.addView(VaultNativeStyle.label(activity,"DECK HEALTH · "+
+            report.optString("focus","Balanced"),12,VaultNativeStyle.PRIMARY,true));
+        int copies=report.optInt("mainboard",0);
+        panel.addView(VaultNativeStyle.label(activity,
+            copies+"/99 mainboard copies · "+
+            report.optInt("unknown",0)+" unverified · "+
+            report.optInt("missingOracle",0)+" lacking Oracle text",
+            12,VaultNativeStyle.SUBTEXT,false));
+        JSONArray areas=report.optJSONArray("areas");
+        if(areas!=null)for(int i=0;i<areas.length();i++){
+            JSONObject item=areas.optJSONObject(i);
+            if(item==null)continue;
+            panel.addView(VaultNativeStyle.label(activity,
+                item.optString("label")+"  "+item.optInt("count")+"/"+
+                item.optInt("target")+" suggested · "+
+                item.optString("state"),12,VaultNativeStyle.TEXT,false));
+            if(item.optInt("count")>0&&item.optInt("distinct")<=2)
+                panel.addView(VaultNativeStyle.label(activity,
+                    "Limited redundancy: "+item.optInt("distinct")+
+                    " distinct card name(s) matching this role.",
+                    11,VaultNativeStyle.SUBTEXT,false));
+        }
+        panel.addView(VaultNativeStyle.label(activity,
+            "Early spells (MV 0–2): "+report.optInt("early",0)+
+            " of "+report.optInt("nonland",0)+" known nonland copies.",
+            12,VaultNativeStyle.GOLD,false));
+        JSONArray unknown=report.optJSONArray("unknownNames");
+        if(unknown!=null&&unknown.length()>0){
+            StringBuilder names=new StringBuilder();
+            for(int i=0;i<Math.min(5,unknown.length());i++){
+                if(i>0)names.append(", ");
+                names.append(unknown.optString(i));
+            }
+            panel.addView(VaultNativeStyle.label(activity,
+                "Unverified: "+names,11,VaultNativeStyle.GOLD,false));
+        }
+        panel.addView(VaultNativeStyle.label(activity,
+            report.optString("reviewNext",""),12,VaultNativeStyle.TEXT,false));
+        panel.addView(VaultNativeStyle.label(activity,
+            "Heuristic Oracle-text signals only. Cards may fill multiple roles. "+
+            "Targets are suggestions, not format rules or a power score. "+
+            "Owned replacements and commander synergy have not been verified. "+
+            "No cards were changed.",11,VaultNativeStyle.SUBTEXT,false));
+        VaultNativeStyle.margin(target,panel,9,activity);
+    }
+
     /** Local Scryfall facts only: missing names never turn into zero-cost cards. */
     private void renderDeckInsights(JSONObject report){
         renderDeckInsights(report,content);
