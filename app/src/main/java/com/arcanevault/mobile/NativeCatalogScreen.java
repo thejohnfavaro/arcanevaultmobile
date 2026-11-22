@@ -70,6 +70,7 @@ final class NativeCatalogScreen {
     private final java.util.Set<String> queuedPageArt=
         java.util.Collections.synchronizedSet(new java.util.HashSet<>());
     private final AtomicInteger request = new AtomicInteger();
+    private final Runnable pendingSearch=()->schedule();
     private final EditText search;
     // Open the Android catalog on the cards users physically own.
     // Switching to Arena, All or Missing remains an explicit in-session choice.
@@ -170,7 +171,7 @@ final class NativeCatalogScreen {
             public void onTextChanged(CharSequence s,int start,int before,int count) {
                 query = s.toString(); page = 0;
                 clearSearch.setVisibility(query.isEmpty()?View.GONE:View.VISIBLE);
-                schedule();
+                scheduleSearch();
             }
             public void afterTextChanged(Editable s) {}
         });
@@ -314,6 +315,7 @@ final class NativeCatalogScreen {
     View view() { return layout; }
     void close() {
         disposed = true;
+        ui.removeCallbacks(pendingSearch);
         request.incrementAndGet();
         inspectorRequest++;
         worker.shutdownNow();
@@ -506,8 +508,17 @@ final class NativeCatalogScreen {
         }
     }
 
+    /** Coalesce rapid typing while invalidating in-flight results immediately. */
+    private void scheduleSearch(){
+        if(!filtersReady||disposed)return;
+        request.incrementAndGet();
+        ui.removeCallbacks(pendingSearch);
+        ui.postDelayed(pendingSearch,180);
+    }
+
     private void schedule() {
-        if(!filtersReady)return;
+        ui.removeCallbacks(pendingSearch);
+        if(!filtersReady||disposed)return;
         final int id=request.incrementAndGet();
         final String q=query, src=source, scope=owned;
         final String selectedSet=setCode, selectedType=typeFilter,
