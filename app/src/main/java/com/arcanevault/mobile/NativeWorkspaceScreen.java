@@ -1239,6 +1239,8 @@ final class NativeWorkspaceScreen {
         final boolean[] visualGrid={prefs.getBoolean("native_draft_grid_v1",false)};
         final String[] visualSnapshot={""};
         final Map<String,String> visualTypeCache=new HashMap<>();
+        // UI-only state survives list/grid switches and unsaved quantity edits.
+        final Set<String> collapsedDraftGroups=new HashSet<>();
         final Runnable redrawVisual=()->{
             if(closed||!visualOpen[0]||
                     pageGeneration!=deckPageGeneration)return;
@@ -1349,16 +1351,69 @@ final class NativeWorkspaceScreen {
                     String section=NativeDeckTypeGroups.classify(visualTypeCache.get(key));
                     grouped.get(section).add(item);
                 }
+                // Navigation is only a presentation aid: tapping a type
+                // reveals its cards and scrolls there without changing the draft.
+                final Map<String,Button> groupButtons=new HashMap<>();
+                final Map<String,LinearLayout> groupBodies=new HashMap<>();
+                HorizontalScrollView jumpScroll=new HorizontalScrollView(activity);
+                jumpScroll.setHorizontalScrollBarEnabled(false);
+                LinearLayout jumpRow=VaultNativeStyle.row(activity);
+                jumpRow.setPadding(0,dp(7),0,dp(4));
+                jumpScroll.addView(jumpRow);
+                visualCards.addView(jumpScroll);
                 for(String section:NativeDeckTypeGroups.ORDER){
                     java.util.ArrayList<JSONObject> sectionCards=grouped.get(section);
                     if(sectionCards==null||sectionCards.isEmpty())continue;
                     int sectionCopies=0;
                     for(JSONObject item:sectionCards)sectionCopies+=item.optInt("qty",0);
-                    TextView groupHeading=VaultNativeStyle.label(activity,
-                        section.toUpperCase(java.util.Locale.ROOT)+" · "+
-                        sectionCopies+" cards",12,VaultNativeStyle.GOLD,true);
-                    groupHeading.setPadding(dp(2),dp(12),dp(2),dp(5));
-                    visualCards.addView(groupHeading);
+                    final String group=section;
+                    final int groupCount=sectionCopies;
+                    final String title=section.toUpperCase(java.util.Locale.ROOT)+
+                        " · "+groupCount+" cards";
+                    LinearLayout sectionBody=VaultNativeStyle.column(activity);
+                    Button groupHeading=VaultNativeStyle.button(activity,
+                        title+(collapsedDraftGroups.contains(group)?"  ▸":"  ▾"),false);
+                    groupHeading.setAllCaps(false);
+                    groupHeading.setContentDescription(group+", "+groupCount+
+                        " cards. Tap to "+(collapsedDraftGroups.contains(group)?"expand":"collapse"));
+                    visualCards.addView(groupHeading,new LinearLayout.LayoutParams(-1,dp(48)));
+                    visualCards.addView(sectionBody);
+                    sectionBody.setVisibility(collapsedDraftGroups.contains(group)?
+                        View.GONE:View.VISIBLE);
+                    groupButtons.put(group,groupHeading);
+                    groupBodies.put(group,sectionBody);
+                    groupHeading.setOnClickListener(v->{
+                        boolean collapse=!collapsedDraftGroups.contains(group);
+                        if(collapse)collapsedDraftGroups.add(group);
+                        else collapsedDraftGroups.remove(group);
+                        sectionBody.setVisibility(collapse?View.GONE:View.VISIBLE);
+                        groupHeading.setText(title+(collapse?"  ▸":"  ▾"));
+                        groupHeading.setContentDescription(group+", "+groupCount+
+                            " cards. Tap to "+(collapse?"expand":"collapse"));
+                        if(!collapse)workspaceScroll.post(this::loadVisibleDeckCovers);
+                    });
+                    Button jump=VaultNativeStyle.button(activity,section,false);
+                    jump.setAllCaps(false);
+                    LinearLayout.LayoutParams jumpParams=new LinearLayout.LayoutParams(
+                        -2,dp(38));
+                    jumpParams.rightMargin=dp(6);
+                    jumpRow.addView(jump,jumpParams);
+                    jump.setContentDescription("Jump to "+group);
+                    jump.setOnClickListener(v->{
+                        if(collapsedDraftGroups.contains(group))
+                            groupHeading.performClick();
+                        workspaceScroll.post(()->{
+                            if(closed||pageGeneration!=deckPageGeneration||
+                                    !visualOpen[0])return;
+                            int[] headingPosition=new int[2];
+                            int[] scrollPosition=new int[2];
+                            groupHeading.getLocationOnScreen(headingPosition);
+                            workspaceScroll.getLocationOnScreen(scrollPosition);
+                            int destination=workspaceScroll.getScrollY()+
+                                headingPosition[1]-scrollPosition[1]-dp(6);
+                            workspaceScroll.smoothScrollTo(0,Math.max(0,destination));
+                        });
+                    });
                     // Two art-forward columns on phones, three on wider screens.
                     int screenDp=Math.round(activity.getResources().getDisplayMetrics()
                         .widthPixels/activity.getResources().getDisplayMetrics().density);
@@ -1370,7 +1425,7 @@ final class NativeWorkspaceScreen {
                     if(visualGrid[0]){
                         cardGrid=new GridLayout(activity);
                         cardGrid.setColumnCount(columns);
-                        visualCards.addView(cardGrid);
+                        sectionBody.addView(cardGrid);
                     }
                     int gridIndex=0;
                     for(JSONObject item:sectionCards){
@@ -1497,7 +1552,7 @@ final class NativeWorkspaceScreen {
                         cell.setMargins(dp(2),dp(3),dp(2),dp(4));
                         cardGrid.addView(cardRow,cell);
                         gridIndex++;
-                    }else VaultNativeStyle.margin(visualCards,cardRow,3,activity);
+                    }else VaultNativeStyle.margin(sectionBody,cardRow,3,activity);
                     }
                 }
                 if(visualArt[0]||visualGrid[0])
