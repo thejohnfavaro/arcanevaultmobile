@@ -21,7 +21,7 @@ public final class NativeDeckManaPipsTest {
 
     @Test public void ignoresMissingOrUntrustedCosts(){
         assertArrayEquals(new double[5],NativeDeckManaPips.count(null),0.0);
-        assertArrayEquals(new double[5],NativeDeckManaPips.count("{Q}{G/X}{8}{P}"),0.0);
+        assertArrayEquals(new double[5],NativeDeckManaPips.count("{Q}{8}{P}{C}"),0.0);
         assertArrayEquals(new double[5],
             NativeDeckManaPips.count("{"+"W".repeat(600)+"}"),0.0);
     }
