@@ -30,6 +30,7 @@ import android.os.Looper;
 final class NativeTabletopScreen {
     private static final String STORE="arcane_tabletop_companion_v1";
     private static final String SESSION="session_v1";
+    private static final String RECOVERY="session_recovery_v1";
     private static final String COMPLETED="completed_games_v1";
     private final Activity activity;
     private final SharedPreferences prefs;
@@ -55,8 +56,30 @@ final class NativeTabletopScreen {
         activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         String stored=prefs.getString(SESSION,null);
         if(stored!=null){
-            try {session=TabletopSession.decode(stored);}
-            catch(Exception corrupted){showRecoveryError();}
+            try{
+                session=TabletopSession.decode(stored);
+                // Upgrade older installs without losing the original session.
+                if(prefs.getString(RECOVERY,null)==null)
+                    prefs.edit().putString(RECOVERY,
+                        TabletopSessionRecovery.checkpoint(stored)).commit();
+            }catch(Exception corrupted){
+                String checkpoint=prefs.getString(RECOVERY,null);
+                if(checkpoint!=null){
+                    try{
+                        TabletopSession recovered=TabletopSessionRecovery.restore(checkpoint);
+                        String restored=recovered.encode().toString();
+                        if(!prefs.edit().putString(SESSION,restored).commit())
+                            throw new IllegalStateException("Could not restore the recovered game");
+                        session=recovered;
+                        ui.post(()->{
+                            if(!closed)new AlertDialog.Builder(activity)
+                                .setTitle("Tabletop game recovered")
+                                .setMessage("The active game data could not be read. Arcane Vault restored the last verified tabletop checkpoint. The most recent counter change may need to be re-entered. Decks and collections were not modified.")
+                                .setPositiveButton("Continue",null).show();
+                        });
+                    }catch(Exception recoveryFailed){showRecoveryError();}
+                }else showRecoveryError();
+            }
         }
         if(session==null)setup();
         else render();
@@ -96,10 +119,7 @@ final class NativeTabletopScreen {
         String before=session.encode().toString();
         try{
             operation.run();
-            if(!prefs.edit().putString(SESSION,session.encode().toString()).commit()){
-                session=TabletopSession.decode(before);
-                throw new IllegalStateException("Device could not save the game");
-            }
+            saveSession(session.encode().toString(),before);
             if(redraw)render();
             else sessionDirty=true;
         }catch(Exception error){
@@ -108,6 +128,20 @@ final class NativeTabletopScreen {
                 .setMessage(error.getMessage()).setPositiveButton("OK",null).show();
         }
     }
+    /** A verified second generation is committed atomically with the active
+     * session. A failed save leaves the previous session and checkpoint intact. */
+    private void saveSession(String updated,String previous){
+        TabletopSession.decode(updated);
+        String checkpoint=TabletopSessionRecovery.checkpoint(
+            previous==null?updated:previous);
+        if(!prefs.edit().putString(RECOVERY,checkpoint)
+                .putString(SESSION,updated).commit())
+            throw new IllegalStateException("Device could not save the tabletop game");
+        // SharedPreferences.commit() is atomic for the preference map; check
+        // the in-memory generation before telling the user this edit succeeded.
+        TabletopSession.decode(prefs.getString(SESSION,""));
+    }
+
     private void setup(){
         replaceContent();
         LinearLayout body=VaultNativeStyle.column(activity);
@@ -136,12 +170,14 @@ final class NativeTabletopScreen {
             .setNegativeButton("Cancel",null)
             .setPositiveButton("Start",(d,w)->{
                 TabletopSession fresh=new TabletopSession(players,40);
-                if(!prefs.edit().putString(SESSION,fresh.encode().toString()).commit()){
-                    new AlertDialog.Builder(activity).setMessage("Unable to save new game")
-                        .setPositiveButton("OK",null).show();
-                    return;
+                try{
+                    saveSession(fresh.encode().toString(),
+                        session==null?null:session.encode().toString());
+                    session=fresh;render();
+                }catch(Exception error){
+                    new AlertDialog.Builder(activity).setTitle("New game not saved")
+                        .setMessage(error.getMessage()).setPositiveButton("OK",null).show();
                 }
-                session=fresh;render();
             }).show();
     }
     private Button counterButton(LinearLayout row,String text,Runnable action){
@@ -462,6 +498,7 @@ final class NativeTabletopScreen {
             }
             archive.put(session.snapshot());
             boolean saved=prefs.edit()
+                .putString(RECOVERY,TabletopSessionRecovery.checkpoint(previous))
                 .putString(SESSION,session.encode().toString())
                 .putString(COMPLETED,archive.toString()).commit();
             if(!saved)throw new IllegalStateException("Could not save game result");
