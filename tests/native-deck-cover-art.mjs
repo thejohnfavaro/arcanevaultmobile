@@ -92,8 +92,10 @@ assert.match(workspace,/for\(String section:NativeDeckTypeGroups\.ORDER\)/,
   'Visual mainboard must render sections in established Windows order');
 assert.match(workspace,/NativeDeckTypeGroups\.classify\(visualTypeCache\.get\(key\)\)/,
   'The visible section must come from cached verified card type lines');
-assert.match(workspace,/sectionCopies\+" cards"/,
-  'Section headings must summarize owned-independent draft quantities');
+assert.match(workspace,/final int groupCount=sectionCopies;/,
+  'Section headings must preserve the computed draft-only quantity');
+assert.match(workspace,/groupCount\+" cards"/,
+  'Expandable heading and jump labels must reflect live draft quantities');
 const groups=read('app/src/main/java/com/arcanevault/mobile/NativeDeckTypeGroups.java');
 for(const type of ['Creatures','Instants','Sorceries','Artifacts','Enchantments',
   'Planeswalkers','Battles','Other / Unknown','Lands'])
