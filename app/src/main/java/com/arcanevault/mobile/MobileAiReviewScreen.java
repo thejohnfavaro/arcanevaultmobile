@@ -74,8 +74,12 @@ final class MobileAiReviewScreen {
         label(deck.optString("name","Saved deck")+" · read-only recommendations",
             12,false,VaultNativeStyle.SUBTEXT);
         label(client.status(),12,false,VaultNativeStyle.SUBTEXT);
-        if(!client.connected())label("Connect your ChatGPT plan under Home → Options first. "+
+        if(!client.connected())label("The ChatGPT app sign-in does not authorize Arcane Vault. "+
+            "Open Home → Options → Continue with ChatGPT and approve plan usage here. "+
             "You can still copy the review prompt.",12,false,VaultNativeStyle.GOLD);
+        else label("Authorization is stored on this device. Check plan access under "+
+            "Home → Options → Check ChatGPT connection if analysis fails.",
+            12,false,VaultNativeStyle.SUBTEXT);
 
         mode=new Spinner(activity);
         ArrayAdapter<String> adapter=new ArrayAdapter<>(activity,android.R.layout.simple_spinner_item,MODES);
