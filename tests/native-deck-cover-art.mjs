@@ -166,6 +166,10 @@ assert.match(workspace,/catalog\.cardDetailsForReviewMention\(cardIdentity\)/,
   'Double-faced fallback must also use the canonical identity');
 assert.match(workspace,/draftArtFailures\.remove\(commander\)/,
   'Successful art loads should clear the draft failure state');
+assert.match(workspace,/candidate\.image\.setImageBitmap\(result\)/,
+  'A completed artwork request must paint the live thumbnail immediately');
+assert.match(workspace,/candidate\.image\.isAttachedToWindow\(\)/,
+  'Completed images must only be assigned to still-attached card rows');
 
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
