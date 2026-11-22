@@ -39,6 +39,30 @@ public class NativeMatchAnalyticsSnapshotTest {
         assertEquals(2,all.wins);
         assertEquals(3,all.losses);
     }
+    @Test public void opponentColorsAreSeparatedAndUnknownIsNotColorless()throws Exception {
+        JSONArray entries=new JSONArray();
+        entries.put(event("2026-11-17T11:00:00Z","Etali","Brawl","loss")
+            .put("opponentColors","UB"));
+        entries.put(event("2026-11-16T11:00:00Z","Etali","Brawl","win")
+            .put("opponentColors","BU"));
+        entries.put(event("2026-11-15T11:00:00Z","Etali","Brawl","loss")
+            .put("opponentColors","C"));
+        entries.put(event("2026-11-14T11:00:00Z","Etali","Brawl","win"));
+        entries.put(event("2026-11-13T11:00:00Z","Other","Brawl","win")
+            .put("opponentColors","UB"));
+        JSONObject source=NativeMatchAnalyticsSnapshot.fromPeer(peer(entries));
+        var groups=NativeMatchAnalyticsSnapshot.byOpponentColors(source,"Etali",
+            "Brawl",30,Instant.parse("2026-11-18T12:00:00Z"));
+        assertEquals(3,groups.size());
+        assertEquals("UB",groups.get(0).identity);
+        assertEquals(1,groups.get(0).wins);
+        assertEquals(1,groups.get(0).losses);
+        assertEquals("C",groups.get(1).identity);
+        assertEquals(0,groups.get(1).wins);
+        assertEquals(1,groups.get(1).losses);
+        assertEquals("Unknown",groups.get(2).identity);
+        assertEquals(1,groups.get(2).wins);
+    }
     @Test public void rejectUnverifiedRowsAndOtherFormats()throws Exception {
         JSONArray entries=new JSONArray().put(event("2026-11-17T11:00:00Z","Borg","","unknown"));
         try{NativeMatchAnalyticsSnapshot.fromPeer(peer(entries));fail("Unknown not confirmed");}
