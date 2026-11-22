@@ -2397,6 +2397,28 @@ final class NativeWorkspaceScreen {
                 "Approximate: hybrid/Phyrexian symbols discounted; not cast odds.",
                 11,VaultNativeStyle.SUBTEXT,false));
         }
+        JSONObject odds=report.optJSONObject("landOdds");
+        if(odds!=null&&odds.length()>0){
+            insights.addView(VaultNativeStyle.label(activity,
+                "NATURAL LAND-DROP ESTIMATES",12,VaultNativeStyle.GOLD,true));
+            StringBuilder estimate=new StringBuilder();
+            for(int turn=2;turn<=4;turn++){
+                if(estimate.length()>0)estimate.append("   ·   ");
+                estimate.append("T").append(turn).append(" ≥").append(turn)
+                    .append(" lands: ").append(String.format(java.util.Locale.US,
+                        "%.0f%%",100*odds.optDouble("T"+turn,0)));
+            }
+            insights.addView(VaultNativeStyle.label(activity,
+                estimate.toString(),12,VaultNativeStyle.TEXT,false));
+            insights.addView(VaultNativeStyle.label(activity,
+                "Known 99-card mainboard only · 7-card opener, one draw per turn "+
+                "from turn 2; no mulligans, ramp or land timing modeled.",
+                11,VaultNativeStyle.SUBTEXT,false));
+        }else{
+            insights.addView(VaultNativeStyle.label(activity,
+                "Land-drop estimates require 99 known mainboard cards.",
+                11,VaultNativeStyle.SUBTEXT,false));
+        }
         VaultNativeStyle.margin(target,insights,10,activity);
     }
 
