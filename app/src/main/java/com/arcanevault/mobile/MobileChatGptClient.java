@@ -40,9 +40,49 @@ final class MobileChatGptClient {
     private long expiration;
     MobileChatGptClient(Activity activity){this.activity=activity;load();}
 
+    private volatile boolean connectionVerified;
+    private volatile String lastConnectionIssue="";
     synchronized boolean connected(){return refresh!=null && !refresh.isEmpty();}
-    synchronized String status(){return connected()?
-        "ChatGPT connected on this Android device":"Not connected · Options → ChatGPT";}
+    synchronized String status(){
+        if(!connected())return lastConnectionIssue.isEmpty()?
+            "Not connected · Options → ChatGPT":lastConnectionIssue;
+        if(connectionVerified)return "ChatGPT plan authorization verified on this Android device";
+        return "Saved ChatGPT authorization · not yet verified on this device";
+    }
+    /** A saved token is not proof the linked account can perform AI requests.
+     * Check the same model-list endpoint used by the review workflow. Never
+     * transmit a deck, collection or personal information for diagnostics. */
+    void verifyConnection(Result callback){
+        if(!connected()){
+            ui.post(()->callback.done("Arcane Vault is not authorized. Use Continue with ChatGPT in Options, even if the ChatGPT app is signed in.",false));
+            return;
+        }
+        worker.execute(()->{
+            try{
+                String bearer=currentAccess();
+                JSONObject models=bearerRequest(RESOURCE+"/models",bearer,null);
+                JSONArray listed=models.optJSONArray("models");
+                if(listed==null)throw new IOException("Model list was not returned");
+                int usable=0;
+                for(int i=0;i<listed.length();i++){
+                    JSONObject item=listed.optJSONObject(i);
+                    if(item!=null&&"list".equals(item.optString("visibility"))&&
+                        !item.optString("slug","").isEmpty())usable++;
+                }
+                if(usable==0)throw new IOException("No eligible ChatGPT models were returned for this connection");
+                connectionVerified=true;
+                lastConnectionIssue="";
+                ui.post(()->callback.done("ChatGPT connection verified. "+usable+
+                    " eligible model"+(usable==1?"":"s")+" available for deck reviews.",true));
+            }catch(Exception ex){
+                connectionVerified=false;
+                String message=ex.getMessage()==null?"Unknown connection error":ex.getMessage();
+                lastConnectionIssue="ChatGPT connection not verified: "+message;
+                ui.post(()->callback.done(lastConnectionIssue+
+                    ". If authorization is no longer valid, disconnect and authorize Arcane Vault again.",false));
+            }
+        });
+    }
 
     private static String b64(byte[] bytes){return Base64.encodeToString(bytes,
         Base64.NO_PADDING|Base64.NO_WRAP|Base64.URL_SAFE);}
@@ -151,6 +191,7 @@ final class MobileChatGptClient {
     }
     private synchronized void clear(){
         access=null;refresh=null;subject=null;idToken=null;expiration=0;
+        connectionVerified=false;lastConnectionIssue="";
         store().delete(); // Never put OAuth material into collection SharedPreferences.
     }
 
@@ -253,7 +294,9 @@ final class MobileChatGptClient {
                     expiration=Instant.now().getEpochSecond()+tokens.getLong("expires_in");
                     save();
                 }
-                ui.post(()->callback.done("ChatGPT connected and securely saved on this device.",true));
+                connectionVerified=false;
+                lastConnectionIssue="";
+                ui.post(()->callback.done("ChatGPT authorization saved. Use Check connection to confirm plan access on this device.",true));
             }catch(Exception ex){
                 ui.post(()->callback.done("ChatGPT connection unavailable: "+ex.getMessage(),false));
             }
@@ -328,6 +371,8 @@ final class MobileChatGptClient {
                     }
                 }finally{c.disconnect();}
                 if(!complete)throw new IOException("AI response ended before completion");
+                connectionVerified=true;
+                lastConnectionIssue="";
                 String finalModel=model;
                 ui.post(()->callback.done(answer.toString(),finalModel,null));
             }catch(Exception ex){
