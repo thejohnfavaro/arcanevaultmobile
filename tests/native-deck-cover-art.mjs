@@ -203,6 +203,27 @@ assert.match(workspace,/VaultNativeStyle\.margin\(sectionBody,cardRow,3,activity
 assert.match(workspace,/if\(!collapse\)workspaceScroll\.post\(this::loadVisibleDeckCovers\)/,
   'Expanding an art section must request newly visible thumbnails');
 
+// Bulk section controls are presentation-only and reuse the same header
+// callbacks, so section state stays correct after a view switch or draft edit.
+assert.match(workspace,/"Collapse All"/,
+  'Visual editor must provide a bulk collapse control');
+assert.match(workspace,/"Expand All"/,
+  'Visual editor must provide a bulk expand control');
+assert.match(workspace,/if\(heading!=null&&!collapsedDraftGroups\.contains\(type\)\)/,
+  'Collapse All must skip sections that are already collapsed');
+assert.match(workspace,/if\(heading!=null&&collapsedDraftGroups\.contains\(type\)\)/,
+  'Expand All must reopen only collapsed sections');
+assert.match(workspace,/heading\.performClick\(\)/,
+  'Bulk actions must reuse verified single-section toggle logic');
+assert.match(workspace,/workspaceScroll\.post\(this::loadVisibleDeckCovers\)/,
+  'Expanded artwork must be eligible for existing visible-only loader');
+assert.match(workspace,/"DECK COMPOSITION · "\+populatedGroups\+" card types"/,
+  'Composition summary must show populated type count');
+assert.match(workspace,/sectionTotal\+=member\.optInt\("qty",0\)/,
+  'Composition must use unsaved draft copy counts, not ownership');
+assert.match(workspace,/composition\.append\(type\)\.append\(" "\)\.append\(sectionTotal\)/,
+  'Composition must expose card counts for each populated type');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
