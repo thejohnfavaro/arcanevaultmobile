@@ -671,8 +671,19 @@ final class NativeTabletopScreen {
             panel.addView(life,new LinearLayout.LayoutParams(-1,dp(57)));
         }
         LinearLayout utilities=VaultNativeStyle.row(activity);
-        Button poison=counterButton(utilities,"☠ "+session.poison[i],()->poisonDialog(i));
-        poison.setContentDescription("Poison counters for "+session.names[i]+": "+session.poison[i]);
+        // Direct +/- poison controls avoid opening a modal on every counter
+        // change during four-player play. Each edit still goes through persist
+        // for automatic recovery and the existing undo stack.
+        Button poisonMinus=counterButton(utilities,"☠−",()->{
+            if(session.poison[i]>0)persist(()->session.changePoison(i,-1));
+        });
+        poisonMinus.setContentDescription("Remove one poison counter from "+session.names[i]+
+            ", current "+session.poison[i]);
+        Button poisonPlus=counterButton(utilities,"☠+"+session.poison[i],()->persist(
+            ()->session.changePoison(i,1)));
+        poisonPlus.setContentDescription("Add one poison counter to "+session.names[i]+
+            ", current "+session.poison[i]+". Long press for poison counter details.");
+        poisonPlus.setOnLongClickListener(v->{poisonDialog(i);return true;});
         Button commander=counterButton(utilities,"⚔",()->commanderDialog(i));
         commander.setContentDescription("Commander damage to "+session.names[i]);
         Button color=counterButton(utilities,"◉",()->persist(()->session.nextColor(i)));
