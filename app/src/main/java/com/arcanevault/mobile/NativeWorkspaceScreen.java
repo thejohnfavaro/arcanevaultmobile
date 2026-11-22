@@ -1193,10 +1193,16 @@ final class NativeWorkspaceScreen {
         button("← Back to deck",this::onBack);
         LinearLayout fields=VaultNativeStyle.column(activity);
         fields.setPadding(dp(16),dp(8),dp(16),dp(8));
-        TextView commander=VaultNativeStyle.label(activity,
-            "Commander: "+deck.optString("commander","")+" (unchanged)",13,
-            VaultNativeStyle.SUBTEXT,false);
-        fields.addView(commander);
+        fields.addView(VaultNativeStyle.label(activity,
+            "COMMANDER",11,VaultNativeStyle.SUBTEXT,true));
+        android.widget.AutoCompleteTextView commander=new android.widget.AutoCompleteTextView(activity);
+        VaultNativeStyle.search(activity,commander);
+        commander.setSingleLine(true);
+        commander.setHint("Search commander (2+ characters)");
+        commander.setText(deck.optString("commander",""));
+        fields.addView(commander,new LinearLayout.LayoutParams(-1,dp(50)));
+        NativeCommanderSuggestions.attach(activity,catalog,commander,
+            deck.optString("format","Commander"),executor);
         Button aiReview=VaultNativeStyle.button(activity,"✦ AI Review (current draft)",false);
         fields.addView(aiReview,new LinearLayout.LayoutParams(-1,dp(47)));
         aiReview.setOnClickListener(v->openAiReview(deck,
@@ -2095,8 +2101,12 @@ final class NativeWorkspaceScreen {
             try {
                 JSONObject revised=NativeDeckDraft.revised(deck,
                     name.getText().toString(),lines.getText().toString());
+                String selectedCommander=commander.getText().toString().trim();
+                if(selectedCommander.length()>180)
+                    throw new IllegalArgumentException("Commander name is too long.");
+                revised.put("commander",selectedCommander);
                 JSONArray entries=revised.getJSONArray("entries");
-                int count=1;
+                int count=selectedCommander.isEmpty()?0:1;
                 for(int i=0;i<entries.length();i++)
                     count+=entries.getJSONObject(i).getInt("qty");
                 String confirmation="Save "+revised.getString("name")+
