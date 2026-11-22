@@ -1033,7 +1033,7 @@ final class NativeWorkspaceScreen {
                 java.util.Collections.sort(choices.subList(1,choices.size()),
                     String.CASE_INSENSITIVE_ORDER);
                 ArrayAdapter<String> folderAdapter=new ArrayAdapter<>(activity,
-                    android.R.layout.simple_spinner_item,deckFormatChoices);
+                    android.R.layout.simple_spinner_item,choices);
                 folderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
                 folders.setAdapter(folderAdapter);
                 int selectedFolder=deckFolder.isEmpty()?0:choices.indexOf(deckFolder);
@@ -1221,7 +1221,7 @@ final class NativeWorkspaceScreen {
         String savedFormat=deck.optString("format","Commander");
         if(!deckFormatChoices.contains(savedFormat))deckFormatChoices.add(savedFormat);
         ArrayAdapter<String> pickerAdapter=new ArrayAdapter<>(activity,
-            android.R.layout.simple_spinner_item,choices);
+            android.R.layout.simple_spinner_item,deckFormatChoices);
         pickerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         formatPicker.setAdapter(pickerAdapter);
         formatPicker.setSelection(Math.max(0,deckFormatChoices.indexOf(savedFormat)));
