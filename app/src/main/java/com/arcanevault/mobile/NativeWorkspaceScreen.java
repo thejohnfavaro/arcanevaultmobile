@@ -856,6 +856,16 @@ final class NativeWorkspaceScreen {
                         coverBitmaps.put(commander,result);
                         coverUnavailable.remove(commander);
                         draftArtFailures.remove(commander);
+                        // Apply the completed image immediately to live targets.
+                        // A nested editor can be rebuilt without a scroll event,
+                        // so don't depend on another visibility scan to repaint.
+                        if(!closed&&pageGeneration==deckPageGeneration)
+                            for(DeckCoverTarget candidate:deckCoverTargets)
+                                if(commander.equals(candidate.commander)&&
+                                        candidate.image.isAttachedToWindow()){
+                                    candidate.image.setImageBitmap(result);
+                                    candidate.loaded=true;
+                                }
                     }else{
                         boolean draftTarget=false;
                         for(DeckCoverTarget candidate:deckCoverTargets)
