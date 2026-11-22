@@ -952,10 +952,11 @@ final class NativeCatalogScreen {
         inspectorScroll.setVisibility(View.VISIBLE);
         inspectorScroll.scrollTo(0,0);
         Button back=VaultNativeStyle.button(activity,"← Back to catalog",false);
-        inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(46)));
+        inspectorContent.addView(back,new LinearLayout.LayoutParams(-1,dp(42)));
         back.setOnClickListener(v->onBack());
-        TextView title=text(heading,22,true);
+        TextView title=text(heading,20,true);
         title.setMaxLines(3);
+        title.setPadding(dp(2),dp(3),dp(2),dp(1));
         inspectorContent.addView(title);
     }
 
@@ -972,10 +973,23 @@ final class NativeCatalogScreen {
 
     private void addInspectorArtwork(String name,String imageUrl,String imageBack) {
         if(!hasOfficialArt(imageUrl))return;
-        FrameLayout art=flippableArt(name,imageUrl,imageBack,-1,dp(330));
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(330));
-        params.topMargin=dp(8);params.bottomMargin=dp(8);
+        // Full artwork remains available on demand; use a compact preview
+        // initially so the Oracle text appears earlier on small phones.
+        final int compactHeight=dp(254),expandedHeight=dp(390);
+        FrameLayout art=flippableArt(name,imageUrl,imageBack,-1,expandedHeight);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,compactHeight);
+        params.topMargin=dp(5);params.bottomMargin=dp(5);
         inspectorContent.addView(art,params);
+        final boolean[] expanded={false};
+        art.setContentDescription("Card artwork for "+name+". Double tap is not required; tap to expand or collapse.");
+        art.setOnClickListener(v->{
+            expanded[0]=!expanded[0];
+            android.view.ViewGroup.LayoutParams size=art.getLayoutParams();
+            size.height=expanded[0]?expandedHeight:compactHeight;
+            art.setLayoutParams(size);
+            art.setContentDescription("Card artwork for "+name+
+                (expanded[0]?" expanded. Tap to collapse.":" compact. Tap to expand."));
+        });
     }
 
     /** Enter the exact same full Catalog inspector from Set Progress.
