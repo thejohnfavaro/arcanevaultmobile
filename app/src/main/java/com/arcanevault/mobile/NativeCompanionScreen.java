@@ -596,6 +596,17 @@ final class NativeCompanionScreen {
         Button connect=button(aiClient.connected()?"Authorization saved":"Continue with ChatGPT",true);
         connect.setEnabled(!aiClient.connected());
         VaultNativeStyle.margin(parent,connect,9,activity);
+        Button network=button("Diagnose ChatGPT network",false);
+        VaultNativeStyle.margin(parent,network,9,activity);
+        network.setOnClickListener(v->{
+            network.setEnabled(false);
+            status.setText("Checking DNS for OpenAI authorization and API hosts…");
+            aiClient.checkNetwork((message,ok)->{
+                if(closed)return;
+                status.setText(message);
+                network.setEnabled(true);
+            });
+        });
         Button check=button("Check ChatGPT connection",false);
         check.setEnabled(aiClient.connected());
         VaultNativeStyle.margin(parent,check,9,activity);
