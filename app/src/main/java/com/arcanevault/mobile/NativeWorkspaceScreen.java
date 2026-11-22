@@ -1033,7 +1033,7 @@ final class NativeWorkspaceScreen {
         status.setText("AI Review · no automatic deck changes");
         MobileAiReviewScreen review=new MobileAiReviewScreen(
             activity,aiClient,prefs,deck,unsavedBoard,this::returnFromAiReview,
-            catalog,this::openAiCard);
+            catalog,this::openAiCard,deckSaver);
         content.addView(review.view());
         workspaceScroll.post(()->workspaceScroll.scrollTo(0,0));
     }
@@ -1470,6 +1470,8 @@ final class NativeWorkspaceScreen {
                         deck.optString("name","Untitled deck"),22,VaultNativeStyle.TEXT,true);
                     VaultNativeStyle.margin(content,title,8,activity);
                     row("COMMANDER",deck.optString("commander",""),null);
+                    if(AiReviewMetadata.hasReview(deck))
+                        row("SAVED AI REVIEW",AiReviewMetadata.label(deck),null);
                     row("BUILDABILITY",fit.summary(),null);
                     if(!fit.missing.isEmpty())
                         row("MISSING OWNED COPIES",String.join(", ",
