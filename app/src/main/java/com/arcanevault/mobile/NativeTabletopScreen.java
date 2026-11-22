@@ -317,7 +317,7 @@ final class NativeTabletopScreen {
         content.addView(results,new LinearLayout.LayoutParams(-1,dp(55)));
         Button restore=button("Restore previous saved game");
         content.addView(restore,new LinearLayout.LayoutParams(-1,dp(55)));
-        restore.setOnClickListener(v->{dialogRecoveryFromTools();});
+
 
         android.widget.ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.addView(content);
@@ -336,6 +336,7 @@ final class NativeTabletopScreen {
                     dialog.dismiss();
                     setup();
                 }).show()));
+        restore.setOnClickListener(v->{dialog.dismiss();dialogRecoveryFromTools();});
         decks.setOnClickListener(v->{dialog.dismiss();showDeckAssignments();});
         finish.setOnClickListener(v->{dialog.dismiss();showEndGame();});
         results.setOnClickListener(v->{dialog.dismiss();showCompletedGames();});
