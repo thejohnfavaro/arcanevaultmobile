@@ -733,6 +733,8 @@ final class CatalogStore extends SQLiteOpenHelper {
         // Nonland spell color identities. A multicolor spell contributes to
         // each of its colors; this is NOT land mana production or mana pips.
         int[] identityCounts=new int[6];
+        double[] coloredPips=new double[5];
+        int manaCostCopies=0,missingCostCopies=0;
         JSONArray cards=new JSONArray();
         for(int i=-1;i<entries.length();i++){
             JSONObject row=i<0?null:entries.optJSONObject(i);
@@ -745,7 +747,7 @@ final class CatalogStore extends SQLiteOpenHelper {
             total+=qty;
             if(total>10000)throw new IllegalArgumentException("Deck size exceeds analysis limit");
             try(Cursor card=db.rawQuery(
-                    "SELECT type,mv,colors FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
+                    "SELECT type,mv,colors,mana FROM cards WHERE name=? COLLATE NOCASE LIMIT 1",
                     new String[]{lookupName})){
                 if(!card.moveToFirst()){
                     unknown+=qty;
@@ -765,6 +767,13 @@ final class CatalogStore extends SQLiteOpenHelper {
                     else for(int ci=0;ci<5;ci++)
                         if(colors.indexOf("WUBRG".charAt(ci))>=0)
                             identityCounts[ci]+=qty;
+                    String mana=card.getString(3);
+                    if(mana==null||mana.isEmpty())missingCostCopies+=qty;
+                    else{
+                        manaCostCopies+=qty;
+                        double[] demand=NativeDeckManaPips.count(mana);
+                        for(int ci=0;ci<5;ci++)coloredPips[ci]+=demand[ci]*qty;
+                    }
                     if(Double.isFinite(mv)&&mv>=0){
                         curve[Math.min(7,(int)Math.floor(mv))]+=qty;
                         costSum+=mv*qty;
@@ -782,9 +791,13 @@ final class CatalogStore extends SQLiteOpenHelper {
         JSONArray bars=new JSONArray();
         for(int number:curve)bars.put(number);
         JSONObject colorIdentity=new JSONObject();
-        for(int ci=0;ci<6;ci++)
-            colorIdentity.put(ci==5?"C":String.valueOf("WUBRG".charAt(ci)),
-                identityCounts[ci]);
+        JSONObject coloredPipDemand=new JSONObject();
+        for(int ci=0;ci<6;ci++){
+            String symbol=ci==5?"C":String.valueOf("WUBRG".charAt(ci));
+            colorIdentity.put(symbol,identityCounts[ci]);
+            if(ci<5)coloredPipDemand.put(symbol,
+                Math.round(coloredPips[ci]*10.0)/10.0);
+        }
         return new JSONObject().put("total",total).put("known",known)
             .put("unknown",unknown).put("lands",lands)
             .put("creatures",creatures).put("instants",instants)
@@ -792,6 +805,9 @@ final class CatalogStore extends SQLiteOpenHelper {
             .put("enchantments",enchantments).put("planeswalkers",planeswalkers)
             .put("other",other).put("curve",bars).put("unknownNames",cards)
             .put("colorIdentity",colorIdentity).put("nonland",nonland)
+            .put("coloredPipDemand",coloredPipDemand)
+            .put("manaCostCopies",manaCostCopies)
+            .put("missingCostCopies",missingCostCopies)
             .put("avgMv",nonland>0?costSum/nonland:JSONObject.NULL);
     }
 
