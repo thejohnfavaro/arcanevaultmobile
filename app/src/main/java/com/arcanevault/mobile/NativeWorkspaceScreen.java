@@ -258,6 +258,7 @@ final class NativeWorkspaceScreen {
     View view(){return root;}
     void close(){
         closed=true;
+        ui.removeCallbacks(deckSearchPending);
         if(aiCardInspector!=null){aiCardInspector.close();aiCardInspector=null;}
         executor.shutdownNow();
         setDetailsWorker.shutdownNow();
