@@ -854,8 +854,8 @@ final class NativeWorkspaceScreen {
                         draftArtFailures.remove(commander);
                     }else{
                         boolean draftTarget=false;
-                        for(DeckCoverTarget target:deckCoverTargets)
-                            if(target.draft&&commander.equals(target.commander)){
+                        for(DeckCoverTarget candidate:deckCoverTargets)
+                            if(candidate.draft&&commander.equals(candidate.commander)){
                                 draftTarget=true;break;
                             }
                         if(draftTarget)draftArtFailures.put(commander,
