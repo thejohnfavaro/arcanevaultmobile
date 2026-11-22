@@ -171,6 +171,28 @@ assert.match(workspace,/candidate\.image\.setImageBitmap\(result\)/,
 assert.match(workspace,/candidate\.image\.isAttachedToWindow\(\)/,
   'Completed images must only be assigned to still-attached card rows');
 
+// Type navigation is UI-only; all three visual modes share the same state.
+assert.match(workspace,/final Set<String> collapsedDraftGroups=new HashSet<>\(\)/,
+  'Section collapsed state must survive in-editor redraws');
+assert.match(workspace,/HorizontalScrollView jumpScroll=new HorizontalScrollView\(activity\)/,
+  'A horizontally scrolling quick-jump strip should fit mobile screens');
+assert.match(workspace,/groupHeading\.setOnClickListener\(v->\{/,
+  'Every occupied type section must offer a collapse toggle');
+assert.match(workspace,/sectionBody\.setVisibility\(collapse\?View\.GONE:View\.VISIBLE\)/,
+  'Collapsed sections must truly hide rows, not remove draft entries');
+assert.match(workspace,/jump\.setContentDescription\("Jump to "\+group\)/,
+  'Quick-jump buttons should identify their target to screen readers');
+assert.match(workspace,/if\(collapsedDraftGroups\.contains\(group\)\)\s*groupHeading\.performClick\(\)/,
+  'Jumping to a collapsed type must expand it');
+assert.match(workspace,/workspaceScroll\.smoothScrollTo\(0,Math\.max\(0,destination\)\)/,
+  'Jump controls must scroll to the real section location');
+assert.match(workspace,/sectionBody\.addView\(cardGrid\)/,
+  'Grid cards must be parented inside the collapsible section');
+assert.match(workspace,/VaultNativeStyle\.margin\(sectionBody,cardRow,3,activity\)/,
+  'List and Art + Details rows must use the same collapsible section');
+assert.match(workspace,/if\(!collapse\)workspaceScroll\.post\(this::loadVisibleDeckCovers\)/,
+  'Expanding an art section must request newly visible thumbnails');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
