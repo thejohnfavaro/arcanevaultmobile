@@ -17,7 +17,7 @@ for(const part of [
   'count+" cards · "+folder',
   'ribbon',
 ])assert.ok(workspace.includes(part),'Missing deck cover presentation: '+part);
-assert.match(workspace,/catalog\.commanderCoverUrl\(commander\)/,'Lookup must use local catalog');
+assert.match(workspace,/catalog\.commanderCoverUrl\(cardIdentity\)/,'Artwork lookup must use the normalized exact local catalog identity');
 assert.match(catalog,/String commanderCoverUrl\(String commanderName\)/);
 assert.match(catalog,/SELECT image FROM cards WHERE name=\? COLLATE NOCASE LIMIT 1/,
   'Only exact commander names are allowed to drive art selection');
