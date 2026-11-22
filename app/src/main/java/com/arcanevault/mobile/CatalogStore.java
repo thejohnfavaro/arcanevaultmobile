@@ -1353,6 +1353,53 @@ final class CatalogStore extends SQLiteOpenHelper {
             .put("size",size).put("source","ownedPhysicalPrintings").put("cards",rows);
     }
 
+    /** Read-only exact commander printings, including front faces of transforming cards.
+     * Physical ownership is reported only for the exact verified printing ID. */
+    JSONArray commanderPrintings(String commander)throws Exception {
+        String name=NativeArenaCardName.identity(commander).trim();
+        if(name.isEmpty()||name.length()>255)return new JSONArray();
+        JSONArray result=new JSONArray();
+        String sql="SELECT v.print_id,v.name,v.setcode,v.setname,v.collector,"+
+            "v.image,v.image_back,v.release,"+
+            "COALESCE((SELECT SUM(p.qty) FROM physical_printings p "+
+            "WHERE p.print_id=v.print_id COLLATE NOCASE AND p.qty>0),0) "+
+            "FROM variants v WHERE (v.name=? COLLATE NOCASE OR "+
+            "v.name LIKE ? COLLATE NOCASE) "+
+            "AND v.image LIKE 'https://cards.scryfall.io/%' "+
+            "ORDER BY 9 DESC,v.release DESC,v.setcode,v.collector LIMIT 400";
+        // Escape LIKE metacharacters by matching front-face prefix in Java below,
+        // never treating arbitrary commander input as an SQL pattern.
+        String prefix=name.replace("%","\\%").replace("_","\\_")+" // %";
+        sql=sql.replace("v.name LIKE ? COLLATE NOCASE",
+            "v.name LIKE ? ESCAPE '\\' COLLATE NOCASE");
+        try(Cursor c=getReadableDatabase().rawQuery(sql,new String[]{name,prefix})){
+            while(c.moveToNext()){
+                String full=c.getString(1);
+                if(!full.equalsIgnoreCase(name)&&
+                    !full.regionMatches(true,0,name+" // ",0,name.length()+4))
+                    continue;
+                result.put(new JSONObject().put("id",c.getString(0))
+                    .put("name",full).put("set",c.getString(2))
+                    .put("setName",c.getString(3)).put("collectorNumber",c.getString(4))
+                    .put("image",c.getString(5)).put("imageBack",c.getString(6))
+                    .put("released",c.getString(7)).put("ownedQty",c.getInt(8)));
+            }
+        }
+        return result;
+    }
+
+    String commanderPrintingArtwork(String commander,String printId)throws Exception {
+        if(!printId.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+            return "";
+        JSONArray options=commanderPrintings(commander);
+        for(int i=0;i<options.length();i++){
+            JSONObject item=options.optJSONObject(i);
+            if(item!=null&&printId.equalsIgnoreCase(item.optString("id","")))
+                return item.optString("image","");
+        }
+        return "";
+    }
+
     JSONObject variants(Map<String,String> p)throws Exception{
         String name=get(p,"name"),scope=get(p,"scope");if(name.isEmpty()||name.length()>300)throw new IllegalArgumentException("Invalid name");
         JSONArray rows=new JSONArray();
