@@ -185,8 +185,24 @@ final class MobileChatGptClient {
         }
         try{
             int code=c.getResponseCode();
-            if(code<200||code>=300)
-                throw new IOException("ChatGPT authorization service HTTP "+code);
+            if(code<200||code>=300){
+                // Never surface raw OAuth responses: they can contain account
+                // information or authorization material. Preserve only safe,
+                // structured error identifiers and the HTTP status.
+                String errorCode="";
+                try(InputStream err=c.getErrorStream()){
+                    if(err!=null){
+                        JSONObject details=new JSONObject(new String(readBounded(err,16384),
+                            StandardCharsets.UTF_8));
+                        JSONObject nested=details.optJSONObject("error");
+                        if(nested!=null)errorCode=nested.optString("code","");
+                        else errorCode=details.optString("error","");
+                    }
+                }catch(Exception ignored){}
+                if(!errorCode.matches("[A-Za-z0-9_.-]{1,80}"))errorCode="";
+                throw new IOException("ChatGPT authorization service HTTP "+code+
+                    (errorCode.isEmpty()?"":" ("+errorCode+")"));
+            }
             try(InputStream in=c.getInputStream()){
                 return new JSONObject(new String(readBounded(in,1024*1024),StandardCharsets.UTF_8));
             }
@@ -294,6 +310,7 @@ final class MobileChatGptClient {
         // Do not open authorization in a WebView or handle any browser cookies.
         String state=random(),nonce=random(),verifier=random();
         worker.execute(()->{
+            String stage="starting local callback";
             try(ServerSocket socket=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))){
                 socket.setSoTimeout(180000);
                 String redirect="http://127.0.0.1:"+socket.getLocalPort()+"/auth/callback";
@@ -307,7 +324,9 @@ final class MobileChatGptClient {
                 args.put("code_challenge_method","S256");args.put("code_challenge",sha(verifier));
                 if(clientId==null)args.put("agent_name_hint","Arcane Vault Android");
                 String authorize=AUTH+"/api/accounts/authorize?"+form(args);
+                stage="opening browser";
                 ui.post(()->activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(authorize))));
+                stage="waiting for browser callback";
                 Map<String,String> callbackData=null;
                 for(int attempt=0;attempt<5;attempt++){
                     try(Socket connection=socket.accept()){
@@ -332,7 +351,11 @@ final class MobileChatGptClient {
                     }
                 }
                 if(callbackData==null)throw new SecurityException("No valid local OAuth callback");
-                if(callbackData.containsKey("error"))throw new SecurityException("Authorization declined");
+                if(callbackData.containsKey("error")){
+                    String reason=callbackData.get("error");
+                    if(!reason.matches("[A-Za-z0-9_.-]{1,80}"))reason="authorization_error";
+                    throw new SecurityException("OAuth callback returned "+reason);
+                }
                 String code=callbackData.get("code");
                 if(code==null||code.length()<8)throw new SecurityException("Missing code");
                 String issued=clientId;
@@ -345,13 +368,17 @@ final class MobileChatGptClient {
                 request.put("grant_type","authorization_code");request.put("client_id",issued);
                 request.put("code",code);request.put("code_verifier",verifier);
                 request.put("redirect_uri",redirect);request.put("resource",RESOURCE);
+                stage="exchanging authorization code";
                 JSONObject tokens=request(AUTH+"/api/accounts/oauth/token",form(request));
+                stage="verifying signed identity";
                 String user=verify(tokens.getString("id_token"),issued,nonce);
                 if(subject!=null&&!subject.equals(user))throw new SecurityException("Account mismatch");
+                stage="checking granted ChatGPT plan permission";
                 if(!Arrays.asList(tokens.optString("scope","").split(" ")).contains(SCOPE))
                     throw new SecurityException("ChatGPT plan permission was not granted");
                 String refreshValue=tokens.optString("refresh_token","");
                 if(refreshValue.isEmpty())throw new SecurityException("No renewable access was granted");
+                stage="saving encrypted authorization";
                 synchronized(this){
                     clientId=issued;subject=user;access=tokens.getString("access_token");
                     refresh=refreshValue;idToken=tokens.getString("id_token");
@@ -362,7 +389,12 @@ final class MobileChatGptClient {
                 lastConnectionIssue="";
                 ui.post(()->callback.done("ChatGPT authorization saved. Use Check connection to confirm plan access on this device.",true));
             }catch(Exception ex){
-                ui.post(()->callback.done("ChatGPT connection unavailable: "+connectionError(ex),false));
+                String reason=ex instanceof SocketTimeoutException?
+                    "Browser authorization did not return to Arcane Vault within three minutes":
+                    connectionError(ex);
+                lastConnectionIssue="ChatGPT authorization failed while "+stage+": "+reason;
+                String result=lastConnectionIssue;
+                ui.post(()->callback.done(result,false));
             }
         });
     }
