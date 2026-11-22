@@ -344,3 +344,14 @@ assert.match(workspace,/revised\.put\("format",selectedFormat\)/,
   'Deck editing must preserve the selected format through saved native JSON');
 assert.match(workspace,/Arena Standard requires at least 60 mainboard cards/,
   'Arena Standard needs at least a 60-card mainboard before saving');
+
+assert.match(workspace,/boolean standard=!\("Commander"\.equals\(formatPicker\.getSelectedItem\(\)\)/,
+  'Commander controls must hide for every non-Commander deck type, not just Standard');
+assert.match(workspace,/revised\.put\("deckCoverMode",coverMode\)/,
+  'The selected cover mode must persist in revision-safe native deck save');
+assert.match(workspace,/revised\.put\("deckCoverCardName"/,
+  'Custom cover card must persist independently of the mainboard');
+assert.match(workspace,/revised\.put\("deckCoverPrintingId"/,
+  'The cosmetic cover printing ID must persist without affecting ownership');
+assert.match(workspace,/coverMode="Auto"/,
+  'Removing a custom cover card must safely restore Auto fallback');
