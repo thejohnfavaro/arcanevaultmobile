@@ -224,6 +224,34 @@ assert.match(workspace,/sectionTotal\+=member\.optInt\("qty",0\)/,
 assert.match(workspace,/composition\.append\(type\)\.append\(" "\)\.append\(sectionTotal\)/,
   'Composition must expose card counts for each populated type');
 
+// Editor and saved deck details share the same catalog-grounded mana curve
+// and quantity-weighted, nonland spell color identity readout.
+assert.match(workspace,/"Deck Insights  ▾"/,
+  'Deck editor should offer optional insight charts');
+assert.match(workspace,/"Refresh Insights"/,
+  'Unsaved draft insights should be manually refreshable');
+assert.match(workspace,/catalog\.deckInsights\(commander,\s*NativeDeckDraft\.parseEntries\(snapshot\)\)/,
+  'Draft insights must analyze validated unsaved text');
+assert.match(workspace,/request!=draftInsightRequests\[0\]/,
+  'Stale insight requests must not replace later edits or leave-state');
+assert.match(workspace,/!snapshot\.equals\(lines\.getText\(\)\.toString\(\)\)/,
+  'An edited draft must invalidate its previous insights');
+assert.match(workspace,/renderDeckInsights\(report,draftInsightsPanel\)/,
+  'Draft insights must reuse the saved deck chart renderer');
+assert.match(workspace,/"SPELL COLOR IDENTITY"/,
+  'Charts must include spell color identity');
+assert.match(workspace,/"Nonland spells only · multicolor cards count once per color/,
+  'Color insight labels must distinguish multicolor and lands from mana sources');
+const catalogInsights=read('app/src/main/java/com/arcanevault/mobile/CatalogStore.java');
+assert.match(catalogInsights,/int\[\] identityCounts=new int\[6\]/,
+  'Read-only catalog analysis should count five colors and colorless');
+assert.match(catalogInsights,/if\(colors==null\|\|colors\.isEmpty\(\)\)identityCounts\[5\]\+=qty/,
+  'Known colorless nonland cards must count in the colorless category');
+assert.match(catalogInsights,/identityCounts\[ci\]\+=qty/,
+  'Spell color identity must be quantity-weighted');
+assert.match(catalogInsights,/\.put\("colorIdentity",colorIdentity\)/,
+  'The color histogram should be included in deck insight reports');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
