@@ -271,6 +271,29 @@ const pipCode=read('app/src/main/java/com/arcanevault/mobile/NativeDeckManaPips.
 assert.match(pipCode,/String cost=manaCost\.split\(" \/\/ ",2\)\[0\]/,
   'Mana pip analysis must use only the first face of split costs');
 
+// Schema-v4 migration only added an empty mana field for pre-existing bulk
+// rows. Recover missing costs without reindexing ownership or saved decks.
+assert.match(catalogInsights,/int fillMissingDeckManaCosts\(String commander,JSONArray entries\)/,
+  'Legacy catalog should support exact-name, targeted deck mana backfill');
+assert.match(catalogInsights,/"https:\/\/api\.scryfall\.com\/cards\/collection"/,
+  'Backfill must use official batched Scryfall card collection API');
+assert.match(catalogInsights,/Math\.min\(offset\+75,all\.size\(\)\)/,
+  'Scryfall collection requests must respect the 75-card cap');
+assert.match(catalogInsights,/if\(batches\+\+>0\)Thread\.sleep\(600\)/,
+  'Backfill must space out API batches');
+assert.match(catalogInsights,/requested\.contains\(canonical\.toLowerCase\(Locale\.ROOT\)\)/,
+  'Only verified exact names should update local metadata');
+assert.match(catalogInsights,/writable\.update\("cards",values,/,
+  'Backfill should only update local indexed cards');
+assert.match(workspace,/catalog\.fillMissingDeckManaCosts\(\s*draftCommander,parsed\)/,
+  'Draft insights must repair old empty-cost local catalog rows');
+assert.match(workspace,/attemptedManaRepair\[0\]=true/,
+  'Draft insights should not repeatedly fetch metadata while navigating');
+assert.match(workspace,/attemptedManaRepair\[0\]=false;\s*updateDraftInsights\.run\(\)/,
+  'Explicit Refresh Insights should permit retry after an offline failure');
+assert.match(workspace,/"Casting-cost analysis unavailable: "\+costMissing/,
+  'Missing casting costs must not be presented as zero demand');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
