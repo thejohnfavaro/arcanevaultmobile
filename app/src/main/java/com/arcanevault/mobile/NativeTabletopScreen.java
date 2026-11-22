@@ -315,6 +315,9 @@ final class NativeTabletopScreen {
         content.addView(finish,new LinearLayout.LayoutParams(-1,dp(55)));
         Button results=button("Recent completed games");
         content.addView(results,new LinearLayout.LayoutParams(-1,dp(55)));
+        Button restore=button("Restore previous saved game");
+        content.addView(restore,new LinearLayout.LayoutParams(-1,dp(55)));
+        restore.setOnClickListener(v->{dialogRecoveryFromTools();});
 
         android.widget.ScrollView scroll=VaultNativeStyle.scroll(activity);
         scroll.addView(content);
@@ -340,6 +343,51 @@ final class NativeTabletopScreen {
             if(sessionDirty&&!closed){sessionDirty=false;render();}
         });
         dialog.show();
+    }
+
+    private void dialogRecoveryFromTools(){
+        String checkpoint=prefs.getString(RECOVERY,null);
+        if(checkpoint==null){
+            new AlertDialog.Builder(activity).setTitle("No recovery checkpoint")
+                .setMessage("Your current game is saved, but no earlier checkpoint is available.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        try{
+            TabletopSession prior=TabletopSessionRecovery.restore(checkpoint);
+            String current=session.encode().toString();
+            if(prior.encode().toString().equals(current)){
+                new AlertDialog.Builder(activity).setTitle("Recovery is current")
+                    .setMessage("The verified backup matches this game. No previous changes to restore.")
+                    .setPositiveButton("OK",null).show();
+                return;
+            }
+            String preview="Previous saved game: "+prior.players+" players · Round "+
+                prior.round+"\\n";
+            for(int i=0;i<prior.players;i++)
+                preview+=prior.names[i]+": "+prior.life[i]+" life · "+
+                    prior.poison[i]+" poison\\n";
+            final String summary=preview+
+                "\\nThis replaces the current tabletop counters with the previous verified checkpoint. It never changes decks or collections.";
+            new AlertDialog.Builder(activity).setTitle("Restore previous tabletop checkpoint?")
+                .setMessage(summary)
+                .setNegativeButton("Keep current game",null)
+                .setPositiveButton("Restore",(d,w)->{
+                    try{
+                        saveSession(prior.encode().toString(),current);
+                        session=prior;
+                        sessionDirty=false;
+                        render();
+                    }catch(Exception failure){
+                        new AlertDialog.Builder(activity).setTitle("Recovery not applied")
+                            .setMessage(failure.getMessage()).setPositiveButton("OK",null).show();
+                    }
+                }).show();
+        }catch(Exception invalid){
+            new AlertDialog.Builder(activity).setTitle("Recovery checkpoint invalid")
+                .setMessage("The backup did not pass integrity checks. The active game has not been changed.")
+                .setPositiveButton("OK",null).show();
+        }
     }
 
     /** Read-only local archive; deliberately not a source of deck win/loss data. */
