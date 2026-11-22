@@ -1033,7 +1033,7 @@ final class NativeWorkspaceScreen {
                 java.util.Collections.sort(choices.subList(1,choices.size()),
                     String.CASE_INSENSITIVE_ORDER);
                 ArrayAdapter<String> folderAdapter=new ArrayAdapter<>(activity,
-                    android.R.layout.simple_spinner_item,choices);
+                    android.R.layout.simple_spinner_item,deckFormatChoices);
                 folderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
                 folders.setAdapter(folderAdapter);
                 int selectedFolder=deckFolder.isEmpty()?0:choices.indexOf(deckFolder);
@@ -1216,15 +1216,15 @@ final class NativeWorkspaceScreen {
         fields.addView(VaultNativeStyle.label(activity,
             "DECK FORMAT",11,VaultNativeStyle.SUBTEXT,true));
         Spinner formatPicker=new Spinner(activity);
-        java.util.ArrayList<String> choices=new java.util.ArrayList<>(
+        java.util.ArrayList<String> deckFormatChoices=new java.util.ArrayList<>(
             java.util.Arrays.asList("Commander","Arena Brawl","Arena Standard","60-card"));
         String savedFormat=deck.optString("format","Commander");
-        if(!choices.contains(savedFormat))choices.add(savedFormat);
+        if(!deckFormatChoices.contains(savedFormat))deckFormatChoices.add(savedFormat);
         ArrayAdapter<String> pickerAdapter=new ArrayAdapter<>(activity,
             android.R.layout.simple_spinner_item,choices);
         pickerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         formatPicker.setAdapter(pickerAdapter);
-        formatPicker.setSelection(Math.max(0,choices.indexOf(savedFormat)));
+        formatPicker.setSelection(Math.max(0,deckFormatChoices.indexOf(savedFormat)));
         fields.addView(formatPicker,new LinearLayout.LayoutParams(-1,dp(52)));
         TextView commanderLabel=VaultNativeStyle.label(activity,
             "COMMANDER",11,VaultNativeStyle.SUBTEXT,true);
