@@ -1203,6 +1203,82 @@ final class NativeWorkspaceScreen {
         fields.addView(commander,new LinearLayout.LayoutParams(-1,dp(50)));
         NativeCommanderSuggestions.attach(activity,catalog,commander,
             deck.optString("format","Commander"),executor);
+        // The commander is not a mainboard entry: save its cosmetic printing on
+        // the deck object, never in physical ownership or a fabricated card row.
+        final String[] chosenCommanderPrinting={
+            deck.optString("commanderDisplayPrintId","").trim()};
+        final String startingCommander=commander.getText().toString().trim();
+        Button printingButton=VaultNativeStyle.button(activity,
+            "Commander artwork · Choose printing",false);
+        fields.addView(printingButton,new LinearLayout.LayoutParams(-1,dp(48)));
+        TextView printingLabel=VaultNativeStyle.label(activity,
+            chosenCommanderPrinting[0].isEmpty()?
+                "Default commander artwork":"Saved commander printing selected",
+            12,VaultNativeStyle.SUBTEXT,false);
+        fields.addView(printingLabel);
+        commander.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence text,int start,int count,int after){}
+            public void onTextChanged(CharSequence text,int start,int before,int count){
+                if(!text.toString().trim().equalsIgnoreCase(startingCommander)){
+                    chosenCommanderPrinting[0]="";
+                    printingLabel.setText("Commander changed · choose a new printing");
+                }
+            }
+            public void afterTextChanged(Editable text){}
+        });
+        printingButton.setOnClickListener(v->{
+            final String card=commander.getText().toString().trim();
+            if(card.isEmpty()){info("Choose a commander before selecting artwork.");return;}
+            printingButton.setEnabled(false);
+            executor.execute(()->{
+                try{
+                    JSONArray choices=catalog.commanderPrintings(card);
+                    ui.post(()->{
+                        if(closed||pageGeneration!=deckPageGeneration||
+                            activity.isFinishing())return;
+                        printingButton.setEnabled(true);
+                        if(!card.equals(commander.getText().toString().trim())){
+                            info("Commander changed; open printings again.");return;
+                        }
+                        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+                        java.util.ArrayList<String> ids=new java.util.ArrayList<>();
+                        labels.add("Default commander artwork");
+                        ids.add("");
+                        for(int n=0;n<choices.length();n++){
+                            JSONObject option=choices.optJSONObject(n);
+                            if(option==null)continue;
+                            String id=option.optString("id","");
+                            if(!id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))continue;
+                            int owned=option.optInt("ownedQty",0);
+                            labels.add((owned>0?"OWNED ×"+owned+" · ":"")+
+                                option.optString("set","").toUpperCase(java.util.Locale.ROOT)+
+                                " #"+option.optString("collectorNumber","")+" · "+
+                                option.optString("setName","")+
+                                (owned>0?"":" · display only"));
+                            ids.add(id);
+                        }
+                        if(labels.size()==1){
+                            info("No official printings indexed; refresh Scryfall catalog.");return;
+                        }
+                        new AlertDialog.Builder(activity)
+                            .setTitle("Commander artwork · "+card)
+                            .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                                chosenCommanderPrinting[0]=ids.get(which);
+                                printingLabel.setText(which==0?"Default commander artwork (unsaved)":
+                                    labels.get(which)+" (unsaved)");
+                            })
+                            .setNegativeButton("Cancel",null).show();
+                    });
+                }catch(Exception error){
+                    ui.post(()->{
+                        if(!closed&&pageGeneration==deckPageGeneration){
+                            printingButton.setEnabled(true);
+                            info("Commander printings unavailable: "+error.getMessage());
+                        }
+                    });
+                }
+            });
+        });
         Button aiReview=VaultNativeStyle.button(activity,"✦ AI Review (current draft)",false);
         fields.addView(aiReview,new LinearLayout.LayoutParams(-1,dp(47)));
         aiReview.setOnClickListener(v->openAiReview(deck,
@@ -2105,6 +2181,10 @@ final class NativeWorkspaceScreen {
                 if(selectedCommander.length()>180)
                     throw new IllegalArgumentException("Commander name is too long.");
                 revised.put("commander",selectedCommander);
+                if(selectedCommander.equalsIgnoreCase(startingCommander))
+                    revised.put("commanderDisplayPrintId",chosenCommanderPrinting[0]);
+                else
+                    revised.put("commanderDisplayPrintId","");
                 JSONArray entries=revised.getJSONArray("entries");
                 int count=selectedCommander.isEmpty()?0:1;
                 for(int i=0;i<entries.length();i++)
