@@ -150,6 +150,19 @@ assert.match(workspace,/lines.setText\(NativeDeckDraft.formatEntries\(updated\)\
 assert.match(workspace,/if\(visualArt\[0\]\|\|visualGrid\[0\]\)/,
   'Grid thumbnails should use the lazy visible-art loader');
 
+// A draft thumbnail should recover from an early unavailable catalog or art
+// request instead of being permanently stuck on the fallback star.
+assert.match(workspace,/new DeckCoverTarget\(artImage,cardName,true\)/,
+  'Draft thumbnail targets should opt into recoverable artwork behavior');
+assert.match(workspace,/draftArtFailures\.getOrDefault\(target\.commander,0\)>=2/,
+  'Recovery attempts must be bounded to avoid repeated failed downloads');
+assert.match(workspace,/artImage\.addOnAttachStateChangeListener/,
+  'Artwork must begin loading when a rebuilt editor thumbnail attaches');
+assert.match(workspace,/catalog\.cardDetailsForReviewMention\(commander\)/,
+  'The art loader should resolve valid front-face-only double-faced names');
+assert.match(workspace,/draftArtFailures\.remove\(commander\)/,
+  'Successful art loads should clear the draft failure state');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
