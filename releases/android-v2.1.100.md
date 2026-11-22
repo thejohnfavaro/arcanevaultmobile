@@ -1,5 +1,8 @@
 # Arcane Vault Android v2.1.100
 
+## Added
+- Regression coverage for exact canonical card artwork lookups and immediate visible thumbnail repaint.
+
 ## Fixed
 - Art + Details and Grid thumbnails now resolve saved Arena-style names such as "Esper Sentinel (MH2) 12" to their exact card identity, "Esper Sentinel", for the artwork lookup. The saved deck text, desired printing notes, and card quantities remain untouched.
 - Newly downloaded artwork is assigned directly to live ImageViews instead of relying on a later scroll or layout event to replace the placeholder.
