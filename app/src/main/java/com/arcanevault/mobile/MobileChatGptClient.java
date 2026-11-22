@@ -49,31 +49,55 @@ final class MobileChatGptClient {
         if(connectionVerified)return "ChatGPT plan authorization verified on this Android device";
         return "Saved ChatGPT authorization · not yet verified on this device";
     }
-    /** Checks only DNS; this never reads tokens or transmits user data. */
+    /** Public network diagnostics: no tokens, prompts, deck contents, or collection data. */
     void checkNetwork(Result callback){
         worker.execute(()->{
             StringBuilder report=new StringBuilder();
             boolean healthy=true;
-            for(String host:new String[]{"auth.openai.com","api.openai.com"}){
+            String[][] targets={
+                {"auth.openai.com","https://auth.openai.com/.well-known/openid-configuration"},
+                {"api.openai.com","https://api.openai.com/v1/models"}
+            };
+            for(String[] target:targets){
+                String host=target[0];
                 try{
-                    java.net.InetAddress[] records=java.net.InetAddress.getAllByName(host);
+                    InetAddress[] records=InetAddress.getAllByName(host);
                     if(records.length==0)throw new UnknownHostException(host);
-                    report.append(host).append(": DNS resolved").append("\\n");
+                    report.append(host).append(": DNS OK; ");
+                    HttpURLConnection conn=null;
+                    try{
+                        conn=(HttpURLConnection)new URL(target[1]).openConnection();
+                        conn.setConnectTimeout(10000);
+                        conn.setReadTimeout(10000);
+                        conn.setInstanceFollowRedirects(false);
+                        conn.setRequestProperty("Accept","application/json");
+                        int code=conn.getResponseCode();
+                        // 401/403/404 are valid reachability responses: no auth is sent.
+                        report.append("HTTPS reachable (HTTP ").append(code).append(")");
+                    }finally{
+                        if(conn!=null)conn.disconnect();
+                    }
                 }catch(UnknownHostException ex){
                     healthy=false;
-                    report.append(host).append(": cannot resolve hostname").append("\\n");
+                    report.append(host).append(": DNS lookup failed");
+                }catch(javax.net.ssl.SSLException ex){
+                    healthy=false;
+                    report.append("TLS failure (").append(ex.getClass().getSimpleName()).append(")");
+                }catch(java.net.SocketTimeoutException ex){
+                    healthy=false;
+                    report.append("Connection timed out");
                 }catch(Exception ex){
                     healthy=false;
-                    report.append(host).append(": DNS check unavailable").append("\\n");
+                    report.append("Connection failed (").append(ex.getClass().getSimpleName()).append(")");
                 }
+                report.append('\n');
             }
-            if(!healthy)report.append(
-                "Try mobile data instead of Wi-Fi, or temporarily disable Private DNS, VPN, or DNS filtering. Then repeat this check. No sign-in credentials were changed.");
-            else report.append(
-                "DNS works for both OpenAI hosts. If authorization still fails, check browser redirects and the connection permissions.");
-            final boolean resolved=healthy;
-            final String message=report.toString();
-            ui.post(()->callback.done(message,resolved));
+            report.append(healthy?
+                "Both hosts are reachable from Arcane Vault. Network access alone does not confirm OAuth or model permissions.":
+                "A browser may use different DNS/network handling than the app. Compare the failing host in Chrome; check Private DNS or VPN only if Chrome also fails.");
+            boolean passed=healthy;
+            String message=report.toString();
+            ui.post(()->callback.done(message,passed));
         });
     }
 
