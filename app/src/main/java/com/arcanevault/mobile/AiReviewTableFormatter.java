@@ -36,7 +36,11 @@ final class AiReviewTableFormatter {
             if(value.isEmpty())continue;
             if(wrote)b.append("\n");
             String heading=headers!=null&&i<headers.length?headers[i]:"";
-            b.append(label(heading,i)).append(": ").append(value);
+            String kind=label(heading,i);
+            if("CUT".equals(kind))b.append("⊖ ");
+            else if("ADD".equals(kind))b.append("⊕ ");
+            else b.append(kind).append(": ");
+            b.append(value);
             wrote=true;
         }
         return b.toString();
