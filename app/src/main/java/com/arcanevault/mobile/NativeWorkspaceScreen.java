@@ -2213,6 +2213,12 @@ final class NativeWorkspaceScreen {
      * the authoritative WebView. No second bookmark store is introduced. */
     /** Local Scryfall facts only: missing names never turn into zero-cost cards. */
     private void renderDeckInsights(JSONObject report){
+        renderDeckInsights(report,content);
+    }
+
+    /** Read-only chart for either a saved deck or the unsaved editing draft.
+     * The local catalog is queried off-thread before this method is called. */
+    private void renderDeckInsights(JSONObject report,LinearLayout target){
         LinearLayout insights=VaultNativeStyle.column(activity);
         insights.setPadding(dp(13),dp(12),dp(13),dp(12));
         VaultNativeStyle.surface(activity,insights,false);
@@ -2262,7 +2268,46 @@ final class NativeWorkspaceScreen {
                 insights.addView(bar);
             }
         }
-        VaultNativeStyle.margin(content,insights,10,activity);
+        JSONObject colors=report.optJSONObject("colorIdentity");
+        if(colors!=null){
+            TextView colorHeading=VaultNativeStyle.label(activity,
+                "SPELL COLOR IDENTITY",12,VaultNativeStyle.GOLD,true);
+            colorHeading.setPadding(0,dp(10),0,dp(3));
+            insights.addView(colorHeading);
+            int maxColor=1;
+            for(String color:new String[]{"W","U","B","R","G","C"})
+                maxColor=Math.max(maxColor,colors.optInt(color,0));
+            for(String color:new String[]{"W","U","B","R","G","C"}){
+                final int number=colors.optInt(color,0);
+                LinearLayout colorRow=VaultNativeStyle.row(activity);
+                String colorLabel=color.equals("W")?"White":color.equals("U")?"Blue":
+                    color.equals("B")?"Black":color.equals("R")?"Red":
+                    color.equals("G")?"Green":"Colorless";
+                TextView label=VaultNativeStyle.label(activity,colorLabel,11,
+                    VaultNativeStyle.SUBTEXT,false);
+                label.setGravity(Gravity.CENTER_VERTICAL);
+                colorRow.addView(label,new LinearLayout.LayoutParams(dp(78),dp(25)));
+                android.widget.ProgressBar progress=new android.widget.ProgressBar(activity,
+                    null,android.R.attr.progressBarStyleHorizontal);
+                progress.setMax(maxColor);
+                progress.setProgress(number);
+                progress.setProgressTintList(android.content.res.ColorStateList.valueOf(
+                    VaultNativeStyle.PRIMARY));
+                LinearLayout.LayoutParams barWidth=new LinearLayout.LayoutParams(0,dp(12),1);
+                barWidth.gravity=Gravity.CENTER_VERTICAL;
+                colorRow.addView(progress,barWidth);
+                TextView copies=VaultNativeStyle.label(activity,
+                    Integer.toString(number),11,VaultNativeStyle.TEXT,false);
+                copies.setGravity(Gravity.CENTER);
+                colorRow.addView(copies,new LinearLayout.LayoutParams(dp(36),dp(25)));
+                insights.addView(colorRow);
+            }
+            insights.addView(VaultNativeStyle.label(activity,
+                "Nonland spells only · multicolor cards count once per color. "+
+                "Not a mana-source or mana-symbol estimate.",11,
+                VaultNativeStyle.SUBTEXT,false));
+        }
+        VaultNativeStyle.margin(target,insights,10,activity);
     }
 
     private void shortlist(){
