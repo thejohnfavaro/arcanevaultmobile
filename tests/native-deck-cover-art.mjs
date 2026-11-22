@@ -296,6 +296,31 @@ assert.match(workspace,/attemptedManaRepair\[0\]=false;\s*updateDraftInsights\.r
 assert.match(workspace,/"Casting-cost analysis unavailable: "\+costMissing/,
   'Missing casting costs must not be presented as zero demand');
 
+// Windows-style EDH Lab deck health reports are advisory and use the current draft.
+const health=read('app/src/main/java/com/arcanevault/mobile/NativeDeckHealth.java');
+assert.match(health,/TARGETS=\{36,10,10,8,2,2\}/,
+  'Health should use the Windows EDH Lab suggested starting targets');
+assert.match(health,/"Balanced","Faster starts","Card advantage"/,
+  'Android should offer Windows-aligned transient strategy emphases');
+assert.match(catalogInsights,/JSONObject deckHealth\(JSONArray entries,int focus\)/,
+  'Deck health must be local and read-only');
+assert.match(catalogInsights,/SELECT type,oracle,mv FROM cards WHERE name=\? COLLATE NOCASE LIMIT 1/,
+  'Health should derive verified card roles only from local catalog metadata');
+assert.match(catalogInsights,/if\(i>=0\)mainboardCopies\+=qty|mainboard\+=copies/,
+  'Health should count draft quantities rather than names');
+assert.match(catalogInsights,/unknownNames\.put\(name/,
+  'Missing metadata must remain visible, not treated as verified');
+assert.match(workspace,/"Deck Health  ▾"/,
+  'Deck editor should expose optional Deck Health view');
+assert.match(workspace,/catalog\.deckHealth\(\s*NativeDeckDraft\.parseEntries\(snapshot\),focus\)/,
+  'Health must read the current validated unsaved deck');
+assert.match(workspace,/request!=healthRequests\[0\]/,
+  'Stale health results must be discarded');
+assert.match(workspace,/renderNativeDeckHealth\(report,healthReport\)/,
+  'Health should render a strategy-aware native report');
+assert.match(workspace,/"Owned replacements and commander synergy have not been verified/,
+  'Do not claim format-safe substitutions or verified synergies before the eligibility port');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
