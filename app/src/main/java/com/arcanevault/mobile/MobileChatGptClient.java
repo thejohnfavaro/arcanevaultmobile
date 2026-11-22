@@ -49,9 +49,6 @@ final class MobileChatGptClient {
         if(connectionVerified)return "ChatGPT plan authorization verified on this Android device";
         return "Saved ChatGPT authorization · not yet verified on this device";
     }
-    /** A saved token is not proof the linked account can perform AI requests.
-     * Check the same model-list endpoint used by the review workflow. Never
-     * transmit a deck, collection or personal information for diagnostics. */
     /** Checks only DNS; this never reads tokens or transmits user data. */
     void checkNetwork(Result callback){
         worker.execute(()->{
@@ -91,6 +88,9 @@ final class MobileChatGptClient {
         return ex.getMessage()==null?"Unknown connection error":ex.getMessage();
     }
 
+    /** A saved token is not proof the linked account can perform AI requests.
+     * Check the same model-list endpoint used by the review workflow. Never
+     * transmit a deck, collection or personal information for diagnostics. */
     void verifyConnection(Result callback){
         if(!connected()){
             ui.post(()->callback.done("Arcane Vault is not authorized. Use Continue with ChatGPT in Options, even if the ChatGPT app is signed in.",false));
