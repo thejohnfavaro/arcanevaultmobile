@@ -251,6 +251,17 @@ assert.match(catalogInsights,/identityCounts\[ci\]\+=qty/,
   'Spell color identity must be quantity-weighted');
 assert.match(catalogInsights,/\.put\("colorIdentity",colorIdentity\)/,
   'The color histogram should be included in deck insight reports');
+assert.match(catalogInsights,/NativeDeckManaPips\.count\(mana\)/,
+  'Windows-parity colored pip demand must read cached Scryfall mana costs');
+assert.match(catalogInsights,/\.put\("coloredPipDemand",coloredPipDemand\)/,
+  'Spell colored symbol demand must be included in deck reports');
+assert.match(workspace,/"COLORED CASTING-COST DEMAND"/,
+  'Deck insights must distinguish casting cost demand from card identity');
+assert.match(workspace,/"Approximate: hybrid\/Phyrexian symbols discounted; not cast odds."/,
+  'Colored mana costs must be labeled approximate and not cast odds');
+const pipCode=read('app/src/main/java/com/arcanevault/mobile/NativeDeckManaPips.java');
+assert.match(pipCode,/String cost=manaCost\.split\(" \/\/ ",2\)\[0\]/,
+  'Mana pip analysis must use only the first face of split costs');
 
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
