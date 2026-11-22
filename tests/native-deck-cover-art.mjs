@@ -334,8 +334,12 @@ assert.match(workspace,/catalog\.commanderPrintingArtwork\(cardIdentity,printing
 assert.match(workspace,/coverBitmaps\.get\(target\.coverKey\)/,
   'Different commander printings must not share one decoded image cache key');
 
-assert.match(workspace,/"Arena Standard"\.equalsIgnoreCase\(format\)/,
-  'Arena Standard deck art must use a representative mainboard card, not a fabricated commander');
+assert.match(workspace,/String coverName=commander;/,
+  'Deck cover must retain commander fallback');
+assert.match(workspace,/savedEntries!=null&&savedEntries\.length\(\)>0/,
+  'A deck without a commander must use a representative saved mainboard card');
+assert.match(workspace,/deck\.optString\("deckCoverMode",""\)/,
+  'Custom deck art must load from the saved deck rather than global catalog settings');
 assert.match(workspace,/revised\.put\("format",selectedFormat\)/,
   'Deck editing must preserve the selected format through saved native JSON');
 assert.match(workspace,/Arena Standard requires at least 60 mainboard cards/,
