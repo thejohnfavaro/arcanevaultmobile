@@ -385,6 +385,18 @@ final class MobileAiReviewScreen {
                     offset,builder.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
+        // Native colored icons remain separate from the linked card-name spans.
+        for(int j=0;j<builder.length();j++){
+            char symbol=builder.charAt(j);
+            if(symbol=='⊖'||symbol=='⊕'){
+                builder.setSpan(new ForegroundColorSpan(
+                    symbol=='⊖'?android.graphics.Color.rgb(235,91,99):
+                                android.graphics.Color.rgb(70,202,139)),
+                    j,j+1,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                builder.setSpan(new StyleSpan(Typeface.BOLD),
+                    j,j+1,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+        }
         return builder;
     }
 }
