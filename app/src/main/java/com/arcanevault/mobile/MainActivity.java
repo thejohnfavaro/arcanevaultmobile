@@ -85,6 +85,11 @@ public class MainActivity extends Activity {
     private static final long SCRYFALL_MIN_GAP_MS = 700L;
 
 
+    @Override protected void onResume(){
+        super.onResume();
+        if(nativeController!=null)nativeController.onAppResumed();
+    }
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         if(getIntent()!=null&&"com.arcanevault.mobile.WIDGET_OPEN".equals(getIntent().getAction()))
