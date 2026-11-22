@@ -230,8 +230,10 @@ assert.match(workspace,/"Deck Insights  ▾"/,
   'Deck editor should offer optional insight charts');
 assert.match(workspace,/"Refresh Insights"/,
   'Unsaved draft insights should be manually refreshable');
-assert.match(workspace,/catalog\.deckInsights\(draftCommander,\s*NativeDeckDraft\.parseEntries\(snapshot\)\)/,
-  'Draft insights must analyze validated unsaved text');
+assert.match(workspace,/JSONArray parsed=NativeDeckDraft\.parseEntries\(snapshot\)/,
+  'Draft insights must parse the current unsaved text once');
+assert.match(workspace,/catalog\.deckInsights\(draftCommander,parsed\)/,
+  'Draft insights must analyze only the validated draft entries');
 assert.match(workspace,/request!=draftInsightRequests\[0\]/,
   'Stale insight requests must not replace later edits or leave-state');
 assert.match(workspace,/!snapshot\.equals\(lines\.getText\(\)\.toString\(\)\)/,
