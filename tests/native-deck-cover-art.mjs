@@ -259,6 +259,14 @@ assert.match(workspace,/"COLORED CASTING-COST DEMAND"/,
   'Deck insights must distinguish casting cost demand from card identity');
 assert.match(workspace,/"Approximate: hybrid\/Phyrexian symbols discounted; not cast odds."/,
   'Colored mana costs must be labeled approximate and not cast odds');
+assert.match(workspace,/"NATURAL LAND-DROP ESTIMATES"/,
+  'Saved and unsaved deck insights should present natural land-drop odds');
+assert.match(workspace,/"Known 99-card mainboard only · 7-card opener/,
+  'Land odds must disclose verified-deck and no-mulligan assumptions');
+assert.match(catalogInsights,/mainboardCopies==99&&mainboardUnknown==0/,
+  'Land-drop percentages must only be computed for a complete verified mainboard');
+assert.match(catalogInsights,/NativeDeckLandOdds\.probability\(mainboardLands,turn\)/,
+  'Land-drop estimates must depend on the actual known mainboard land count');
 const pipCode=read('app/src/main/java/com/arcanevault/mobile/NativeDeckManaPips.java');
 assert.match(pipCode,/String cost=manaCost\.split\(" \/\/ ",2\)\[0\]/,
   'Mana pip analysis must use only the first face of split costs');
