@@ -1206,7 +1206,21 @@ final class NativeWorkspaceScreen {
         LinearLayout fields=VaultNativeStyle.column(activity);
         fields.setPadding(dp(16),dp(8),dp(16),dp(8));
         fields.addView(VaultNativeStyle.label(activity,
-            "COMMANDER",11,VaultNativeStyle.SUBTEXT,true));
+            "DECK FORMAT",11,VaultNativeStyle.SUBTEXT,true));
+        Spinner formatPicker=new Spinner(activity);
+        java.util.ArrayList<String> choices=new java.util.ArrayList<>(
+            java.util.Arrays.asList("Commander","Arena Brawl","Arena Standard","60-card"));
+        String savedFormat=deck.optString("format","Commander");
+        if(!choices.contains(savedFormat))choices.add(savedFormat);
+        ArrayAdapter<String> pickerAdapter=new ArrayAdapter<>(activity,
+            android.R.layout.simple_spinner_item,choices);
+        pickerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        formatPicker.setAdapter(pickerAdapter);
+        formatPicker.setSelection(Math.max(0,choices.indexOf(savedFormat)));
+        fields.addView(formatPicker,new LinearLayout.LayoutParams(-1,dp(52)));
+        TextView commanderLabel=VaultNativeStyle.label(activity,
+            "COMMANDER",11,VaultNativeStyle.SUBTEXT,true);
+        fields.addView(commanderLabel);
         android.widget.AutoCompleteTextView commander=new android.widget.AutoCompleteTextView(activity);
         VaultNativeStyle.search(activity,commander);
         commander.setSingleLine(true);
@@ -1291,6 +1305,20 @@ final class NativeWorkspaceScreen {
                 }
             });
         });
+        Runnable updateCommanderVisibility=()->{
+            boolean standard="Arena Standard".equals(formatPicker.getSelectedItem());
+            commanderLabel.setVisibility(standard?View.GONE:View.VISIBLE);
+            commander.setVisibility(standard?View.GONE:View.VISIBLE);
+            printingButton.setVisibility(standard?View.GONE:View.VISIBLE);
+            printingLabel.setVisibility(standard?View.GONE:View.VISIBLE);
+        };
+        formatPicker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                updateCommanderVisibility.run();
+            }
+            public void onNothingSelected(AdapterView<?> parent){}
+        });
+        updateCommanderVisibility.run();
         Button aiReview=VaultNativeStyle.button(activity,"✦ AI Review (current draft)",false);
         fields.addView(aiReview,new LinearLayout.LayoutParams(-1,dp(47)));
         aiReview.setOnClickListener(v->openAiReview(deck,
@@ -2189,17 +2217,24 @@ final class NativeWorkspaceScreen {
             try {
                 JSONObject revised=NativeDeckDraft.revised(deck,
                     name.getText().toString(),lines.getText().toString());
-                String selectedCommander=commander.getText().toString().trim();
+                String selectedFormat=(String)formatPicker.getSelectedItem();
+                boolean standard="Arena Standard".equals(selectedFormat);
+                String selectedCommander=standard?"":commander.getText().toString().trim();
                 if(selectedCommander.length()>180)
                     throw new IllegalArgumentException("Commander name is too long.");
+                revised.put("format",selectedFormat);
                 revised.put("commander",selectedCommander);
-                revised.put("commanderDisplayPrintId",chosenCommanderPrinting[0]);
+                revised.put("commanderDisplayPrintId",standard?"":chosenCommanderPrinting[0]);
                 JSONArray entries=revised.getJSONArray("entries");
                 int count=selectedCommander.isEmpty()?0:1;
                 for(int i=0;i<entries.length();i++)
                     count+=entries.getJSONObject(i).getInt("qty");
+                if(standard && count<60)
+                    throw new IllegalArgumentException(
+                        "Arena Standard requires at least 60 mainboard cards.");
                 String confirmation="Save "+revised.getString("name")+
-                    " with "+count+" total cards (including commander)?"+
+                    " as "+selectedFormat+" with "+count+" total cards"+ 
+                    (selectedCommander.isEmpty()?"":" (including commander)")+"?"+
                     "\\n\\nA private recovery copy will be kept. "+
                     "The original deck must still match the version you opened.";
                 new AlertDialog.Builder(activity).setTitle("Confirm deck edit")
