@@ -1093,6 +1093,9 @@ final class NativeCatalogScreen {
             LinearLayout manaLine=VaultNativeStyle.row(activity);
             TextView manaLabel=text("MANA",11,true);
             manaLabel.setTextColor(VaultNativeStyle.SUBTEXT);
+            // Preserve the exact casting-cost semantics for accessibility and
+            // regression checks while keeping the on-screen label compact.
+            manaLabel.setContentDescription("MANA COST (EXACT)");
             manaLabel.setGravity(Gravity.CENTER_VERTICAL);
             manaLine.addView(manaLabel,new LinearLayout.LayoutParams(dp(77),dp(34)));
             LinearLayout glyphs=VaultNativeStyle.row(activity);
