@@ -340,18 +340,25 @@ final class MobileAiReviewScreen {
         SpannableStringBuilder builder=new SpannableStringBuilder();
         String[] lines=(markdown==null?"":markdown).replace("\r\n","\n").split("\n");
         boolean table=false;
+        String[] headers=null;
+        int rowIndex=0;
         for(int i=0;i<lines.length;i++){
             String line=lines[i].trim();
-            if(line.isEmpty()){builder.append('\n');table=false;continue;}
+            if(line.isEmpty()){builder.append('\n');table=false;headers=null;rowIndex=0;continue;}
             if(line.startsWith("|")){
-                // Mobile-first vertical representation instead of clipping a wide table.
-                if(line.matches("^\\|?[\\s|:\\-]+\\|?$"))continue;
-                String[] cells=line.replaceAll("^\\||\\|$","").split("\\|");
-                if(!table){table=true;continue;} // column headings
-                if(cells.length>=3)line="• "+cells[0].trim()+": "+
-                    cells[1].trim()+"\n   "+cells[2].trim();
-                else line="• "+line.replace('|',' ');
-            }else table=false;
+                // Retain all table columns (including WHY), and transform each
+                // row into a labeled vertical card for narrow phone screens.
+                if(AiReviewTableFormatter.separator(line))continue;
+                String[] cells=AiReviewTableFormatter.cells(line);
+                if(!table){
+                    table=true;
+                    headers=cells;
+                    rowIndex=0;
+                    continue;
+                }
+                line=AiReviewTableFormatter.row(headers,cells,++rowIndex);
+                if(builder.length()>0)builder.append('\n');
+            }else{table=false;headers=null;rowIndex=0;}
             int level=0;while(level<line.length()&&line.charAt(level)=='#')level++;
             boolean heading=level>0&&level<=4&&line.length()>level&&line.charAt(level)==' ';
             if(heading)line=line.substring(level+1);
