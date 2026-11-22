@@ -589,13 +589,27 @@ final class NativeCompanionScreen {
     /** Connection is per Android device; tokens are never synced to Windows. */
     private void renderOptions(LinearLayout parent){
         card(parent,"Options","ChatGPT connection",
-            "Use your existing eligible ChatGPT plan. This device keeps its own protected session.",
+            "Signing into the ChatGPT app does not authorize Arcane Vault. Connect this app separately and approve plan usage. Authorization stays encrypted on this Android device and is never synced from Windows.",
             VaultNativeStyle.GOLD);
         TextView status=text(aiClient.status(),13,VaultNativeStyle.SUBTEXT,false);
         VaultNativeStyle.margin(parent,status,10,activity);
-        Button connect=button(aiClient.connected()?"ChatGPT connected":"Continue with ChatGPT",true);
+        Button connect=button(aiClient.connected()?"Authorization saved":"Continue with ChatGPT",true);
         connect.setEnabled(!aiClient.connected());
         VaultNativeStyle.margin(parent,connect,9,activity);
+        Button check=button("Check ChatGPT connection",false);
+        check.setEnabled(aiClient.connected());
+        VaultNativeStyle.margin(parent,check,9,activity);
+        check.setOnClickListener(v->{
+            check.setEnabled(false);
+            status.setText("Checking saved ChatGPT authorization and plan model access…");
+            aiClient.verifyConnection((message,ok)->{
+                if(closed)return;
+                status.setText(message);
+                check.setEnabled(aiClient.connected());
+                connect.setEnabled(!aiClient.connected());
+                connect.setText(aiClient.connected()?"Authorization saved":"Continue with ChatGPT");
+            });
+        });
         Button disconnect=button("Disconnect ChatGPT",false);
         disconnect.setEnabled(aiClient.connected());
         VaultNativeStyle.margin(parent,disconnect,9,activity);
@@ -611,8 +625,9 @@ final class NativeCompanionScreen {
                 if(closed)return;
                 status.setText(message);
                 connect.setEnabled(!aiClient.connected());
-                connect.setText(aiClient.connected()?"ChatGPT connected":"Continue with ChatGPT");
+                connect.setText(aiClient.connected()?"Authorization saved":"Continue with ChatGPT");
                 disconnect.setEnabled(aiClient.connected());
+                check.setEnabled(aiClient.connected());
             });
         });
         disconnect.setOnClickListener(v->{
@@ -621,6 +636,8 @@ final class NativeCompanionScreen {
                 if(closed)return;
                 status.setText(message);
                 connect.setText("Continue with ChatGPT");
+                connect.setEnabled(true);
+                check.setEnabled(false);
                 disconnect.setEnabled(false);
             });
         });
