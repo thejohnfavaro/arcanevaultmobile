@@ -158,7 +158,7 @@ assert.match(workspace,/new DeckCoverTarget\(artImage,cardName,true\)/,
   'Draft thumbnail targets should opt into recoverable artwork behavior');
 assert.match(workspace,/if\(coverInFlight\.size\(\)>=2\)break/,
   'Only two visible image requests should be queued for the two cover workers');
-assert.match(workspace,/draftArtRetryAfter\.getOrDefault\(target\.commander,0L\)/,
+assert.match(workspace,/draftArtRetryAfter\.getOrDefault\(target\.coverKey,0L\)/,
   'Failed draft images must use a timed backoff rather than permanent exclusion');
 assert.match(workspace,/Math\.min\(60000L,6000L\*failures\)/,
   'Retry backoff must be bounded to avoid hammering Scryfall');
@@ -174,7 +174,7 @@ assert.match(workspace,/catalog\.commanderCoverUrl\(cardIdentity\)/,
   'Card art SQL must use canonical identity rather than Arena printing notes');
 assert.match(workspace,/catalog\.cardDetailsForReviewMention\(cardIdentity\)/,
   'Double-faced fallback must also use the canonical identity');
-assert.match(workspace,/draftArtFailures\.remove\(commander\)/,
+assert.match(workspace,/draftArtFailures\.remove\(coverKey\)/,
   'Successful art loads should clear the draft failure state');
 assert.match(workspace,/candidate\.image\.setImageBitmap\(result\)/,
   'A completed artwork request must paint the live thumbnail immediately');
@@ -324,3 +324,12 @@ assert.match(workspace,/"Owned replacements and commander synergy have not been 
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
+
+// Saved deck cosmetics are keyed by commander + exact printing ID, so multiple
+// decks using the same commander can display different official artwork.
+assert.match(workspace,/new DeckCoverTarget\(art,commander,false,/,
+  'Saved deck cover must carry its exact commander printing preference');
+assert.match(workspace,/catalog\.commanderPrintingArtwork\(cardIdentity,printingId\)/,
+  'Selected artwork must match the exact printing ID');
+assert.match(workspace,/coverBitmaps\.get\(target\.coverKey\)/,
+  'Different commander printings must not share one decoded image cache key');
