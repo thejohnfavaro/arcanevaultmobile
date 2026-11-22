@@ -136,6 +136,27 @@ final class NativeMatchAnalyticsScreen {
                     " L • "+other.percent()+"%    ("+
                     (primary.percent()-other.percent())+" percentage points difference)",
                     14,VaultNativeStyle.TEXT,true));
+            output.addView(text("MATCHUPS BY OPPONENT COLOR IDENTITY",
+                13,VaultNativeStyle.GOLD,true));
+            ArrayList<NativeMatchAnalyticsSnapshot.ColorResult> colorMatchups=
+                NativeMatchAnalyticsSnapshot.byOpponentColors(
+                    data,deckName,format,days,now);
+            if(colorMatchups.isEmpty())
+                output.addView(text("No confirmed matchups for these filters.",
+                    12,VaultNativeStyle.SUBTEXT,false));
+            for(NativeMatchAnalyticsSnapshot.ColorResult color:colorMatchups){
+                String label=color.identity.equals("Unknown")?
+                    "Unknown opponent colors":color.identity.equals("C")?
+                    "Colorless":color.identity;
+                output.addView(text(label+"    "+color.wins+" W / "+
+                    color.losses+" L    •    "+color.percent()+"% ("+
+                    color.matches()+" matches)",
+                    12,VaultNativeStyle.TEXT,false));
+            }
+            output.addView(text("Opponent colors come from explicitly recorded match " +
+                "metadata. Unidentified opponents remain Unknown; small samples " +
+                "are not reliable evidence of a bad matchup.",
+                11,VaultNativeStyle.SUBTEXT,false));
             output.addView(text("ROLLING 10-MATCH WIN RATE",13,VaultNativeStyle.GOLD,true));
             View graph=new View(activity){
                 final Paint stroke=new Paint(3);
