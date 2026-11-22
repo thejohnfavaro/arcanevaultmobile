@@ -803,16 +803,27 @@ final class NativeWorkspaceScreen {
         entry.setOnClickListener(v->showDeck(deck));
         VaultNativeStyle.margin(deckListPanel,entry,9,activity);
         String coverName=commander;
-        if(coverName.isEmpty()&&"Arena Standard".equalsIgnoreCase(format)){
-            JSONArray entries=deck.optJSONArray("entries");
-            if(entries!=null&&entries.length()>0){
-                JSONObject first=entries.optJSONObject(0);
-                if(first!=null)coverName=first.optString("name","").trim();
+        JSONArray savedEntries=deck.optJSONArray("entries");
+        boolean customCover="Custom".equalsIgnoreCase(deck.optString("deckCoverMode",""));
+        if(customCover){
+            String customCard=deck.optString("deckCoverCardName","").trim();
+            boolean exists=!commander.isEmpty() && commander.equalsIgnoreCase(customCard);
+            if(savedEntries!=null)for(int i=0;i<savedEntries.length();i++){
+                JSONObject card=savedEntries.optJSONObject(i);
+                if(card!=null&&customCard.equalsIgnoreCase(card.optString("name","")))
+                    exists=true;
             }
+            if(exists)coverName=customCard;
+            else customCover=false;
+        }
+        if(coverName.isEmpty()&&savedEntries!=null&&savedEntries.length()>0){
+            JSONObject first=savedEntries.optJSONObject(0);
+            if(first!=null)coverName=first.optString("name","").trim();
         }
         if(!coverName.isEmpty())
             deckCoverTargets.add(new DeckCoverTarget(art,coverName,false,
-                commander.isEmpty()?"":deck.optString("commanderDisplayPrintId","")));
+                customCover?deck.optString("deckCoverPrintingId",""):
+                    commander.isEmpty()?"":deck.optString("commanderDisplayPrintId","")));
     }
 
     /** Only request covers whose ImageView is actually inside the scrolling
