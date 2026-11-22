@@ -2376,7 +2376,8 @@ final class NativeWorkspaceScreen {
                         coverCard.equalsIgnoreCase(entry.optString("name","")))
                         stillPresent=true;
                 }
-                if("Custom".equals(coverMode)&&!stillPresent){
+                boolean customCoverRemoved="Custom".equals(coverMode)&&!stillPresent;
+                if(customCoverRemoved){
                     coverMode="Auto";
                     coverCard="";coverPrinting="";
                 }
@@ -2393,6 +2394,7 @@ final class NativeWorkspaceScreen {
                 String confirmation="Save "+revised.getString("name")+
                     " as "+selectedFormat+" with "+count+" total cards"+ 
                     (selectedCommander.isEmpty()?"":" (including commander)")+"?"+
+                    (customCoverRemoved?"\\n\\nThe custom deck cover card is no longer in this deck; cover art will revert to Auto.":"")+
                     "\\n\\nA private recovery copy will be kept. "+
                     "The original deck must still match the version you opened.";
                 new AlertDialog.Builder(activity).setTitle("Confirm deck edit")
