@@ -716,13 +716,20 @@ final class NativeWorkspaceScreen {
     private static final class DeckCoverTarget {
         final ImageView image;
         final String commander;
+        final String printingId;
+        final String coverKey;
         final boolean draft;
         boolean loaded;
         DeckCoverTarget(ImageView image,String commander){
-            this(image,commander,false);
+            this(image,commander,false,"");
         }
         DeckCoverTarget(ImageView image,String commander,boolean draft){
+            this(image,commander,draft,"");
+        }
+        DeckCoverTarget(ImageView image,String commander,boolean draft,String printingId){
             this.image=image;this.commander=commander;this.draft=draft;
+            this.printingId=printingId==null?"":printingId.trim();
+            this.coverKey=commander+"|"+this.printingId;
         }
     }
 
@@ -796,7 +803,8 @@ final class NativeWorkspaceScreen {
         entry.setOnClickListener(v->showDeck(deck));
         VaultNativeStyle.margin(deckListPanel,entry,9,activity);
         if(!commander.isEmpty())
-            deckCoverTargets.add(new DeckCoverTarget(art,commander));
+            deckCoverTargets.add(new DeckCoverTarget(art,commander,false,
+                deck.optString("commanderDisplayPrintId","")));
     }
 
     /** Only request covers whose ImageView is actually inside the scrolling
@@ -810,7 +818,7 @@ final class NativeWorkspaceScreen {
             if(target.loaded || !target.image.isAttachedToWindow() ||
                     !target.image.getGlobalVisibleRect(visible) ||
                     visible.isEmpty())continue;
-            Bitmap cached=coverBitmaps.get(target.commander);
+            Bitmap cached=coverBitmaps.get(target.coverKey);
             if(cached!=null){
                 target.image.setImageBitmap(cached);
                 target.loaded=true;
@@ -818,15 +826,17 @@ final class NativeWorkspaceScreen {
             }
             if((target.draft?
                     android.os.SystemClock.uptimeMillis()<
-                        draftArtRetryAfter.getOrDefault(target.commander,0L):
-                    coverUnavailable.contains(target.commander)) ||
-                    coverInFlight.contains(target.commander))continue;
+                        draftArtRetryAfter.getOrDefault(target.coverKey,0L):
+                    coverUnavailable.contains(target.coverKey)) ||
+                    coverInFlight.contains(target.coverKey))continue;
             // Keep in-flight work equal to the two actual cover workers.
             // Otherwise an earlier visible group can monopolize a long queue
             // while later card-type sections are being scrolled into view.
             if(coverInFlight.size()>=2)break;
             String commander=target.commander;
-            coverInFlight.add(commander);
+            String printingId=target.printingId;
+            String coverKey=target.coverKey;
+            coverInFlight.add(coverKey);
             coverWorkers.execute(()->{
                 Bitmap decoded=null;
                 try {
@@ -834,7 +844,9 @@ final class NativeWorkspaceScreen {
                     // such as "Esper Sentinel (MH2) 12". Look up the actual
                     // card identity without modifying the saved entry.
                     String cardIdentity=NativeArenaCardName.identity(commander);
-                    String url=catalog.commanderCoverUrl(cardIdentity);
+                    String url=printingId.isEmpty()?""
+                        :catalog.commanderPrintingArtwork(cardIdentity,printingId);
+                    if(url.isEmpty())url=catalog.commanderCoverUrl(cardIdentity);
                     if(url.isEmpty()){
                         // Draft imports may use a front-face-only name for a
                         // double-faced card, while the local catalog stores
@@ -856,18 +868,18 @@ final class NativeWorkspaceScreen {
                 }
                 final Bitmap result=decoded;
                 ui.post(()->{
-                    coverInFlight.remove(commander);
+                    coverInFlight.remove(coverKey);
                     if(result!=null){
-                        coverBitmaps.put(commander,result);
-                        coverUnavailable.remove(commander);
-                        draftArtFailures.remove(commander);
-                        draftArtRetryAfter.remove(commander);
+                        coverBitmaps.put(coverKey,result);
+                        coverUnavailable.remove(coverKey);
+                        draftArtFailures.remove(coverKey);
+                        draftArtRetryAfter.remove(coverKey);
                         // Apply the completed image immediately to live targets.
                         // A nested editor can be rebuilt without a scroll event,
                         // so don't depend on another visibility scan to repaint.
                         if(!closed&&pageGeneration==deckPageGeneration)
                             for(DeckCoverTarget candidate:deckCoverTargets)
-                                if(commander.equals(candidate.commander)&&
+                                if(coverKey.equals(candidate.coverKey)&&
                                         candidate.image.isAttachedToWindow()){
                                     candidate.image.setImageBitmap(result);
                                     candidate.loaded=true;
@@ -875,19 +887,19 @@ final class NativeWorkspaceScreen {
                     }else{
                         boolean draftTarget=false;
                         for(DeckCoverTarget candidate:deckCoverTargets)
-                            if(candidate.draft&&commander.equals(candidate.commander)){
+                            if(candidate.draft&&coverKey.equals(candidate.coverKey)){
                                 draftTarget=true;break;
                             }
                         if(draftTarget){
-                            int failures=draftArtFailures.getOrDefault(commander,0)+1;
-                            draftArtFailures.put(commander,failures);
+                            int failures=draftArtFailures.getOrDefault(coverKey,0)+1;
+                            draftArtFailures.put(coverKey,failures);
                             // Back off transient offline, CDN rate limiting or
                             // indexing failures; never permanently blacklist a
                             // draft card while the editor remains open.
                             long delayMs=Math.min(60000L,6000L*failures);
-                            draftArtRetryAfter.put(commander,
+                            draftArtRetryAfter.put(coverKey,
                                 android.os.SystemClock.uptimeMillis()+delayMs);
-                        }else coverUnavailable.add(commander);
+                        }else coverUnavailable.add(coverKey);
                     }
                     if(!closed&&pageGeneration==deckPageGeneration)
                         loadVisibleDeckCovers();
@@ -2181,10 +2193,7 @@ final class NativeWorkspaceScreen {
                 if(selectedCommander.length()>180)
                     throw new IllegalArgumentException("Commander name is too long.");
                 revised.put("commander",selectedCommander);
-                if(selectedCommander.equalsIgnoreCase(startingCommander))
-                    revised.put("commanderDisplayPrintId",chosenCommanderPrinting[0]);
-                else
-                    revised.put("commanderDisplayPrintId","");
+                revised.put("commanderDisplayPrintId",chosenCommanderPrinting[0]);
                 JSONArray entries=revised.getJSONArray("entries");
                 int count=selectedCommander.isEmpty()?0:1;
                 for(int i=0;i<entries.length();i++)
