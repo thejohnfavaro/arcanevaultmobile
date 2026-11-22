@@ -608,15 +608,23 @@ final class NativeCompanionScreen {
             });
         });
         Button check=button("Check ChatGPT connection",false);
-        check.setEnabled(aiClient.connected());
+        // Keep diagnostics available even when no credentials are saved: the
+        // verification handler returns a useful explanation in that case.
         VaultNativeStyle.margin(parent,check,9,activity);
+        TextView checkResult=text("Tap to check authorization and ChatGPT model access.",12,
+            VaultNativeStyle.SUBTEXT,false);
+        VaultNativeStyle.margin(parent,checkResult,8,activity);
         check.setOnClickListener(v->{
             check.setEnabled(false);
-            status.setText("Checking saved ChatGPT authorization and plan model access…");
+            String progress="Checking saved ChatGPT authorization and plan model access…";
+            status.setText(progress);
+            checkResult.setText(progress);
             aiClient.verifyConnection((message,ok)->{
                 if(closed)return;
                 status.setText(message);
-                check.setEnabled(aiClient.connected());
+                checkResult.setText(message);
+                checkResult.setTextColor(ok?VaultNativeStyle.GOLD:VaultNativeStyle.TEXT);
+                check.setEnabled(true);
                 connect.setEnabled(!aiClient.connected());
                 connect.setText(aiClient.connected()?"Authorization saved":"Continue with ChatGPT");
             });
@@ -638,7 +646,7 @@ final class NativeCompanionScreen {
                 connect.setEnabled(!aiClient.connected());
                 connect.setText(aiClient.connected()?"Authorization saved":"Continue with ChatGPT");
                 disconnect.setEnabled(aiClient.connected());
-                check.setEnabled(aiClient.connected());
+                check.setEnabled(true);
             });
         });
         disconnect.setOnClickListener(v->{
@@ -648,7 +656,8 @@ final class NativeCompanionScreen {
                 status.setText(message);
                 connect.setText("Continue with ChatGPT");
                 connect.setEnabled(true);
-                check.setEnabled(false);
+                check.setEnabled(true);
+                checkResult.setText("Not authorized. Use Continue with ChatGPT, then check again.");
                 disconnect.setEnabled(false);
             });
         });
