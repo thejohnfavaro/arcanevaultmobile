@@ -2424,13 +2424,23 @@ final class NativeWorkspaceScreen {
                 demand.append(String.format(java.util.Locale.US,"%.1f",
                     pips.optDouble(String.valueOf(symbols.charAt(ci)),0)));
             }
-            insights.addView(VaultNativeStyle.label(activity,demand.toString(),
-                12,VaultNativeStyle.TEXT,false));
-            insights.addView(VaultNativeStyle.label(activity,
-                report.optInt("manaCostCopies",0)+" nonland copies with costs · "+
-                report.optInt("missingCostCopies",0)+" without cost metadata. "+
-                "Approximate: hybrid/Phyrexian symbols discounted; not cast odds.",
-                11,VaultNativeStyle.SUBTEXT,false));
+            int costKnown=report.optInt("manaCostCopies",0);
+            int costMissing=report.optInt("missingCostCopies",0);
+            // Do not portray an absent catalog field as zero demand.
+            if(costKnown==0&&costMissing>0)
+                insights.addView(VaultNativeStyle.label(activity,
+                    "Casting-cost analysis unavailable: "+costMissing+
+                    " nonland copies lack cached mana-cost metadata.",
+                    12,VaultNativeStyle.GOLD,false));
+            else{
+                insights.addView(VaultNativeStyle.label(activity,demand.toString(),
+                    12,VaultNativeStyle.TEXT,false));
+                insights.addView(VaultNativeStyle.label(activity,
+                    costKnown+" nonland copies with costs · "+
+                    costMissing+" without cost metadata. "+
+                    "Approximate: hybrid/Phyrexian symbols discounted; not cast odds.",
+                    11,VaultNativeStyle.SUBTEXT,false));
+            }
         }
         JSONObject odds=report.optJSONObject("landOdds");
         if(odds!=null&&odds.length()>0){
