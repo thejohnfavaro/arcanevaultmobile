@@ -156,8 +156,16 @@ assert.match(workspace,/if\(visualArt\[0\]\|\|visualGrid\[0\]\)/,
 // request instead of being permanently stuck on the fallback star.
 assert.match(workspace,/new DeckCoverTarget\(artImage,cardName,true\)/,
   'Draft thumbnail targets should opt into recoverable artwork behavior');
-assert.match(workspace,/draftArtFailures\.getOrDefault\(target\.commander,0\)>=2/,
-  'Recovery attempts must be bounded to avoid repeated failed downloads');
+assert.match(workspace,/if\(coverInFlight\.size\(\)>=2\)break/,
+  'Only two visible image requests should be queued for the two cover workers');
+assert.match(workspace,/draftArtRetryAfter\.getOrDefault\(target\.commander,0L\)/,
+  'Failed draft images must use a timed backoff rather than permanent exclusion');
+assert.match(workspace,/Math\.min\(60000L,6000L\*failures\)/,
+  'Retry backoff must be bounded to avoid hammering Scryfall');
+assert.match(workspace,/"Retry missing artwork"/,
+  'Art and Grid views need an explicit recovery action');
+assert.match(workspace,/draftArtRetryAfter\.clear\(\)/,
+  'The retry action must reset failed artwork backoff');
 assert.match(workspace,/artImage\.addOnAttachStateChangeListener/,
   'Artwork must begin loading when a rebuilt editor thumbnail attaches');
 assert.match(workspace,/String cardIdentity=NativeArenaCardName\.identity\(commander\)/,
