@@ -112,6 +112,23 @@ assert.match(workspace,/if\(deckCardInspector!=null\)\{/,
 assert.match(workspace,/deckCardReturnState=screenState/,
   'Shared deck inspector should remember whether the origin was editing or details');
 
+// Optional artwork rows reuse bounded artwork workers; the list is still
+// just a different presentation of the same unsaved mainboard.
+assert.match(workspace,/native_draft_art_rows_v1/,
+  'Art/List presentation preference should persist independently of deck data');
+assert.match(workspace,/"Art \+ Details"/,
+  'The visual mainboard must offer an illustrated layout');
+assert.match(workspace,/"List",!visualArt\[0\]/,
+  'The compact list must remain directly selectable');
+assert.match(workspace,/deckCoverTargets\.add\(new DeckCoverTarget\(artImage,cardName\)\)/,
+  'Artwork rows should reuse lazy card art loading rather than new bulk requests');
+assert.match(workspace,/workspaceScroll\.post\(this::loadVisibleDeckCovers\)/,
+  'Visible art should render as the workspace scrolls');
+assert.match(workspace,/artFrame\.setOnClickListener\(v->openDeckCard\(cardName\)\)/,
+  'Card thumbnail should open the full linked inspector');
+assert.match(workspace,/new LinearLayout\.LayoutParams\(dp\(70\),dp\(95\)\)/,
+  'Art rows should use compact card thumbnail dimensions');
+
 assert.doesNotMatch(workspace,/localStorage\.setItem\([^\n]*cover/i,
   'Cover preview must not persist separate deck or artwork records');
 console.log('PASS: Android Deck Library displays lazy, safe commander artwork deck-box previews');
