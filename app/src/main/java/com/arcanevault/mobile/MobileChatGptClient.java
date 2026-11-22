@@ -36,6 +36,13 @@ final class MobileChatGptClient {
     private final Activity activity;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final Handler ui=new Handler(Looper.getMainLooper());
+    // OAuth callback arrives in the browser while this Activity is backgrounded.
+    // Do not exchange the one-time code until the app has resumed.
+    private volatile java.util.concurrent.CountDownLatch awaitingBrowserReturn;
+    void onAppResumed(){
+        java.util.concurrent.CountDownLatch pending=awaitingBrowserReturn;
+        if(pending!=null)pending.countDown();
+    }
     private String clientId,subject,access,refresh,idToken,hostId;
     private long expiration;
     MobileChatGptClient(Activity activity){this.activity=activity;load();}
@@ -391,6 +398,8 @@ final class MobileChatGptClient {
         if(connected()){ui.post(()->callback.done("Already connected",true));return;}
         // Do not open authorization in a WebView or handle any browser cookies.
         String state=random(),nonce=random(),verifier=random();
+        java.util.concurrent.CountDownLatch browserReturn=new java.util.concurrent.CountDownLatch(1);
+        awaitingBrowserReturn=browserReturn;
         worker.execute(()->{
             String stage="starting local callback";
             try(ServerSocket socket=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))){
@@ -433,6 +442,9 @@ final class MobileChatGptClient {
                     }
                 }
                 if(callbackData==null)throw new SecurityException("No valid local OAuth callback");
+                stage="waiting for Arcane Vault to return to foreground";
+                if(!browserReturn.await(180,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new IOException("Browser callback received, but Arcane Vault did not return to foreground. Return to Arcane Vault after authorizing.");
                 if(callbackData.containsKey("error")){
                     String reason=callbackData.get("error");
                     if(!reason.matches("[A-Za-z0-9_.-]{1,80}"))reason="authorization_error";
@@ -477,6 +489,8 @@ final class MobileChatGptClient {
                 lastConnectionIssue="ChatGPT authorization failed while "+stage+": "+reason;
                 String result=lastConnectionIssue;
                 ui.post(()->callback.done(result,false));
+            }finally{
+                if(awaitingBrowserReturn==browserReturn)awaitingBrowserReturn=null;
             }
         });
     }
