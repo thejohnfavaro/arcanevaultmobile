@@ -20,7 +20,7 @@ assert.match(workspace,/matches\.sort\(order\.thenComparing/);
 assert.match(workspace,/b\.optString\("updated",""\)\.compareTo\(a\.optString\("updated",""\)\)/);
 assert.match(workspace,/workspaceScroll\.post\(this::loadVisibleDeckCovers\)/);
 assert.match(catalog,/JSONObject deckInsights\(String commander,JSONArray entries\)/);
-assert.match(catalog,/SELECT type,mv FROM cards WHERE name=\? COLLATE NOCASE LIMIT 1/);
+assert.match(catalog,/SELECT type,mv,colors FROM cards WHERE name=\? COLLATE NOCASE LIMIT 1/);
 assert.match(catalog,/unknown\+=qty/,'Unresolved metadata must remain unknown');
 assert.match(catalog,/if\(normalized\.contains\("land"\)\)lands\+=qty/);
 assert.match(workspace,/new android\.widget\.ProgressBar/);
