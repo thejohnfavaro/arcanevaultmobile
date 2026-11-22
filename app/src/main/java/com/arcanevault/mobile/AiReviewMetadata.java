@@ -18,7 +18,7 @@ final class AiReviewMetadata {
         String name=NativeArenaCardName.identity(raw==null?"":raw).trim();
         int slash=name.indexOf(" // ");
         if(slash>=0)name=name.substring(0,slash).trim();
-        return Normalizer.normalize(name.replace('’','\'').replace('‘','\''),
+        return Normalizer.normalize(name.replace('’',(char)39).replace('‘',(char)39),
             Normalizer.Form.NFKC);
     }
 
