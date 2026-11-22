@@ -431,7 +431,8 @@ public class MainActivity extends Activity {
                             "return JSON.stringify({ok:false,error:'Concurrent edit detected'});"+
                         (reviewOnly ? "" :
                         "const prior=decks[index];const revisions=Array.isArray(prior.revisions)?prior.revisions.slice():[];"+
-                        "revisions.push({name:prior.name,commander:prior.commander,entries:prior.entries,"+
+                        "revisions.push({name:prior.name,commander:prior.commander,"+
+                            "commanderDisplayPrintId:prior.commanderDisplayPrintId||'',entries:prior.entries,"+
                             "savedAt:new Date().toISOString(),label:'Before Android native edit',"+
                             "coverCard:prior.coverCard||'',folder:prior.folder||'Unfiled',tags:prior.tags||[]});"+
                         "revised.revisions=revisions.slice(-20);revised.updated=new Date().toISOString();")+
